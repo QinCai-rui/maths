@@ -1,17 +1,36 @@
-# use the official Bun image
-# see all versions at https://hub.docker.com/r/oven/bun/tags
-FROM oven/bun:1-debian AS base
-WORKDIR /usr/src/app
+# ---- Build stage ----
+FROM oven/bun:1 AS build
+WORKDIR /app
 
-# for Coolify healthchecks
-RUN apt-get update && apt-get install -y curl \
-  && rm -rf /var/lib/apt/lists/*
-
-COPY . .
+COPY package.json bun.lock .npmrc ./
 RUN bun install --frozen-lockfile
 
-ENV NODE_ENV=production
-RUN bun run build
+COPY svelte.config.js vite.config.ts tsconfig.json components.json ./
+COPY src/ src/
+COPY static/ static/
+RUN NODE_ENV=production bun run build
 
+# ---- Runtime stage ----
+FROM oven/bun:1-debian AS runtime
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/package.json /app/bun.lock ./
+RUN bun install --frozen-lockfile --production && bun pm cache rm
+
+COPY --from=build /app/build ./build
+COPY server.ts ./
+COPY src/ws/index.server.ts ./src/ws/index.server.ts
+COPY src/lib/mathex/schemas.ts ./src/lib/mathex/schemas.ts
+
+ENV NODE_ENV=production
+ENV PORT=5185
+ENV HOST=0.0.0.0
 EXPOSE 5185/tcp
-ENTRYPOINT [ "bun", "run", "server.ts" ]
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:5185/ || exit 1
+
+CMD ["bun", "run", "server.ts"]

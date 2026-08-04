@@ -1,0 +1,9 @@
+services:
+  maths:
+    build: .
+    ports:
+      - "5185:5185"
+    environment:
+      - PORT=5185
+      - HOST=0.0.0.0
+    restart: unless-stopped
