@@ -1,6 +1,6 @@
-# Devarsh's Maths
+# Devarsh's Maths, revived
 
-This is a website that contains resources about maths. It uses Bun and SvelteKit. You can try it [here](https://maths.devarsh.me).
+This is a website that contains resources about maths. It uses Bun and SvelteKit. You can try it [here](https://dvmaths.qincai.xyz).
 
 **Thanks to Hack Club Summer of Making and Arcade for supporting this project!** (Nest was previously used for hosting)
 

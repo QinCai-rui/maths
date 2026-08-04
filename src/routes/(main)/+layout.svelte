@@ -34,13 +34,13 @@
 </script>
 
 <svelte:head>
-  <title>Devarsh's Maths</title>
+  <title>Devarsh's Maths, revived</title>
 </svelte:head>
 
 <Toaster />
 <nav class="bg-white border-gray-200 dark:bg-gray-900">
   <div class="flex flex-wrap items-center justify-between mx-auto p-4">
-    <a href="/" class="flex items-center text-center self-center font-semibold text-xl">Devarsh's Maths</a>
+    <a href="/" class="flex items-center text-center self-center font-semibold text-xl">Devarsh's Maths, revived</a>
     <div class="w-auto">
       <ul class="font-medium flex flex-row">
         {#each links as link}
@@ -54,7 +54,7 @@
           </li>
         {/each}
 
-        <a class="px-3" href="https://github.com/webdev03/maths" target="_blank">
+        <a class="px-3" href="https://github.com/QinCai-rui/maths" target="_blank">
           <Github />
         </a>
       </ul>
