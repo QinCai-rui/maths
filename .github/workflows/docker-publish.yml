@@ -2,8 +2,6 @@ name: Publish Docker image
 
 on:
   push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
@@ -15,6 +13,7 @@ env:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +60,7 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.slug }},mode=max
 
   merge:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: build
     permissions:
