@@ -20,10 +20,13 @@
   import { io, type Socket } from "socket.io-client";
   import { goto } from "$app/navigation";
   const socket: Socket<RoomCreateServerToClientEvents, RoomCreateClientToServerEvents> = io("/rooms");
+  const ROOM_SET_KEY = "mathex-room-set";
 
   let file: File | undefined = $state(undefined);
   let fileValid = $state(false);
   let questionCount = $state(0);
+  let editorSet: z.infer<typeof Question>[] | undefined = $state(undefined);
+  let useEditorSet = $state(false);
   let roomName = $state("");
   let creating = $state(false);
   let dragOver = $state(false);
@@ -54,6 +57,16 @@
     })();
   });
 
+  $effect(() => {
+    try {
+      const result = z.array(Question).safeParse(JSON.parse(localStorage.getItem(ROOM_SET_KEY) || "null"));
+      if (result.success && result.data.length > 0) {
+        editorSet = result.data;
+        useEditorSet = true;
+      }
+    } catch {}
+  });
+
   let roomNameValid = $state(true);
   $effect(() => {
     if (!roomName) {
@@ -64,7 +77,9 @@
     roomNameValid = result.success;
   });
 
-  const canCreate = $derived(fileValid && roomNameValid && roomName.length >= 3 && !creating);
+  const canCreate = $derived(
+    (fileValid || (useEditorSet && editorSet !== undefined)) && roomNameValid && roomName.length >= 3 && !creating
+  );
 
   function handleFileDrop(e: DragEvent) {
     e.preventDefault();
@@ -78,7 +93,7 @@
   }
 
   async function createRoom() {
-    if (!file || !fileValid) {
+    if (!fileValid && (!useEditorSet || !editorSet)) {
       toast.error("Upload a valid question set file");
       return;
     }
@@ -89,8 +104,7 @@
     }
     creating = true;
     try {
-      const text = await file.text();
-      const set = z.array(Question).parse(JSON.parse(text));
+      const set = useEditorSet && editorSet ? editorSet : z.array(Question).parse(JSON.parse(await file!.text()));
       socket.emit("newRoom", roomNameResult.data, set, runningTime * 1000);
       socket.once("goto", (path) => {
         socket.disconnect();
@@ -130,16 +144,34 @@
         <!-- File drop zone -->
         <div class="space-y-2">
           <Label>Question Set</Label>
+          {#if editorSet}
+            <button
+              type="button"
+              class="mb-2 flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors {useEditorSet
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/50'}"
+              onclick={() => (useEditorSet = true)}
+            >
+              <span class="text-sm font-medium">Use set from editor</span>
+              <span class="text-xs text-muted-foreground">
+                {editorSet.length} question{editorSet.length === 1 ? "" : "s"}
+              </span>
+            </button>
+          {/if}
           <button
-            class="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed p-4 text-center transition-colors {dragOver
+            class="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed p-4 text-center transition-colors {dragOver
               ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-primary/50'} {file && !fileValid ? 'border-destructive' : ''}"
+              : 'border-border hover:border-primary/50'} {file && !fileValid ? 'border-destructive' : ''} {file &&
+            !useEditorSet
+              ? 'border-primary bg-primary/5'
+              : ''}"
             onclick={() => {
               const input = document.createElement("input");
               input.type = "file";
               input.accept = ".json,application/json";
               input.onchange = () => {
                 file = input.files?.[0];
+                useEditorSet = false;
               };
               input.click();
             }}
