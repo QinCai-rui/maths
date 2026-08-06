@@ -6,6 +6,7 @@
 
   import { Menu, X, Github } from "@lucide/svelte/icons";
   import ThemeToggle from "$lib/components/ui/theme-toggle/theme-toggle.svelte";
+  import { ModeWatcher } from "mode-watcher";
 
   interface Props {
     children?: import("svelte").Snippet;
@@ -41,6 +42,7 @@
 </svelte:head>
 
 <Toaster />
+<ModeWatcher />
 
 <div class="min-h-screen flex flex-col">
   <nav

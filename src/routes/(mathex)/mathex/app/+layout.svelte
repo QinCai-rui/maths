@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Toaster } from "$lib/components/ui/sonner";
   import ThemeToggle from "$lib/components/ui/theme-toggle/theme-toggle.svelte";
+  import { ModeWatcher } from "mode-watcher";
   import "../../../../app.css";
   import "quill/dist/quill.snow.css";
   interface Props {
@@ -14,6 +15,7 @@
   <title>Mathex - Devarsh's Maths, revived</title>
 </svelte:head>
 <Toaster />
+<ModeWatcher />
 <div class="min-h-screen w-full bg-background text-foreground">
   {@render children?.()}
 </div>
