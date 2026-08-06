@@ -58,7 +58,8 @@ export const createWSServer = (base: ServerInstance) => {
         questions: roomQuestions,
         runToken,
         state: "lobby",
-        runningTimeMs: clampedTime
+        runningTimeMs: clampedTime,
+        logs: []
       });
       socket.emit("goto", `/mathex/app/manage?id=${roomId}&runToken=${runToken}`);
       socket.disconnect();
@@ -94,6 +95,7 @@ export const createWSServer = (base: ServerInstance) => {
     >;
     setTimeout(async () => {
       socket.emit("playerData", await getPlayers(roomNamespace));
+      socket.emit("logs", room.logs);
     });
     socket.on("alertAll", async (type, message) => {
       roomNamespace.emit("alert", type, message);
@@ -185,6 +187,7 @@ export const createWSServer = (base: ServerInstance) => {
         questionNumber: socket.data.currentQuestion,
         detail: String(answer)
       };
+      room.logs.push(submitLog);
       roomManageNamespace.emit("log", submitLog);
 
       const isCorrect = checkSolution(answer, currentQuestion);
@@ -197,6 +200,7 @@ export const createWSServer = (base: ServerInstance) => {
             type: "correct",
             questionNumber: socket.data.currentQuestion
           };
+          room.logs.push(correctLog);
           roomManageNamespace.emit("log", correctLog);
           if (socket.data.currentQuestion >= room.questions.length) {
             socket.data.finishingTime = Date.now();
@@ -211,6 +215,7 @@ export const createWSServer = (base: ServerInstance) => {
               type: "finished",
               questionNumber: socket.data.currentQuestion
             };
+            room.logs.push(finishLog);
             roomManageNamespace.emit("log", finishLog);
             roomManageNamespace.emit("leaderboard", buildLeaderboard(room, socket.nsp));
           } else {
@@ -228,6 +233,7 @@ export const createWSServer = (base: ServerInstance) => {
             questionNumber: socket.data.currentQuestion,
             detail: String(answer)
           };
+          room.logs.push(wrongLog);
           roomManageNamespace.emit("log", wrongLog);
         }
         socket.emit("stopRunning");
@@ -295,7 +301,7 @@ function checkSolution(guess: any, question: z.infer<typeof Question>) {
     } else if (solution.type === "text") {
       if (String(guess).trim() === solution.value) return true;
     } else if (solution.type === "expression") {
-      if (question.type === "expression" && !question.data.allowEquivalent) {
+      if (!question.data.allowEquivalent) {
         if (String(guess).trim() === solution.value) return true;
       } else {
         try {

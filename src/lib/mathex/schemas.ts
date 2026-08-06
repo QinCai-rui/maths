@@ -37,7 +37,7 @@ export interface RoomSocketData {
   isRunning: boolean;
 }
 
-export type LogVerbosity = "all" | "submissions" | "running" | "finished";
+export type LogVerbosity = "all" | "submissions" | "finished";
 
 export interface LogEntry {
   timestamp: number;
@@ -78,6 +78,7 @@ export interface RoomManageServerToClientEvents {
   alert: (type: ToastT["type"], message: string) => void;
   state: (state: RoomState) => void;
   playerData: (data: RoomSocketData[]) => void;
+  logs: (data: LogEntry[]) => void;
   log: (entry: LogEntry) => void;
   leaderboard: (data: LeaderboardEntry[]) => void;
 }
@@ -103,12 +104,14 @@ export const SolutionItem = z.union([
 
 export const NumberQuestion = z.object({
   contents: z.string(),
-  solutions: z.array(SolutionItem)
+  solutions: z.array(SolutionItem),
+  allowEquivalent: z.boolean()
 });
 
 export const TextQuestion = z.object({
   contents: z.string(),
-  solutions: z.array(SolutionItem)
+  solutions: z.array(SolutionItem),
+  allowEquivalent: z.boolean()
 });
 
 export const ExpressionQuestion = z.object({
@@ -141,6 +144,7 @@ export interface Room {
   runToken: string;
   state: RoomState;
   runningTimeMs: number;
+  logs: LogEntry[];
 }
 
 export interface ClientKnownRoom {

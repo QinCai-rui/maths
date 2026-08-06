@@ -46,7 +46,17 @@
       q.data.solutions.length > 0 &&
       typeof q.data.solutions[0] !== "object"
     ) {
-      return { ...q, data: { ...q.data, solutions: migrateSolutions(q.data.solutions) } };
+      return {
+        ...q,
+        data: {
+          ...q.data,
+          solutions: migrateSolutions(q.data.solutions),
+          allowEquivalent: q.data.allowEquivalent ?? true
+        }
+      };
+    }
+    if (q.data) {
+      return { ...q, data: { ...q.data, allowEquivalent: q.data.allowEquivalent ?? true } };
     }
     return q;
   }
@@ -114,16 +124,12 @@
   });
 
   // --- Question CRUD ---
-  function newQuestion(type: QuestionType) {
+  function newQuestion() {
     if (questions.length >= 100) {
       toast.error("Maximum 100 questions per set");
       return;
     }
-    if (type === "expression") {
-      questions = [...questions, { type, data: { contents: "", solutions: [], allowEquivalent: true } }];
-    } else {
-      questions = [...questions, { type, data: { contents: "", solutions: [] } }];
-    }
+    questions = [...questions, { type: "text", data: { contents: "", solutions: [], allowEquivalent: true } }];
     currentQuestionIdx = questions.length - 1;
   }
 
@@ -250,33 +256,9 @@
       <span class="text-xs text-muted-foreground italic">Unsaved</span>
     {/if}
     <div class="ml-auto flex items-center gap-1.5">
-      <div class="relative group">
-        <Button variant="outline" size="sm" class="gap-1">
-          <Plus class="h-3.5 w-3.5" /> New
-        </Button>
-        <div
-          class="absolute right-0 top-full z-50 mt-1 hidden w-36 rounded-lg border border-border bg-popover p-1 shadow-md group-hover:block"
-        >
-          <button
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-            onclick={() => newQuestion("number")}
-          >
-            <span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span> Number
-          </button>
-          <button
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-            onclick={() => newQuestion("text")}
-          >
-            <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span> Text
-          </button>
-          <button
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-            onclick={() => newQuestion("expression")}
-          >
-            <span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span> Expression
-          </button>
-        </div>
-      </div>
+      <Button variant="outline" size="sm" class="gap-1" onclick={newQuestion}>
+        <Plus class="h-3.5 w-3.5" /> New
+      </Button>
       <Button variant="outline" size="sm" class="gap-1" onclick={importFile}>
         <Upload class="h-3.5 w-3.5" /> Import
       </Button>
@@ -322,17 +304,11 @@
         >
           <div class="mb-6 text-2xl font-semibold text-foreground">Create your first question</div>
           <p class="mb-6 max-w-md text-muted-foreground">
-            Start building a question set by choosing a question type, or import an existing set.
+            Start building a question set by adding a question, or import an existing set.
           </p>
           <div class="flex flex-wrap justify-center gap-3">
-            <Button variant="outline" size="lg" class="gap-2" onclick={() => newQuestion("number")}>
-              <span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span> Number
-            </Button>
-            <Button variant="outline" size="lg" class="gap-2" onclick={() => newQuestion("text")}>
-              <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span> Text
-            </Button>
-            <Button variant="outline" size="lg" class="gap-2" onclick={() => newQuestion("expression")}>
-              <span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span> Expression
+            <Button variant="outline" size="lg" class="gap-2" onclick={newQuestion}>
+              <Plus class="h-4 w-4" /> New Question
             </Button>
           </div>
           <p class="mt-6 text-sm text-muted-foreground">

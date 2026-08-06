@@ -53,6 +53,7 @@
   let alertText = $state("");
 
   let logs: LogEntry[] = $state([]);
+  socket.on("logs", (data) => (logs = data));
   socket.on("log", (entry) => {
     logs = [...logs, entry];
   });
@@ -65,7 +66,6 @@
     if (verbosity === "all") return logs;
     if (verbosity === "submissions")
       return logs.filter((l) => l.type === "submitted" || l.type === "correct" || l.type === "wrong");
-    if (verbosity === "running") return logs.filter((l) => l.type !== "submitted");
     if (verbosity === "finished")
       return logs.filter((l) => l.type === "finished" || l.type === "correct" || l.type === "wrong");
     return logs;
@@ -75,6 +75,9 @@
   socket.on("leaderboard", (data) => (leaderboard = data));
 
   let exportFormat: "json" | "csv" = $state("json");
+
+  let tick = $state(0);
+  setInterval(() => tick++, 1000);
 
   function exportScores() {
     if (leaderboard.length === 0) {
@@ -125,13 +128,14 @@
     <div class="rounded-xl border border-border/60 bg-card p-6 shadow-sm">
       <Header size="h2">Players ({players.length})</Header>
       <div class="mt-4 flex max-h-96 flex-col gap-2 overflow-y-auto scrollbar-thin">
-        {#each players as player, i}
+        {#each players as player, i (player.name)}
           {@const progress =
             totalQuestions > 0
               ? ((player.finishingTime ? player.currentQuestion - 1 : player.currentQuestion - 1) / totalQuestions) *
                 100
               : 0}
-          {@const elapsed = player.startingTime ? (player.finishingTime || Date.now()) - player.startingTime : null}
+          {@const elapsed =
+            tick >= 0 && player.startingTime ? (player.finishingTime || Date.now()) - player.startingTime : null}
           <div
             class="flex items-center gap-3 rounded-lg border-2 border-solid p-3 transition-colors {player.startingTime
               ? player.finishingTime
@@ -264,7 +268,6 @@
               <Select.Content>
                 <Select.Item value="all">All</Select.Item>
                 <Select.Item value="submissions">Submissions</Select.Item>
-                <Select.Item value="running">Running</Select.Item>
                 <Select.Item value="finished">Finished</Select.Item>
               </Select.Content>
             </Select.Root>
@@ -288,11 +291,11 @@
                 <span class="shrink-0 font-semibold">{log.playerName}</span>
                 <span>
                   {#if log.type === "submitted"}
-                    submitted Q{log.questionNumber}: {log.detail}
+                    submitted Q{log.questionNumber}{verbosity === "all" ? `: ${log.detail}` : ""}
                   {:else if log.type === "correct"}
                     Q{log.questionNumber} correct
                   {:else if log.type === "wrong"}
-                    Q{log.questionNumber} wrong ({log.detail})
+                    Q{log.questionNumber} wrong{verbosity === "all" ? ` (${log.detail})` : ""}
                   {:else if log.type === "finished"}
                     finished all questions
                   {:else}
