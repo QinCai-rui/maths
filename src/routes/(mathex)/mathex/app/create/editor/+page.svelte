@@ -274,7 +274,9 @@
             <Header size="h2" class="!m-0">Question {currentQuestionIdx + 1}</Header>
           </div>
           <div class="flex flex-col gap-6 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
-            <QuestionEditor question={currentQuestion} />
+            {#key currentQuestionIdx}
+              <QuestionEditor question={currentQuestion} />
+            {/key}
           </div>
         </div>
       {:else}

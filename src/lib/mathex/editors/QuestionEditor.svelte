@@ -18,7 +18,7 @@
   <Label>Question text</Label>
   <Quill bind:html={question.contents} />
 </div>
-<SolutionsEditor bind:solutions={question.solutions} />
+<div class="mt-4"><SolutionsEditor bind:solutions={question.solutions} /></div>
 <div class="flex items-center space-x-2 mt-3">
   <Checkbox id="allowEquiv" bind:checked={question.allowEquivalent} />
   <Label for="allowEquiv" class="text-sm font-medium leading-none cursor-pointer">Allow equivalent expressions</Label>
