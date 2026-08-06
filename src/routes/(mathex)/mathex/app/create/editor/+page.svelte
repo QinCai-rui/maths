@@ -216,7 +216,12 @@
       toast.error("Add at least one question first");
       return;
     }
-    localStorage.setItem(ROOM_SET_KEY, JSON.stringify(questions));
+    try {
+      localStorage.setItem(ROOM_SET_KEY, JSON.stringify(questions));
+    } catch {
+      toast.error("Couldn't store set for room creation");
+      return;
+    }
     window.open("/mathex/app/create", "_blank", "noopener");
   }
 
