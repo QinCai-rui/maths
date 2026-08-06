@@ -2,7 +2,9 @@
   import { Button } from "$lib/components/ui/button";
   import { Header } from "$lib/components/ui/header";
   import * as InputOTP from "$lib/components/ui/input-otp";
-  import MoveLeft from "@lucide/svelte/icons/move-left";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import KeyRound from "@lucide/svelte/icons/key-round";
+  import UsersRound from "@lucide/svelte/icons/users-round";
   import { toast } from "svelte-sonner";
   import { REGEXP_ONLY_DIGITS_AND_CHARS } from "bits-ui";
 
@@ -38,41 +40,50 @@
   }
 </script>
 
-<div class="flex min-h-screen flex-col items-center justify-center gap-6 p-4">
-  <div class="text-center">
-    <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
-      <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M15 7h.01M15 12h.01M15 17h.01M4 7h.01M4 12h.01M4 17h.01M8 7h.01M8 12h.01M8 17h.01"
-        />
-      </svg>
-    </div>
-    <Header size="h1">Join Room</Header>
-    <p class="mt-2 text-muted-foreground">Enter the 8-character room code provided by your host.</p>
-  </div>
-
-  <div class="flex gap-2 mt-2">
-    <InputOTP.Root
-      maxlength={8}
-      spellcheck="false"
-      pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
-      bind:value={() => code, setCode}
+<div class="mathex-shell relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+  <div class="mathex-grid pointer-events-none absolute inset-0 opacity-70"></div>
+  <main class="relative w-full max-w-lg">
+    <a
+      href="/mathex/app"
+      class="mb-10 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      ><ArrowLeft class="h-4 w-4" /> Competition home</a
     >
-      {#snippet children({ cells })}
-        {#each cells as cell (cell)}
-          <InputOTP.Group>
-            <InputOTP.Slot class="bg-muted text-foreground border-border" {cell} />
-          </InputOTP.Group>
-        {/each}
-      {/snippet}
-    </InputOTP.Root>
-  </div>
-
-  <Button variant="ghost" href="/mathex/app" class="gap-2">
-    <MoveLeft class="h-4 w-4" />
-    Back to home
-  </Button>
+    <div class="mathex-panel rounded-3xl p-6 sm:p-9">
+      <div
+        class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+      >
+        <KeyRound class="h-6 w-6" />
+      </div>
+      <p class="mathex-kicker mt-7">Player check-in</p>
+      <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Enter the room.</Header>
+      <p class="mt-3 leading-7 text-muted-foreground">
+        Your host has an 8-character access code. Enter it below to join the competition lobby.
+      </p>
+      <div class="mt-8 rounded-2xl border border-border/70 bg-background/55 p-4 sm:p-5">
+        <p class="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Room code</p>
+        <InputOTP.Root
+          maxlength={8}
+          spellcheck="false"
+          pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
+          bind:value={() => code, setCode}
+        >
+          {#snippet children({ cells })}
+            <div class="flex w-full justify-between gap-1.5 sm:gap-2">
+              {#each cells as cell (cell)}
+                <InputOTP.Group>
+                  <InputOTP.Slot
+                    class="h-11 w-8 border-border bg-muted/60 text-base font-bold text-foreground sm:h-14 sm:w-11 sm:text-xl"
+                    {cell}
+                  />
+                </InputOTP.Group>
+              {/each}
+            </div>
+          {/snippet}
+        </InputOTP.Root>
+      </div>
+      <div class="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+        <UsersRound class="h-4 w-4 text-primary" /> You will choose a display name next.
+      </div>
+    </div>
+  </main>
 </div>

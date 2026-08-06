@@ -124,6 +124,29 @@
 }
 
 @layer utilities {
+  .mathex-shell {
+    background:
+      radial-gradient(circle at 12% 0%, color-mix(in oklch, var(--primary) 18%, transparent), transparent 30rem),
+      radial-gradient(circle at 92% 12%, color-mix(in oklch, var(--primary) 10%, transparent), transparent 26rem),
+      var(--background);
+  }
+
+  .mathex-grid {
+    background-image:
+      linear-gradient(color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px);
+    background-size: 34px 34px;
+    mask-image: linear-gradient(to bottom, black, transparent 72%);
+  }
+
+  .mathex-panel {
+    @apply border border-border/70 bg-card/85 shadow-sm backdrop-blur-sm;
+  }
+
+  .mathex-kicker {
+    @apply text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) transparent;

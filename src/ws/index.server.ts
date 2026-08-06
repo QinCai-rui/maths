@@ -245,58 +245,64 @@ export const createWSServer = (base: ServerInstance) => {
 
       const isCorrect = checkSolution(answer, currentQuestion);
       setTimeout(async () => {
-        if (isCorrect) {
-          socket.emit("alert", "success", "Correct!");
-          const correctLog: LogEntry = {
-            timestamp: Date.now(),
-            playerName: socket.data.name || "Unknown",
-            type: "correct",
-            questionNumber: socket.data.currentQuestion
-          };
-          room.logs.push(correctLog);
-          roomManageNamespace.emit("log", correctLog);
-          if (socket.data.currentQuestion >= room.questions.length) {
-            socket.data.finishingTime = Date.now();
-            socket.emit("alert", "success", "You have completed the questions!");
-            socket.emit("gameFinish");
-            socket.emit("confetti");
-            socket.nsp.emit("leaderboard", buildLeaderboard(room));
-            roomManageNamespace.emit("alert", "info", `${socket.data.name} has finished all questions!`);
-            const finishLog: LogEntry = {
+        socket.emit("answerResult", isCorrect);
+        socket.data.runningUntil = Date.now() + 900;
+
+        // Let the player see the outcome before presenting the next action.
+        setTimeout(() => {
+          if (isCorrect) {
+            socket.emit("alert", "success", "Correct!");
+            const correctLog: LogEntry = {
               timestamp: Date.now(),
               playerName: socket.data.name || "Unknown",
-              type: "finished",
+              type: "correct",
               questionNumber: socket.data.currentQuestion
             };
-            room.logs.push(finishLog);
-            roomManageNamespace.emit("log", finishLog);
-            roomManageNamespace.emit("leaderboard", buildLeaderboard(room));
+            room.logs.push(correctLog);
+            roomManageNamespace.emit("log", correctLog);
+            if (socket.data.currentQuestion >= room.questions.length) {
+              socket.data.finishingTime = Date.now();
+              socket.emit("alert", "success", "You have completed the questions!");
+              socket.emit("gameFinish");
+              socket.emit("confetti");
+              socket.nsp.emit("leaderboard", buildLeaderboard(room));
+              roomManageNamespace.emit("alert", "info", `${socket.data.name} has finished all questions!`);
+              const finishLog: LogEntry = {
+                timestamp: Date.now(),
+                playerName: socket.data.name || "Unknown",
+                type: "finished",
+                questionNumber: socket.data.currentQuestion
+              };
+              room.logs.push(finishLog);
+              roomManageNamespace.emit("log", finishLog);
+              roomManageNamespace.emit("leaderboard", buildLeaderboard(room));
+            } else {
+              socket.data.currentQuestion++;
+              const nextQuestion = room.questions[socket.data.currentQuestion - 1];
+              socket.emit(
+                "newQuestion",
+                nextQuestion.contents,
+                [...new Set(nextQuestion.solutions.map((s) => s.type))],
+                socket.data.currentQuestion
+              );
+            }
+            io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
           } else {
-            socket.data.currentQuestion++;
-            const nextQuestion = room.questions[socket.data.currentQuestion - 1];
-            socket.emit(
-              "newQuestion",
-              nextQuestion.contents,
-              [...new Set(nextQuestion.solutions.map((s) => s.type))],
-              socket.data.currentQuestion
-            );
+            socket.emit("alert", "error", "Wrong!");
+            const wrongLog: LogEntry = {
+              timestamp: Date.now(),
+              playerName: socket.data.name || "Unknown",
+              type: "wrong",
+              questionNumber: socket.data.currentQuestion,
+              detail: String(answer)
+            };
+            room.logs.push(wrongLog);
+            roomManageNamespace.emit("log", wrongLog);
           }
-          io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
-        } else {
-          socket.emit("alert", "error", "Wrong!");
-          const wrongLog: LogEntry = {
-            timestamp: Date.now(),
-            playerName: socket.data.name || "Unknown",
-            type: "wrong",
-            questionNumber: socket.data.currentQuestion,
-            detail: String(answer)
-          };
-          room.logs.push(wrongLog);
-          roomManageNamespace.emit("log", wrongLog);
-        }
-        socket.emit("stopRunning");
-        socket.data.isRunning = false;
-        socket.data.runningUntil = null;
+          socket.emit("stopRunning");
+          socket.data.isRunning = false;
+          socket.data.runningUntil = null;
+        }, 900);
       }, room.runningTimeMs);
     });
     socket.on("visibilityChange", async (hidden) => {
@@ -327,6 +333,7 @@ export const createWSServer = (base: ServerInstance) => {
         };
         room.logs.push(log);
         roomManageNamespace.emit("log", log);
+        socket.emit("alert", "info", "You left the competition tab. Your return was recorded and the host was notified.");
       }
     });
     setTimeout(() => io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room)));

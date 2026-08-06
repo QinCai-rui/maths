@@ -14,6 +14,7 @@ export interface RoomServerToClientEvents {
   gameStart: (startingTime: number) => void;
   gameFinish: () => void;
   running: (durationMs: number) => void;
+  answerResult: (correct: boolean) => void;
   stopRunning: () => void;
   newQuestion: (question: string, solutionTypes: SolutionType[], questionNumber: number) => void;
   confetti: () => void;

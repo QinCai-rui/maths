@@ -22,6 +22,10 @@
   import ExpressionAnswer from "$lib/mathex/answers/ExpressionAnswer.svelte";
 
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+  import CircleCheckBig from "@lucide/svelte/icons/circle-check-big";
+  import CircleX from "@lucide/svelte/icons/circle-x";
+  import Flag from "@lucide/svelte/icons/flag";
+  import Timer from "@lucide/svelte/icons/timer";
 
   import { Confetti } from "svelte-confetti";
   let confetti = $state(false);
@@ -81,6 +85,7 @@
   let running: number | false = $state(false);
   let runningDuration = $state(16000);
   let runningVisible = $state(0);
+  let answerFeedback: "correct" | "wrong" | null = $state(null);
   let currentQuestion: {
     number: number;
     content: string;
@@ -113,6 +118,7 @@
   });
   socket.on("newQuestion", (content, solutionTypes, questionNumber) => {
     answer = null;
+    answerFeedback = null;
     currentQuestion = {
       number: questionNumber,
       content: DOMPurify.sanitize(content),
@@ -121,12 +127,17 @@
     running = false;
   });
   socket.on("running", (durationMs: number) => {
+    answerFeedback = null;
     running = Date.now();
     runningDuration = durationMs;
     const interval = setInterval(() => {
       if (running) runningVisible = ((Date.now() - running) / runningDuration) * 100;
       else clearInterval(interval);
     });
+  });
+  socket.on("answerResult", (correct) => {
+    answerFeedback = correct ? "correct" : "wrong";
+    if (!correct) answer = null;
   });
   socket.on("stopRunning", () => (running = false));
   let questionCount = $state(1);
@@ -153,17 +164,22 @@
   </div>
 {/if}
 
-<div class="flex min-h-screen flex-col p-4">
+<div class="mathex-shell min-h-screen p-4 sm:p-6">
   {#if gameState === "connecting"}
-    <div class="flex flex-1 items-center justify-center">
-      <span class="flex items-center gap-3 text-xl font-medium text-muted-foreground">
+    <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
+      <span
+        class="mathex-panel flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-medium text-muted-foreground"
+      >
         <LoaderCircle class="h-5 w-5 animate-spin" />
         Connecting...
       </span>
     </div>
   {:else if gameState === "choose-name"}
-    <div class="flex flex-1 items-center justify-center">
-      <div class="w-full max-w-sm rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+    <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
+      <div class="mathex-panel w-full max-w-md rounded-3xl p-7 sm:p-9">
+        <p class="mathex-kicker">Player check-in</p>
+        <Header size="h1" class="mt-2 text-3xl tracking-[-0.04em]">Choose your name.</Header>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">This is how you will appear on the live leaderboard.</p>
         <div class="flex flex-col items-center">
           {#if name}
             <Identicon seed={name} className="w-16 h-16 rounded-lg" />
@@ -178,34 +194,78 @@
             <Label for="name" class="text-sm font-medium">Your name</Label>
             <Input bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
           </div>
-          <Button class="mt-4 w-full" onclick={joinRoom}>Join Room</Button>
+          <Button class="mt-5 w-full shadow-lg shadow-primary/20" size="lg" onclick={joinRoom}>Join competition</Button>
         </div>
       </div>
     </div>
   {:else if gameState === "waiting_start"}
-    <div class="flex flex-1 items-center justify-center">
-      <span class="flex items-center gap-3 text-xl font-medium text-muted-foreground">
+    <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
+      <span
+        class="mathex-panel flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-medium text-muted-foreground"
+      >
         <LoaderCircle class="h-5 w-5 animate-spin" />
         Waiting for game to start...
       </span>
     </div>
   {:else if gameState === "started"}
-    <div class="mx-auto w-full max-w-2xl">
-      <div class="flex items-center justify-between rounded-xl border border-border/60 bg-card p-4 shadow-sm">
-        <div class="text-2xl font-semibold tabular-nums">{msToMinutesAndSeconds(timePassed)}</div>
-        <div class="text-sm text-muted-foreground">Question {currentQuestion.number} / {questionCount}</div>
-      </div>
-
-      {#if running}
-        <div class="mt-4 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
-          <Header size="h3">Running...</Header>
-          <div class="mt-4 flex items-center gap-3">
-            <LoaderCircle class="h-5 w-5 animate-spin text-primary" />
-            <Progress value={runningVisible} class="*:transition-none" />
+    <div class="mx-auto w-full max-w-3xl">
+      <header class="mathex-panel flex items-center justify-between rounded-2xl p-3.5 sm:p-4">
+        <div class="flex items-center gap-3">
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"
+            ><Timer class="h-4 w-4" /></span
+          >
+          <div>
+            <p class="text-xl font-bold tabular-nums sm:text-2xl">{msToMinutesAndSeconds(timePassed)}</p>
+            <p class="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Elapsed time</p>
           </div>
         </div>
+        <div class="text-right">
+          <p class="text-sm font-bold">
+            Question {currentQuestion.number}<span class="text-muted-foreground"> / {questionCount}</span>
+          </p>
+          <div class="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+            <div
+              class="h-full rounded-full bg-primary"
+              style={`width: ${(currentQuestion.number / questionCount) * 100}%`}
+            ></div>
+          </div>
+        </div>
+      </header>
+
+      {#if running}
+        <div class="mathex-panel mt-4 rounded-3xl p-7 text-center sm:p-9">
+          {#if answerFeedback === "correct"}
+            <div
+              class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            >
+              <CircleCheckBig class="h-9 w-9" />
+            </div>
+            <p class="mathex-kicker mt-5 text-emerald-600 dark:text-emerald-400">Correct answer</p>
+            <Header size="h3" class="mt-1 text-3xl">Excellent work.</Header>
+            <p class="mt-2 text-sm text-muted-foreground">Loading your next question...</p>
+          {:else if answerFeedback === "wrong"}
+            <div
+              class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive"
+            >
+              <CircleX class="h-9 w-9" />
+            </div>
+            <p class="mathex-kicker mt-5 text-destructive">Not quite</p>
+            <Header size="h3" class="mt-1 text-3xl">Try again.</Header>
+            <p class="mt-2 text-sm text-muted-foreground">The question will reopen in a moment.</p>
+          {:else}
+            <p class="mathex-kicker">Answer received</p>
+            <Header size="h3" class="mt-1">Checking your work...</Header>
+            <div class="mt-4 flex items-center gap-3">
+              <LoaderCircle class="h-5 w-5 animate-spin text-primary" />
+              <Progress value={runningVisible} class="*:transition-none" />
+            </div>
+          {/if}
+        </div>
       {:else}
-        <div class="mt-4 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+        <div class="mathex-panel mt-4 rounded-3xl p-6 sm:p-9">
+          <div class="mb-7 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">
+            <Flag class="h-3.5 w-3.5" /> Problem {currentQuestion.number}
+          </div>
           <div class="prose prose-slate max-w-none dark:prose-invert">
             {@html renderMath(currentQuestion.content)}
           </div>
@@ -231,15 +291,26 @@
               socket.emit("answer", answer);
             }}
           >
-            <Button type="submit" class="w-full" disabled={answer === null || answer === ""}>Submit Answer</Button>
+            <Button
+              type="submit"
+              class="w-full shadow-lg shadow-primary/20"
+              size="lg"
+              disabled={answer === null || answer === ""}>Lock in answer</Button
+            >
           </form>
         </div>
       {/if}
     </div>
   {:else if gameState === "finished"}
-    <div class="flex flex-1 items-center justify-center">
-      <div class="w-full max-w-md rounded-xl border border-border/60 bg-card p-8 shadow-sm text-center">
-        <Header size="h1">Game finished!</Header>
+    <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
+      <div class="mathex-panel w-full max-w-md rounded-3xl p-7 text-center sm:p-9">
+        <div
+          class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+        >
+          <CircleCheckBig class="h-7 w-7" />
+        </div>
+        <p class="mathex-kicker mt-5">Round complete</p>
+        <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">You finished!</Header>
         {#if leaderboard.length > 0}
           {@const myEntry = leaderboard.find((e) => e.name === name)}
           {#if myEntry}
