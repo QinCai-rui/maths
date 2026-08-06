@@ -18,6 +18,7 @@
   import Trash2 from "@lucide/svelte/icons/trash-2";
 
   const DRAFT_KEY = "mathex-draft";
+  const ROOM_SET_KEY = "mathex-room-set";
 
   let questions: z.infer<typeof Question>[] = $state([]);
   let currentQuestionIdx = $state(0);
@@ -210,6 +211,20 @@
     URL.revokeObjectURL(url);
   }
 
+  function useInRoom() {
+    if (questions.length === 0) {
+      toast.error("Add at least one question first");
+      return;
+    }
+    try {
+      localStorage.setItem(ROOM_SET_KEY, JSON.stringify(questions));
+    } catch {
+      toast.error("Couldn't store set for room creation");
+      return;
+    }
+    window.open("/mathex/app/create", "_blank", "noopener");
+  }
+
   // --- Sidebar helpers ---
   function questionPreview(q: z.infer<typeof Question>): string {
     const text = stripTags(q.contents);
@@ -252,6 +267,9 @@
       </Button>
       <Button variant="outline" size="sm" class="gap-1" onclick={exportFile} disabled={questions.length === 0}>
         <Download class="h-3.5 w-3.5" /> Export
+      </Button>
+      <Button variant="outline" size="sm" class="gap-1" onclick={useInRoom} disabled={questions.length === 0}>
+        Use in Room
       </Button>
       <Button
         variant="ghost"
