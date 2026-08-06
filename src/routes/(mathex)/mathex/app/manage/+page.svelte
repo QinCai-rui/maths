@@ -51,6 +51,7 @@
   let players: RoomSocketData[] = $state([]);
   socket.on("playerData", (data) => (players = data));
   let currentState: RoomState = $state("lobby");
+  socket.on("state", (state) => (currentState = state));
 
   let totalQuestions = $derived(players.length > 0 ? players[0].totalQuestions : 0);
 

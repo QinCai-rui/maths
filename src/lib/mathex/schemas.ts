@@ -11,18 +11,19 @@ export type State = "connecting" | "choose-name" | "waiting_start" | "started" |
 export interface RoomServerToClientEvents {
   alert: (type: ToastT["type"], message: string) => void;
   lobby: () => void;
-  gameStart: () => void;
+  gameStart: (startingTime: number) => void;
   gameFinish: () => void;
   running: (durationMs: number) => void;
   stopRunning: () => void;
-  newQuestion: (question: string, solutionTypes: SolutionType[]) => void;
+  newQuestion: (question: string, solutionTypes: SolutionType[], questionNumber: number) => void;
   confetti: () => void;
   questionCount: (data: number) => void;
+  joined: (name: string) => void;
   leaderboard: (data: LeaderboardEntry[]) => void;
 }
 
 export interface RoomClientToServerEvents {
-  join: (name: string) => void;
+  join: (name: string, playerId: string) => void;
   answer: (value: string | number) => void;
   visibilityChange: (hidden: boolean) => void;
 }
@@ -30,12 +31,14 @@ export interface RoomClientToServerEvents {
 export interface RoomInterServerEvents {}
 
 export interface RoomSocketData {
+  playerId: string | null;
   name: string | null;
   currentQuestion: number;
   totalQuestions: number;
   startingTime: number | null;
   finishingTime: number | null;
   isRunning: boolean;
+  runningUntil: number | null;
   awaySince: number | null;
   visibilityFlags: number;
 }
@@ -142,6 +145,7 @@ export interface Room {
   state: RoomState;
   runningTimeMs: number;
   visibilityTracking: boolean;
+  players: Map<string, RoomSocketData>;
   logs: LogEntry[];
 }
 

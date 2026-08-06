@@ -30,10 +30,12 @@
   import { renderMath } from "$lib/mathex/content";
 
   const roomId = page.params.id;
+  const sessionKey = `mathex-player-${roomId}`;
 
   let gameState: State = $state("connecting");
 
   let name: string = $state("");
+  let playerId = "";
 
   import { toast } from "svelte-sonner";
   import type { z } from "zod";
@@ -49,7 +51,18 @@
     }
   });
   socket.on("connect", () => {
-    if (gameState === "connecting") gameState = "choose-name";
+    try {
+      const session = JSON.parse(localStorage.getItem(sessionKey) || "null");
+      if (typeof session?.name === "string" && typeof session?.playerId === "string") {
+        name = session.name;
+        playerId = session.playerId;
+        socket.emit("join", name, playerId);
+      } else {
+        gameState = "choose-name";
+      }
+    } catch {
+      gameState = "choose-name";
+    }
     toast.success("Connected!");
   });
   socket.on("connect_error", () => toast.error("Failed to connect! Does this room exist?"));
@@ -83,9 +96,13 @@
     if (!startingTime) timePassed = 0;
     else timePassed = Date.now() - startingTime;
   }, 100);
-  socket.on("gameStart", () => {
+  socket.on("joined", (joinedName) => {
+    name = joinedName;
+    localStorage.setItem(sessionKey, JSON.stringify({ name, playerId }));
+  });
+  socket.on("gameStart", (serverStartingTime) => {
     gameState = "started";
-    startingTime = Date.now();
+    startingTime = serverStartingTime;
   });
   socket.on("gameFinish", () => {
     gameState = "finished";
@@ -94,10 +111,10 @@
     confetti = true;
     setTimeout(() => (confetti = false), 6000);
   });
-  socket.on("newQuestion", (content, solutionTypes) => {
+  socket.on("newQuestion", (content, solutionTypes, questionNumber) => {
     answer = null;
     currentQuestion = {
-      number: currentQuestion.number + 1,
+      number: questionNumber,
       content: DOMPurify.sanitize(content),
       solutionTypes
     };
@@ -117,6 +134,17 @@
 
   let leaderboard: LeaderboardEntry[] = $state([]);
   socket.on("leaderboard", (data) => (leaderboard = data));
+
+  function joinRoom() {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      toast.error("Enter a username");
+      return;
+    }
+    name = trimmedName;
+    playerId = crypto.randomUUID();
+    socket.emit("join", name, playerId);
+  }
 </script>
 
 {#if confetti}
@@ -150,7 +178,7 @@
             <Label for="name" class="text-sm font-medium">Your name</Label>
             <Input bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
           </div>
-          <Button class="mt-4 w-full" onclick={() => socket.emit("join", name)}>Join Room</Button>
+          <Button class="mt-4 w-full" onclick={joinRoom}>Join Room</Button>
         </div>
       </div>
     </div>
