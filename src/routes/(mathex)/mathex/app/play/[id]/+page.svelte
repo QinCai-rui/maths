@@ -60,11 +60,11 @@
   let currentQuestion: {
     number: number;
     content: string;
-    type: z.infer<typeof Question>["type"];
+    solutionTypes: z.infer<typeof Question>["solutions"][number]["type"][];
   } = $state({
     number: 0,
     content: "<p>Loading...</p>",
-    type: "text"
+    solutionTypes: ["text"]
   });
   let startingTime: number | null = $state(null);
   let timePassed = $state(0);
@@ -83,12 +83,12 @@
     confetti = true;
     setTimeout(() => (confetti = false), 6000);
   });
-  socket.on("newQuestion", (content, type) => {
+  socket.on("newQuestion", (content, solutionTypes) => {
     answer = null;
     currentQuestion = {
       number: currentQuestion.number + 1,
       content: DOMPurify.sanitize(content),
-      type
+      solutionTypes
     };
     running = false;
   });
@@ -171,11 +171,13 @@
             {@html renderMath(currentQuestion.content)}
           </div>
           <div class="mt-6">
-            {#if currentQuestion.type === "number"}
+            {#if currentQuestion.solutionTypes.length === 1 && currentQuestion.solutionTypes[0] === "number"}
               <NumberAnswer bind:answer />
-            {:else if currentQuestion.type === "text"}
+            {:else if currentQuestion.solutionTypes.length === 1 && currentQuestion.solutionTypes[0] === "text"}
               <TextAnswer bind:answer />
-            {:else if currentQuestion.type === "expression"}
+            {:else if currentQuestion.solutionTypes.length === 1 && currentQuestion.solutionTypes[0] === "expression"}
+              <ExpressionAnswer bind:answer />
+            {:else}
               <ExpressionAnswer bind:answer />
             {/if}
           </div>

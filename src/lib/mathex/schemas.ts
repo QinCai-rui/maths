@@ -15,7 +15,7 @@ export interface RoomServerToClientEvents {
   gameFinish: () => void;
   running: (durationMs: number) => void;
   stopRunning: () => void;
-  newQuestion: (question: string, questionType: z.infer<typeof Question>["type"]) => void;
+  newQuestion: (question: string, solutionTypes: SolutionType[]) => void;
   confetti: () => void;
   questionCount: (data: number) => void;
   leaderboard: (data: LeaderboardEntry[]) => void;
@@ -102,38 +102,26 @@ export const SolutionItem = z.union([
   })
 ]);
 
-export const NumberQuestion = z.object({
-  contents: z.string(),
-  solutions: z.array(SolutionItem),
-  allowEquivalent: z.boolean()
-});
+export type SolutionType = z.infer<typeof SolutionItem>["type"];
 
-export const TextQuestion = z.object({
-  contents: z.string(),
-  solutions: z.array(SolutionItem),
-  allowEquivalent: z.boolean()
-});
-
-export const ExpressionQuestion = z.object({
-  contents: z.string(),
-  solutions: z.array(SolutionItem),
-  allowEquivalent: z.boolean()
-});
-
-export const Question = z.union([
+export const Question = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object" && "type" in val && "data" in val) {
+      const q = val as any;
+      return {
+        contents: q.data.contents || "",
+        solutions: q.data.solutions || [],
+        allowEquivalent: q.data.allowEquivalent ?? true
+      };
+    }
+    return val;
+  },
   z.object({
-    type: z.literal("number"),
-    data: NumberQuestion
-  }),
-  z.object({
-    type: z.literal("text"),
-    data: TextQuestion
-  }),
-  z.object({
-    type: z.literal("expression"),
-    data: ExpressionQuestion
+    contents: z.string(),
+    solutions: z.array(SolutionItem),
+    allowEquivalent: z.boolean()
   })
-]);
+);
 
 export type RoomState = "lobby" | "started" | "finished";
 

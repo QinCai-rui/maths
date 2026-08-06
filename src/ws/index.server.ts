@@ -107,7 +107,7 @@ export const createWSServer = (base: ServerInstance) => {
       for (const playerSocket of await roomNamespace.fetchSockets()) {
         if (!playerSocket.data.name) return;
         playerSocket.emit("gameStart");
-        playerSocket.emit("newQuestion", firstQuestion.data.contents, firstQuestion.type);
+        playerSocket.emit("newQuestion", firstQuestion.contents, [...new Set(firstQuestion.solutions.map(s => s.type))]);
         playerSocket.data.startingTime = Date.now();
       }
       roomManageNamespace.emit("state", room.state);
@@ -168,7 +168,7 @@ export const createWSServer = (base: ServerInstance) => {
         socket.emit("gameStart");
         socket.data.startingTime = Date.now();
         const firstQuestion = room.questions[0];
-        socket.emit("newQuestion", firstQuestion.data.contents, firstQuestion.type);
+        socket.emit("newQuestion", firstQuestion.contents, [...new Set(firstQuestion.solutions.map(s => s.type))]);
       } else {
         socket.emit("gameFinish");
       }
@@ -221,7 +221,7 @@ export const createWSServer = (base: ServerInstance) => {
           } else {
             socket.data.currentQuestion++;
             const nextQuestion = room.questions[socket.data.currentQuestion - 1];
-            socket.emit("newQuestion", nextQuestion.data.contents, nextQuestion.type);
+            socket.emit("newQuestion", nextQuestion.contents, [...new Set(nextQuestion.solutions.map(s => s.type))]);
           }
           io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp));
         } else {
@@ -294,14 +294,14 @@ export const createWSServer = (base: ServerInstance) => {
 };
 
 function checkSolution(guess: any, question: z.infer<typeof Question>) {
-  const solutions = question.data.solutions;
+  const solutions = question.solutions;
   for (const solution of solutions) {
     if (solution.type === "number") {
       if (Number(guess) === solution.value) return true;
     } else if (solution.type === "text") {
       if (String(guess).trim() === solution.value) return true;
     } else if (solution.type === "expression") {
-      if (!question.data.allowEquivalent) {
+      if (!question.allowEquivalent) {
         if (String(guess).trim() === solution.value) return true;
       } else {
         try {

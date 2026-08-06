@@ -5,19 +5,13 @@
   import SolutionsEditor from "./SolutionsEditor.svelte";
 
   import { z } from "zod";
-  import type { ExpressionQuestion } from "../schemas";
+  import type { Question } from "../schemas";
 
   interface Props {
-    question: z.infer<typeof ExpressionQuestion> | null;
+    question: z.infer<typeof Question>;
   }
 
   let { question = $bindable() }: Props = $props();
-  if (question === null)
-    question = {
-      contents: "",
-      solutions: [],
-      allowEquivalent: true
-    };
 </script>
 
 <div class="grid w-full gap-1.5">

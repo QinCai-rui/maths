@@ -7,9 +7,7 @@
   import { stripTags } from "$lib/mathex/content";
   import { toast } from "svelte-sonner";
 
-  import NumberEditor from "$lib/mathex/editors/NumberEditor.svelte";
-  import TextEditor from "$lib/mathex/editors/TextEditor.svelte";
-  import ExpressionEditor from "$lib/mathex/editors/ExpressionEditor.svelte";
+  import QuestionEditor from "$lib/mathex/editors/QuestionEditor.svelte";
 
   import Plus from "@lucide/svelte/icons/plus";
   import Copy from "@lucide/svelte/icons/copy";
@@ -18,8 +16,6 @@
   import Upload from "@lucide/svelte/icons/upload";
   import Download from "@lucide/svelte/icons/download";
   import Trash2 from "@lucide/svelte/icons/trash-2";
-
-  type QuestionType = z.infer<typeof Question>["type"];
 
   const DRAFT_KEY = "mathex-draft";
 
@@ -40,25 +36,23 @@
   }
 
   function migrateQuestion(q: any): z.infer<typeof Question> {
-    if (
-      q.data?.solutions &&
-      Array.isArray(q.data.solutions) &&
-      q.data.solutions.length > 0 &&
-      typeof q.data.solutions[0] !== "object"
-    ) {
+    // Old format: { type: "...", data: { contents, solutions, allowEquivalent } }
+    if (q.type && q.data) {
       return {
-        ...q,
-        data: {
-          ...q.data,
-          solutions: migrateSolutions(q.data.solutions),
-          allowEquivalent: q.data.allowEquivalent ?? true
-        }
+        contents: q.data.contents || "",
+        solutions: q.data.solutions ? migrateSolutions(q.data.solutions) : [],
+        allowEquivalent: q.data.allowEquivalent ?? true
       };
     }
+    // New format: { contents, solutions, allowEquivalent }
     if (q.data) {
-      return { ...q, data: { ...q.data, allowEquivalent: q.data.allowEquivalent ?? true } };
+      return { ...q.data, allowEquivalent: q.data.allowEquivalent ?? true };
     }
-    return q;
+    return {
+      contents: q.contents || "",
+      solutions: q.solutions ? migrateSolutions(q.solutions) : [],
+      allowEquivalent: q.allowEquivalent ?? true
+    };
   }
 
   // --- Draft persistence ---
@@ -129,7 +123,7 @@
       toast.error("Maximum 100 questions per set");
       return;
     }
-    questions = [...questions, { type: "text", data: { contents: "", solutions: [], allowEquivalent: true } }];
+    questions = [...questions, { contents: "", solutions: [], allowEquivalent: true }];
     currentQuestionIdx = questions.length - 1;
   }
 
@@ -218,14 +212,8 @@
 
   // --- Sidebar helpers ---
   function questionPreview(q: z.infer<typeof Question>): string {
-    const text = stripTags(q.data.contents);
+    const text = stripTags(q.contents);
     return text.slice(0, 50) || (text.length === 0 ? "Empty" : "…");
-  }
-
-  function typeColor(type: QuestionType): string {
-    if (type === "number") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
-    if (type === "text") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
-    return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
   }
 </script>
 
@@ -284,18 +272,9 @@
         <div class="mx-auto max-w-3xl">
           <div class="mb-4 flex items-center gap-3">
             <Header size="h2" class="!m-0">Question {currentQuestionIdx + 1}</Header>
-            <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium {typeColor(currentQuestion.type)}">
-              {currentQuestion.type}
-            </span>
           </div>
           <div class="flex flex-col gap-6 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
-            {#if currentQuestion.type === "number"}
-              <NumberEditor question={currentQuestion.data} />
-            {:else if currentQuestion.type === "text"}
-              <TextEditor question={currentQuestion.data} />
-            {:else if currentQuestion.type === "expression"}
-              <ExpressionEditor question={currentQuestion.data} />
-            {/if}
+            <QuestionEditor question={currentQuestion} />
           </div>
         </div>
       {:else}
@@ -333,9 +312,6 @@
           >
             <button class="min-w-0 flex-1 text-left" onclick={() => (currentQuestionIdx = i)}>
               <div class="flex items-center gap-1.5">
-                <span
-                  class="inline-block h-1.5 w-1.5 shrink-0 rounded-full {typeColor(questions[i].type).split(' ')[0]}"
-                ></span>
                 <span
                   class="truncate text-sm {currentQuestionIdx === i
                     ? 'font-medium text-primary'
