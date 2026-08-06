@@ -50,6 +50,12 @@
   socket.on("connect_error", () => toast.error("Failed to connect! Does this room exist?"));
   socket.on("disconnect", () => toast.warning("Disconnected!"));
 
+  $effect(() => {
+    const reportVisibility = () => socket.emit("visibilityChange", document.hidden);
+    document.addEventListener("visibilitychange", reportVisibility);
+    return () => document.removeEventListener("visibilitychange", reportVisibility);
+  });
+
   socket.on("lobby", () => (gameState = "waiting_start"));
 
   let answer: number | string | null = $state(null);
