@@ -5,6 +5,7 @@
   import { Toaster } from "$lib/components/ui/sonner";
 
   import { Menu, X, Github } from "@lucide/svelte/icons";
+  import ThemeToggle from "$lib/components/ui/theme-toggle/theme-toggle.svelte";
 
   interface Props {
     children?: import("svelte").Snippet;
@@ -63,10 +64,11 @@
             >{link.text}</a
           >
         {/each}
+        <ThemeToggle />
         <a
           href="https://github.com/QinCai-rui/maths"
           target="_blank"
-          class="ml-2 rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          class="ml-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           aria-label="GitHub repository"
         >
           <Github class="h-5 w-5" />
@@ -98,14 +100,17 @@
               onclick={() => (mobileOpen = false)}>{link.text}</a
             >
           {/each}
-          <a
-            href="https://github.com/QinCai-rui/maths"
-            target="_blank"
-            class="flex items-center gap-2 rounded-md px-3 py-2 text-base font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <Github class="h-5 w-5" />
-            GitHub
-          </a>
+          <div class="flex items-center gap-2 pt-2">
+            <ThemeToggle />
+            <a
+              href="https://github.com/QinCai-rui/maths"
+              target="_blank"
+              class="flex items-center gap-2 rounded-md px-3 py-2 text-base font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <Github class="h-5 w-5" />
+              GitHub
+            </a>
+          </div>
         </div>
       </div>
     {/if}
