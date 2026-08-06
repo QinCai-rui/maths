@@ -20,7 +20,7 @@ Every push to the repository triggers the `.github/workflows/docker-publish.yml`
 workflow, which builds the image and publishes it to GHCR:
 
 ```nolang
-ghcr.io/QinCai-rui/maths:{branch}-{sha}
+ghcr.io/qincai-rui/maths:{branch}-{sha}
 ```
 
 On the default branch (`main`) it also publishes `latest` and `{branch}` tags.
@@ -28,5 +28,5 @@ On the default branch (`main`) it also publishes `latest` and `{branch}` tags.
 To run a published image:
 
 ```bash
-docker run -p 5185:5185 ghcr.io/QinCai-rui/maths:latest
+docker run -p 5185:5185 ghcr.io/qincai-rui/maths:latest
 ```
