@@ -13,3 +13,20 @@ Alternatively, you could use the `Dockerfile`/`docker-compose.yml`:
 ```bash
 docker-compose up --build
 ```
+
+## Docker images
+
+Every push to the repository triggers the `.github/workflows/docker-publish.yml`
+workflow, which builds the image and publishes it to GHCR:
+
+```nolang
+ghcr.io/QinCai-rui/maths:{branch}-{sha}
+```
+
+On the default branch (`main`) it also publishes `latest` and `{branch}` tags.
+
+To run a published image:
+
+```bash
+docker run -p 5185:5185 ghcr.io/QinCai-rui/maths:latest
+```
