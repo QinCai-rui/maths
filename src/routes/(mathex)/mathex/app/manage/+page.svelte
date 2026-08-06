@@ -77,7 +77,9 @@
     if (verbosity === "submissions")
       return logs.filter((l) => l.type === "submitted" || l.type === "correct" || l.type === "wrong");
     if (verbosity === "finished")
-      return logs.filter((l) => l.type === "finished" || l.type === "correct" || l.type === "wrong");
+      return logs.filter(
+        (l) => l.type === "finished" || l.type === "correct" || l.type === "wrong" || l.type === "visibility"
+      );
     return logs;
   });
 
@@ -321,12 +323,12 @@
               </div>
               <Select.Root type="single" bind:value={verbosity} disabled={!showLogs}>
                 <Select.Trigger class="w-[140px]">
-                  {verbosity.charAt(0).toUpperCase() + verbosity.substring(1)}
+                  {verbosity === "all" ? "All activity" : verbosity === "submissions" ? "Answers" : "Results & tabs"}
                 </Select.Trigger>
                 <Select.Content>
-                  <Select.Item value="all">All</Select.Item>
-                  <Select.Item value="submissions">Submissions</Select.Item>
-                  <Select.Item value="finished">Finished</Select.Item>
+                  <Select.Item value="all">All activity</Select.Item>
+                  <Select.Item value="submissions">Answers only</Select.Item>
+                  <Select.Item value="finished">Results & tab activity</Select.Item>
                 </Select.Content>
               </Select.Root>
             </div>
