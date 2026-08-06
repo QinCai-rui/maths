@@ -34,8 +34,11 @@
     forceNew: true
   });
   socket.on("alert", (type, message) => {
-    // @ts-ignore
-    toast[type](message);
+    if (type === "normal" || type === "action" || type === "default") {
+      toast(message);
+    } else {
+      toast[type](message);
+    }
   });
   socket.on("connect", () => {
     toast.success("Connected!");
