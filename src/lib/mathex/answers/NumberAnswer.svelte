@@ -7,4 +7,15 @@
   let { answer = $bindable() }: Props = $props();
 </script>
 
-<Input type="number" bind:value={answer} placeholder="Type your answer here" />
+<Input
+  type="text"
+  inputmode="decimal"
+  bind:value={answer}
+  placeholder="Type your number"
+  class="text-lg"
+  onkeydown={(e) => {
+    if (e.key === "Enter") {
+      e.currentTarget.closest("form")?.requestSubmit();
+    }
+  }}
+/>

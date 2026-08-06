@@ -13,7 +13,7 @@ export interface RoomServerToClientEvents {
   lobby: () => void;
   gameStart: () => void;
   gameFinish: () => void;
-  running: () => void;
+  running: (durationMs: number) => void;
   stopRunning: () => void;
   newQuestion: (question: string, questionType: z.infer<typeof Question>["type"]) => void;
   confetti: () => void;
@@ -22,36 +22,21 @@ export interface RoomServerToClientEvents {
 
 export interface RoomClientToServerEvents {
   join: (name: string) => void;
-  answer: (value: z.infer<typeof Question>["data"]["solutions"][number]) => void;
+  answer: (value: string | number) => void;
 }
 
 export interface RoomInterServerEvents {}
 
 export interface RoomSocketData {
-  /**
-   * The given name of the player
-   */
   name: string | null;
-  /**
-   * The current question the player is up to
-   */
   currentQuestion: number;
-  /**
-   * The time in Unix milliseconds when the player started, or null
-   */
   startingTime: number | null;
-  /**
-   * The time in Unix milliseconds when the player finished, or null
-   */
   finishingTime: number | null;
-  /**
-   * Whether the player is currently waiting for a question to be marked
-   */
   isRunning: boolean;
 }
 
 export interface RoomCreateClientToServerEvents {
-  newRoom: (name: string, questions: z.infer<typeof Question>[]) => void;
+  newRoom: (name: string, questions: z.infer<typeof Question>[], runningTimeMs: number) => void;
   checkRoom: (id: string, callback: (exists: boolean) => void) => void;
 }
 
@@ -79,19 +64,34 @@ export interface RoomManageInterServerEvents {}
 
 export interface RoomManageSocketData {}
 
+export const SolutionItem = z.union([
+  z.object({
+    type: z.literal("number"),
+    value: z.number()
+  }),
+  z.object({
+    type: z.literal("text"),
+    value: z.string()
+  }),
+  z.object({
+    type: z.literal("expression"),
+    value: z.string()
+  })
+]);
+
 export const NumberQuestion = z.object({
   contents: z.string(),
-  solutions: z.array(z.number())
+  solutions: z.array(SolutionItem)
 });
 
 export const TextQuestion = z.object({
   contents: z.string(),
-  solutions: z.array(z.string())
+  solutions: z.array(SolutionItem)
 });
 
 export const ExpressionQuestion = z.object({
   contents: z.string(),
-  solutions: z.array(z.string()),
+  solutions: z.array(SolutionItem),
   allowEquivalent: z.boolean()
 });
 
@@ -113,43 +113,17 @@ export const Question = z.union([
 export type RoomState = "lobby" | "started" | "finished";
 
 export interface Room {
-  /**
-   * Unique identity
-   */
   id: string;
-  /**
-   * Name
-   */
   name: string;
-  /**
-   * Questions list
-   */
   questions: z.infer<typeof Question>[];
-  /**
-   * Token that the manager can use to manage the room
-   */
   runToken: string;
-  /**
-   * If the game has started yet
-   */
   state: RoomState;
+  runningTimeMs: number;
 }
 
 export interface ClientKnownRoom {
-  /**
-   * Unique identity
-   */
   id: string;
-  /**
-   * Player count
-   */
   playerCount: number;
-  /**
-   * Name
-   */
   name: string;
-  /**
-   * Questions count
-   */
   questionCount: number;
 }

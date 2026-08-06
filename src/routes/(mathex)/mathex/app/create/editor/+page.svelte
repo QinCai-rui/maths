@@ -2,192 +2,410 @@
   import { z } from "zod";
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import { Header } from "$lib/components/ui/header";
-  import * as Menubar from "$lib/components/ui/menubar";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import { Question } from "$lib/mathex/schemas";
+  import { Question, SolutionItem } from "$lib/mathex/schemas";
+  import { stripTags } from "$lib/mathex/content";
+  import { toast } from "svelte-sonner";
 
   import NumberEditor from "$lib/mathex/editors/NumberEditor.svelte";
   import TextEditor from "$lib/mathex/editors/TextEditor.svelte";
   import ExpressionEditor from "$lib/mathex/editors/ExpressionEditor.svelte";
-  import MoveRight from "@lucide/svelte/icons/move-right";
-  import X from "@lucide/svelte/icons/x";
+
+  import Plus from "@lucide/svelte/icons/plus";
+  import Copy from "@lucide/svelte/icons/copy";
+  import ChevronUp from "@lucide/svelte/icons/chevron-up";
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import Upload from "@lucide/svelte/icons/upload";
+  import Download from "@lucide/svelte/icons/download";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+
+  type QuestionType = z.infer<typeof Question>["type"];
+
+  const DRAFT_KEY = "mathex-draft";
 
   let questions: z.infer<typeof Question>[] = $state([]);
   let currentQuestionIdx = $state(0);
   let currentQuestion = $derived(questions[currentQuestionIdx]);
+  let isDirty = $state(false);
+  let loaded = $state(false);
 
-  // Ask if you want to leave
-  window.addEventListener("beforeunload", (e) => {
-    if (questions.length === 0) return;
+  // --- Migrate old-format solutions ---
+  function migrateSolutions(sol: any[]): z.infer<typeof SolutionItem>[] {
+    return sol.map((s) => {
+      if (typeof s === "object" && s !== null && "type" in s && "value" in s) return s;
+      if (typeof s === "number") return { type: "number", value: s };
+      if (typeof s === "string") return { type: "text", value: s };
+      return { type: "text", value: String(s) };
+    });
+  }
 
-    e.preventDefault();
-    // Included for legacy support
-    e.returnValue = true;
+  function migrateQuestion(q: any): z.infer<typeof Question> {
+    if (
+      q.data?.solutions &&
+      Array.isArray(q.data.solutions) &&
+      q.data.solutions.length > 0 &&
+      typeof q.data.solutions[0] !== "object"
+    ) {
+      return { ...q, data: { ...q.data, solutions: migrateSolutions(q.data.solutions) } };
+    }
+    return q;
+  }
+
+  // --- Draft persistence ---
+  function saveDraft() {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(questions));
+      isDirty = false;
+    } catch {}
+  }
+
+  let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  function scheduleSave() {
+    isDirty = true;
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(saveDraft, 500);
+  }
+
+  function loadDraft(): boolean {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.length === 0) return false;
+      questions = parsed.map(migrateQuestion);
+      currentQuestionIdx = 0;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+    isDirty = false;
+  }
+
+  $effect(() => {
+    if (loaded && questions.length >= 0) {
+      scheduleSave();
+    }
   });
 
-  let clearSetDialogOpen = $state(false);
-  function clearSet() {
-    currentQuestionIdx = 0;
-    questions = [];
-    clearSetDialogOpen = false;
-  }
-
-  function download() {
-    let element = document.createElement("a");
-    element.setAttribute(
-      "href",
-      "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(questions))
-    );
-    element.setAttribute("download", "set.json");
-    element.style.display = "none";
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  }
-
-  function upload() {
-    let input = document.createElement("input");
-    input.type = "file";
-    input.multiple = false;
-    input.accept = "application/json";
-
-    input.addEventListener(
-      "change",
-      async () => {
-        if (!input.files) return;
-        const file = input.files[0];
-        currentQuestionIdx = 0;
-        questions = JSON.parse(await file.text());
-      },
-      {
-        once: true
+  $effect(() => {
+    if (!loaded) return;
+    function handler(e: BeforeUnloadEvent) {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = true;
       }
-    );
+    }
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  });
 
-    input.click();
-  }
+  $effect(() => {
+    if (loaded) return;
+    const restored = loadDraft();
+    loaded = true;
+    if (restored && questions.length > 0) {
+      toast.info(`Draft restored (${questions.length} question${questions.length === 1 ? "" : "s"})`);
+    }
+  });
 
-  function newQuestion(type: z.infer<typeof Question>["type"]) {
+  // --- Question CRUD ---
+  function newQuestion(type: QuestionType) {
     if (questions.length >= 100) {
-      alert("You cannot have more than 100 questions in a set!");
+      toast.error("Maximum 100 questions per set");
       return;
     }
-    if (type === "number" || type === "text") {
-      questions.push({
-        type,
-        data: {
-          contents: "",
-          solutions: []
-        }
-      });
-    } else if (type === "expression") {
-      questions.push({
-        type,
-        data: {
-          contents: "",
-          solutions: [],
-          allowEquivalent: true
-        }
-      });
+    if (type === "expression") {
+      questions = [...questions, { type, data: { contents: "", solutions: [], allowEquivalent: true } }];
+    } else {
+      questions = [...questions, { type, data: { contents: "", solutions: [] } }];
     }
     currentQuestionIdx = questions.length - 1;
-    questions = questions;
   }
 
   function removeQuestion(i: number) {
-    if (!confirm(`Do you really want to remove question ${i + 1}?`)) return;
     if (currentQuestionIdx === i) {
-      if (currentQuestionIdx === 0) currentQuestionIdx++;
-      else currentQuestionIdx--;
+      if (currentQuestionIdx === 0 && questions.length > 1) currentQuestionIdx = 1;
+      else if (questions.length > 1) currentQuestionIdx--;
     }
     questions = questions.toSpliced(i, 1);
+    if (currentQuestionIdx >= questions.length) currentQuestionIdx = Math.max(0, questions.length - 1);
+  }
+
+  function duplicateQuestion(i: number) {
+    if (questions.length >= 100) {
+      toast.error("Maximum 100 questions per set");
+      return;
+    }
+    const copy = structuredClone(questions[i]);
+    questions = [...questions.slice(0, i + 1), copy, ...questions.slice(i + 1)];
+    currentQuestionIdx = i + 1;
+  }
+
+  function moveQuestion(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= questions.length) return;
+    const arr = [...questions];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    questions = arr;
+    currentQuestionIdx = j;
+  }
+
+  // --- Clear ---
+  let clearDialogOpen = $state(false);
+  function clearAll() {
+    questions = [];
+    currentQuestionIdx = 0;
+    clearDraft();
+    clearDialogOpen = false;
+  }
+
+  // --- Import / Export ---
+  function importFile() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const migrated = Array.isArray(parsed) ? parsed.map(migrateQuestion) : parsed;
+        const result = z.array(Question).safeParse(migrated);
+        if (!result.success) {
+          toast.error(`Invalid set: ${result.error.issues[0]?.message || "bad format"}`);
+          return;
+        }
+        if (result.data.length > 100) {
+          toast.error("Set has more than 100 questions — rejected");
+          return;
+        }
+        questions = result.data;
+        currentQuestionIdx = 0;
+        clearDraft();
+        toast.success(`Imported ${result.data.length} question${result.data.length === 1 ? "" : "s"}`);
+      } catch {
+        toast.error("Could not parse JSON file");
+      }
+    };
+    input.click();
+  }
+
+  function exportFile() {
+    if (questions.length === 0) {
+      toast.error("Nothing to export");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(questions, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `set-${questions.length}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // --- Sidebar helpers ---
+  function questionPreview(q: z.infer<typeof Question>): string {
+    const text = stripTags(q.data.contents);
+    return text.slice(0, 50) || (text.length === 0 ? "Empty" : "…");
+  }
+
+  function typeColor(type: QuestionType): string {
+    if (type === "number") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+    if (type === "text") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+    return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
   }
 </script>
 
-<!-- Clear Set dialog -->
-<AlertDialog.Root bind:open={clearSetDialogOpen}>
+<AlertDialog.Root bind:open={clearDialogOpen}>
   <AlertDialog.Content>
     <AlertDialog.Header>
-      <AlertDialog.Title>Are you absolutely sure?</AlertDialog.Title>
+      <AlertDialog.Title>Clear entire set?</AlertDialog.Title>
       <AlertDialog.Description>
-        This action cannot be undone. This will permanently delete all questions in this set! <span class="font-bold"
-          >Please make sure you have exported this set if you want to keep it!</span
-        >
+        This will delete all {questions.length} question{questions.length === 1 ? "" : "s"} permanently. Export first if you
+        want to keep this set.
       </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
       <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-      <AlertDialog.Action class={buttonVariants({ variant: "destructive" })} onclick={clearSet}
-        >Clear</AlertDialog.Action
-      >
+      <AlertDialog.Action class={buttonVariants({ variant: "destructive" })} onclick={clearAll}>
+        Clear
+      </AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>
 
-<div class="flex flex-col h-full">
-  <Menubar.Root class="text-slate-900">
-    <Menubar.Menu>
-      <Menubar.Trigger>File</Menubar.Trigger>
-      <Menubar.Content>
-        <Menubar.Item onclick={() => (clearSetDialogOpen = true)}>Clear Set</Menubar.Item>
-        <Menubar.Separator />
-        <Menubar.Item onclick={upload}>Import JSON</Menubar.Item>
-        <Menubar.Item onclick={download}>Export JSON</Menubar.Item>
-      </Menubar.Content>
-    </Menubar.Menu>
-    <Menubar.Menu>
-      <Menubar.Trigger>Insert</Menubar.Trigger>
-      <Menubar.Content>
-        <Menubar.Sub>
-          <Menubar.SubTrigger>New Question</Menubar.SubTrigger>
-          <Menubar.SubContent>
-            <Menubar.Item onclick={() => newQuestion("number")}>Number</Menubar.Item>
-            <Menubar.Item onclick={() => newQuestion("text")}>Text</Menubar.Item>
-            <Menubar.Item onclick={() => newQuestion("expression")}>Expression</Menubar.Item>
-          </Menubar.SubContent>
-        </Menubar.Sub>
-      </Menubar.Content>
-    </Menubar.Menu>
-  </Menubar.Root>
-  <div class="mt-1 flex flex-row h-full w-full">
-    <div class="bg-white text-slate-900 p-2 w-[80%] h-full rounded-md mr-1">
-      {#if questions.length > 0}
-        <Header size="h2">Question {currentQuestionIdx + 1}</Header>
-        <div class="mt-2"></div>
-        {#if currentQuestion.type === "number"}
-          <NumberEditor question={currentQuestion.data} />
-        {:else if currentQuestion.type === "text"}
-          <TextEditor question={currentQuestion.data} />
-        {:else if currentQuestion.type === "expression"}
-          <ExpressionEditor question={currentQuestion.data} />
-        {/if}
+<div class="flex h-screen flex-col">
+  <!-- Header bar -->
+  <div class="flex shrink-0 items-center gap-3 border-b border-border/40 bg-background px-4 py-2">
+    <Header size="h3" class="!m-0">Set Editor</Header>
+    <span class="ml-1 text-xs text-muted-foreground">{questions.length}/100</span>
+    {#if isDirty}
+      <span class="text-xs text-muted-foreground italic">Unsaved</span>
+    {/if}
+    <div class="ml-auto flex items-center gap-1.5">
+      <div class="relative group">
+        <Button variant="outline" size="sm" class="gap-1">
+          <Plus class="h-3.5 w-3.5" /> New
+        </Button>
+        <div
+          class="absolute right-0 top-full z-50 mt-1 hidden w-36 rounded-lg border border-border bg-popover p-1 shadow-md group-hover:block"
+        >
+          <button
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+            onclick={() => newQuestion("number")}
+          >
+            <span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span> Number
+          </button>
+          <button
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+            onclick={() => newQuestion("text")}
+          >
+            <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span> Text
+          </button>
+          <button
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+            onclick={() => newQuestion("expression")}
+          >
+            <span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span> Expression
+          </button>
+        </div>
+      </div>
+      <Button variant="outline" size="sm" class="gap-1" onclick={importFile}>
+        <Upload class="h-3.5 w-3.5" /> Import
+      </Button>
+      <Button variant="outline" size="sm" class="gap-1" onclick={exportFile} disabled={questions.length === 0}>
+        <Download class="h-3.5 w-3.5" /> Export
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="gap-1 text-destructive hover:text-destructive"
+        onclick={() => (clearDialogOpen = true)}
+        disabled={questions.length === 0}
+      >
+        <Trash2 class="h-3.5 w-3.5" /> Clear
+      </Button>
+    </div>
+  </div>
+
+  <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+    <!-- Main editor area -->
+    <div class="min-h-0 flex-1 overflow-auto p-4 lg:p-6">
+      {#if questions.length > 0 && currentQuestion}
+        <div class="mx-auto max-w-3xl">
+          <div class="mb-4 flex items-center gap-3">
+            <Header size="h2" class="!m-0">Question {currentQuestionIdx + 1}</Header>
+            <span class="inline-block rounded-full px-2 py-0.5 text-xs font-medium {typeColor(currentQuestion.type)}">
+              {currentQuestion.type}
+            </span>
+          </div>
+          <div class="flex flex-col gap-6 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+            {#if currentQuestion.type === "number"}
+              <NumberEditor question={currentQuestion.data} />
+            {:else if currentQuestion.type === "text"}
+              <TextEditor question={currentQuestion.data} />
+            {:else if currentQuestion.type === "expression"}
+              <ExpressionEditor question={currentQuestion.data} />
+            {/if}
+          </div>
+        </div>
       {:else}
-        <div class="w-full text-2xl italic text-center">
-          You have to add a question (Insert <MoveRight class="inline" /> New Question) or load a file (File <MoveRight
-            class="inline"
-          /> Import JSON)
+        <div
+          class="mx-auto flex max-w-3xl flex-col items-center justify-center rounded-xl border border-border/60 bg-card p-12 shadow-sm text-center"
+        >
+          <div class="mb-6 text-2xl font-semibold text-foreground">Create your first question</div>
+          <p class="mb-6 max-w-md text-muted-foreground">
+            Start building a question set by choosing a question type, or import an existing set.
+          </p>
+          <div class="flex flex-wrap justify-center gap-3">
+            <Button variant="outline" size="lg" class="gap-2" onclick={() => newQuestion("number")}>
+              <span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span> Number
+            </Button>
+            <Button variant="outline" size="lg" class="gap-2" onclick={() => newQuestion("text")}>
+              <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span> Text
+            </Button>
+            <Button variant="outline" size="lg" class="gap-2" onclick={() => newQuestion("expression")}>
+              <span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span> Expression
+            </Button>
+          </div>
+          <p class="mt-6 text-sm text-muted-foreground">
+            or
+            <button class="text-primary underline underline-offset-2 hover:text-primary/80" onclick={importFile}>
+              import a JSON set
+            </button>
+          </p>
         </div>
       {/if}
     </div>
-    <div class="bg-white text-slate-900 p-2 w-[20%] h-full rounded-md">
-      {#each questions as _, i}
-        <Button
-          variant="ghost"
-          class="w-full flex group"
-          onclick={() => {
-            currentQuestionIdx = i;
-            questions = questions;
-          }}
-        >
-          <span>Question {i + 1}</span>
-          <div class="flex flex-1"></div>
-          <button onclick={() => removeQuestion(i)}>
-            <X class="invisible flex flex-1 text-right transition-all group-hover:visible" />
-          </button>
-        </Button>
-      {:else}
-        <p class="italic w-full text-center">No questions yet</p>
-      {/each}
+
+    <!-- Sidebar -->
+    <div class="w-full shrink-0 border-t border-border/40 bg-muted/20 p-3 lg:w-64 lg:border-t-0 lg:border-l">
+      <Header size="h3" class="!mb-2">Questions</Header>
+      <div class="flex flex-col gap-0.5 max-h-[calc(100vh-140px)] overflow-y-auto scrollbar-thin">
+        {#each questions as _, i}
+          <div
+            class="group flex items-center gap-1 rounded-lg px-1 py-0.5 transition-colors {currentQuestionIdx === i
+              ? 'bg-primary/10'
+              : 'hover:bg-accent/50'}"
+          >
+            <button class="min-w-0 flex-1 text-left" onclick={() => (currentQuestionIdx = i)}>
+              <div class="flex items-center gap-1.5">
+                <span
+                  class="inline-block h-1.5 w-1.5 shrink-0 rounded-full {typeColor(questions[i].type).split(' ')[0]}"
+                ></span>
+                <span
+                  class="truncate text-sm {currentQuestionIdx === i
+                    ? 'font-medium text-primary'
+                    : 'text-muted-foreground'}"
+                >
+                  {i + 1}. {questionPreview(questions[i])}
+                </span>
+              </div>
+            </button>
+            <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                class="rounded p-0.5 hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-30"
+                onclick={() => moveQuestion(i, -1)}
+                disabled={i === 0}
+                aria-label="Move up"
+              >
+                <ChevronUp class="h-3 w-3" />
+              </button>
+              <button
+                class="rounded p-0.5 hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-30"
+                onclick={() => moveQuestion(i, 1)}
+                disabled={i === questions.length - 1}
+                aria-label="Move down"
+              >
+                <ChevronDown class="h-3 w-3" />
+              </button>
+              <button
+                class="rounded p-0.5 hover:bg-accent text-muted-foreground hover:text-foreground"
+                onclick={() => duplicateQuestion(i)}
+                aria-label="Duplicate"
+              >
+                <Copy class="h-3 w-3" />
+              </button>
+              <button
+                class="rounded p-0.5 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                onclick={() => removeQuestion(i)}
+                aria-label="Remove"
+              >
+                <Trash2 class="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        {:else}
+          <p class="italic text-center text-sm text-muted-foreground py-4">No questions yet</p>
+        {/each}
+      </div>
     </div>
   </div>
 </div>

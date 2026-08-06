@@ -13,6 +13,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Button } from "$lib/components/ui/button";
   import { Header } from "$lib/components/ui/header";
+  import { Label } from "$lib/components/ui/label";
   import { Progress } from "$lib/components/ui/progress";
 
   import NumberAnswer from "$lib/mathex/answers/NumberAnswer.svelte";
@@ -25,6 +26,7 @@
   let confetti = $state(false);
 
   import DOMPurify from "dompurify";
+  import { renderMath } from "$lib/mathex/content";
 
   const roomId = page.params.id;
 
@@ -49,9 +51,10 @@
 
   socket.on("lobby", () => (gameState = "waiting_start"));
 
-  let answer: z.infer<typeof Question>["data"]["solutions"][number] | null = $state(null);
+  let answer: number | string | null = $state(null);
 
   let running: number | false = $state(false);
+  let runningDuration = $state(16000);
   let runningVisible = $state(0);
   let currentQuestion: {
     number: number;
@@ -62,7 +65,7 @@
     content: "<p>Loading...</p>",
     type: "text"
   });
-  let startingTime: number | null = null;
+  let startingTime: number | null = $state(null);
   let timePassed = $state(0);
   setInterval(() => {
     if (!startingTime) timePassed = 0;
@@ -85,10 +88,11 @@
     };
     running = false;
   });
-  socket.on("running", () => {
+  socket.on("running", (durationMs: number) => {
     running = Date.now();
+    runningDuration = durationMs;
     const interval = setInterval(() => {
-      if (running) runningVisible = ((Date.now() - running) / 16000) * 100;
+      if (running) runningVisible = ((Date.now() - running) / runningDuration) * 100;
       else clearInterval(interval);
     });
   });
@@ -97,71 +101,101 @@
   socket.on("questionCount", (data) => (questionCount = data));
 </script>
 
-{#if gameState === "connecting"}
-  <span class="animate-pulse font-bold text-5xl flex text-center items-center w-full h-full justify-center"
-    >Connecting...</span
-  >
-{:else if gameState === "choose-name"}
-  <div class="w-full h-full flex justify-center items-center align-middle text-center">
-    <div class="flex flex-col rounded bg-white text-slate-900 w-min text-center p-2">
-      {#if name}
-        <div class="flex justify-center text-center">
-          <Identicon seed={name} className="w-16 h-16" />
-        </div>
-      {:else}
-        <span class="w-full h-16 text-2xl text-center flex justify-center items-center">?</span>
-      {/if}
-      <Input bind:value={name} type="text" placeholder="Name" class="w-64" maxlength={20} />
-      <Button class="mt-2" onclick={() => socket.emit("join", name)}>Join</Button>
-    </div>
-  </div>
-{:else if gameState === "waiting_start"}
-  <span class="animate-pulse font-bold text-4xl flex text-center items-center w-full h-full justify-center"
-    >Waiting for game to start...</span
-  >
-{:else if gameState === "started"}
-  <div class="p-3 bg-white text-slate-900 rounded mb-2 flex items-center">
-    <div class="text-3xl text-center">{msToMinutesAndSeconds(timePassed)}</div>
-  </div>
-  {#if running}
-    <div class="p-3 bg-white text-slate-900 rounded">
-      <Header size="h2">Running...</Header>
-      <div class="flex justify-center items-center">
-        <LoaderCircle class="animate-spin mr-2" />
-        <Progress value={runningVisible} class="*:transition-none" />
-      </div>
-    </div>
-  {:else}
-    <div class="p-3 bg-white text-slate-900 rounded">
-      <Header size="h2">Question {currentQuestion.number} / {questionCount}</Header>
-      <div class="prose prose-slate">{@html currentQuestion.content}</div>
-      {#if currentQuestion.type === "number"}
-        <NumberAnswer bind:answer />
-      {:else if currentQuestion.type === "text"}
-        <TextAnswer bind:answer />
-      {:else if currentQuestion.type === "expression"}
-        <ExpressionAnswer bind:answer />
-      {/if}
-      <Button
-        class="mt-2"
-        onclick={() => {
-          if (!answer) {
-            toast.error("Answer is null!");
-            return;
-          }
-          socket.emit("answer", answer);
-        }}>Submit</Button
-      >
-    </div>
-  {/if}
-{:else if gameState === "finished"}
-  <div class="rounded p-2 bg-white text-slate-900">
-    <Header size="h1">Game finished!</Header>
-    <p>The host may communicate more information to you via alerts. They will appear at the bottom right.</p>
-  </div>
-{/if}
 {#if confetti}
   <div class="fixed top-[-50px] left-0 h-screen w-screen flex justify-center overflow-hidden pointer-events-none">
     <Confetti x={[-5, 5]} y={[0, 0.1]} delay={[500, 2000]} infinite duration={4000} amount={400} fallDistance="100vh" />
   </div>
 {/if}
+
+<div class="flex min-h-screen flex-col p-4">
+  {#if gameState === "connecting"}
+    <div class="flex flex-1 items-center justify-center">
+      <span class="flex items-center gap-3 text-xl font-medium text-muted-foreground">
+        <LoaderCircle class="h-5 w-5 animate-spin" />
+        Connecting...
+      </span>
+    </div>
+  {:else if gameState === "choose-name"}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="w-full max-w-sm rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+        <div class="flex flex-col items-center">
+          {#if name}
+            <Identicon seed={name} className="w-16 h-16 rounded-lg" />
+          {:else}
+            <div
+              class="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-border text-2xl text-muted-foreground"
+            >
+              ?
+            </div>
+          {/if}
+          <div class="mt-4 w-full space-y-2">
+            <Label for="name" class="text-sm font-medium">Your name</Label>
+            <Input bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
+          </div>
+          <Button class="mt-4 w-full" onclick={() => socket.emit("join", name)}>Join Room</Button>
+        </div>
+      </div>
+    </div>
+  {:else if gameState === "waiting_start"}
+    <div class="flex flex-1 items-center justify-center">
+      <span class="flex items-center gap-3 text-xl font-medium text-muted-foreground">
+        <LoaderCircle class="h-5 w-5 animate-spin" />
+        Waiting for game to start...
+      </span>
+    </div>
+  {:else if gameState === "started"}
+    <div class="mx-auto w-full max-w-2xl">
+      <div class="flex items-center justify-between rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+        <div class="text-2xl font-semibold tabular-nums">{msToMinutesAndSeconds(timePassed)}</div>
+        <div class="text-sm text-muted-foreground">Question {currentQuestion.number} / {questionCount}</div>
+      </div>
+
+      {#if running}
+        <div class="mt-4 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+          <Header size="h3">Running...</Header>
+          <div class="mt-4 flex items-center gap-3">
+            <LoaderCircle class="h-5 w-5 animate-spin text-primary" />
+            <Progress value={runningVisible} class="*:transition-none" />
+          </div>
+        </div>
+      {:else}
+        <div class="mt-4 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+          <div class="prose prose-slate max-w-none dark:prose-invert">
+            {@html renderMath(currentQuestion.content)}
+          </div>
+          <div class="mt-6">
+            {#if currentQuestion.type === "number"}
+              <NumberAnswer bind:answer />
+            {:else if currentQuestion.type === "text"}
+              <TextAnswer bind:answer />
+            {:else if currentQuestion.type === "expression"}
+              <ExpressionAnswer bind:answer />
+            {/if}
+          </div>
+          <form
+            class="mt-4"
+            onsubmit={(e) => {
+              e.preventDefault();
+              if (answer === null || answer === "") {
+                toast.error("Enter an answer first");
+                return;
+              }
+              socket.emit("answer", answer);
+            }}
+          >
+            <Button type="submit" class="w-full" disabled={answer === null || answer === ""}>Submit Answer</Button>
+          </form>
+        </div>
+      {/if}
+    </div>
+  {:else if gameState === "finished"}
+    <div class="flex flex-1 items-center justify-center">
+      <div class="w-full max-w-md rounded-xl border border-border/60 bg-card p-8 shadow-sm text-center">
+        <Header size="h1">Game finished!</Header>
+        <p class="mt-4 text-muted-foreground">
+          The host may communicate more information to you via alerts. They will appear at the bottom right.
+        </p>
+      </div>
+    </div>
+  {/if}
+</div>

@@ -1,15 +1,11 @@
 <script lang="ts">
-  import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import { Button } from "$lib/components/ui/button";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import Quill from "$lib/components/Quill.svelte";
+  import SolutionsEditor from "./SolutionsEditor.svelte";
 
   import { z } from "zod";
   import type { ExpressionQuestion } from "../schemas";
-
-  import Plus from "@lucide/svelte/icons/plus";
-  import Minus from "@lucide/svelte/icons/minus";
 
   interface Props {
     question: z.infer<typeof ExpressionQuestion> | null;
@@ -25,30 +21,11 @@
 </script>
 
 <div class="grid w-full gap-1.5">
-  <Label for="question-text">Question text</Label>
+  <Label>Question text</Label>
   <Quill bind:html={question.contents} />
 </div>
-<div class="mt-2 grid gap-1.5">
-  <Label>Solutions (should be parsable by mathjs)</Label>
-  {#each question.solutions as _solution, i}
-    <div class="flex gap-2">
-      <Input type="text" bind:value={question.solutions[i]} /><Button
-        onclick={() => {
-          question.solutions = question.solutions.toSpliced(i, 1);
-        }}><Minus class="mr-1" />Remove</Button
-      >
-    </div>
-  {/each}
-  <Button
-    onclick={() => {
-      question.solutions = [...question.solutions, ""];
-    }}
-    class="w-48"><Plus class="mr-1" />Add solution</Button
-  >
-</div>
-<div class="flex items-center space-x-2 mt-2">
-  <Checkbox id="allowEquiv" bind:checked={question.allowEquivalent} aria-labelledby="allowEquiv-label" />
-  <Label id="allowEquiv-label" for="allowEquiv" class="text-sm font-medium leading-none">
-    Allow equivalent expressions
-  </Label>
+<SolutionsEditor bind:solutions={question.solutions} />
+<div class="flex items-center space-x-2 mt-3">
+  <Checkbox id="allowEquiv" bind:checked={question.allowEquivalent} />
+  <Label for="allowEquiv" class="text-sm font-medium leading-none cursor-pointer">Allow equivalent expressions</Label>
 </div>

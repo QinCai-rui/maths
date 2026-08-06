@@ -1,15 +1,23 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
+  import { Header } from "$lib/components/ui/header";
+  import { Calculator } from "@lucide/svelte/icons";
 </script>
 
-<section class="p-2 mx-auto flex w-full flex-col items-center gap-2 py-6 md:py-12 md:pb-8 lg:py-24 lg:pb-20 pb-8">
-  <h1 class="text-center text-4xl font-bold leading-tight tracking-tighter md:text-6xl lg:leading-[1.1]">
-    Mathex on Devarsh's Maths, revived
-  </h1>
-  <p class="max-w-[750px] text-center text-lg sm:text-xl text-balance text-muted-foreground">
-    An application designed for Mathex-style events.
-  </p>
-  <a href="/mathex/app" class="max-w-[400px] w-full flex justify-center items-center"
-    ><Button class="w-full font-semibold bg-blue-500 hover:bg-blue-500/90">Let's go!</Button></a
-  >
+<section class="py-20">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-2xl text-center">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Calculator class="h-7 w-7" />
+      </div>
+      <Header size="h1">Mathex on Devarsh's Maths, revived</Header>
+      <p class="mt-4 text-center text-lg text-muted-foreground">An application designed for Mathex-style events.</p>
+      <div class="mt-8 flex justify-center">
+        <Button href="/mathex/app" class="gap-2">
+          <Calculator class="h-4 w-4" />
+          Let's go!
+        </Button>
+      </div>
+    </div>
+  </div>
 </section>

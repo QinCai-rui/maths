@@ -159,14 +159,24 @@
   ];
 </script>
 
-<div class="flex flex-col items-center py-20 bg-linear-to-bl from-emerald-300 to-indigo-600 w-full">
-  <span class="text-6xl text-center font-bold">{data.n}</span>
-</div>
-<div class="p-2 mt-4 w-full grid grid-cols-3 gap-4">
-  {#each properties as property}
-    <div class="p-2 rounded flex flex-col bg-emerald-300">
-      <span class="font-semibold">{@html property.header}</span>
-      <p class="max-h-32 overflow-auto">{@html property.fn(data.n)}</p>
+<div class="py-12">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="text-center">
+      <div
+        class="mx-auto flex h-20 w-fit min-w-20 items-center justify-center rounded-2xl bg-primary/10 px-4 text-primary"
+      >
+        <span class="text-3xl font-bold tabular-nums">{data.n}</span>
+      </div>
+      <p class="mt-4 text-sm text-muted-foreground">Number properties</p>
     </div>
-  {/each}
+
+    <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {#each properties as property}
+        <div class="rounded-xl border border-border/60 bg-card p-5 shadow-sm transition-all hover:shadow-md">
+          <span class="text-sm font-medium text-primary">{@html property.header}</span>
+          <p class="mt-2 text-sm text-muted-foreground">{@html property.fn(data.n)}</p>
+        </div>
+      {/each}
+    </div>
+  </div>
 </div>

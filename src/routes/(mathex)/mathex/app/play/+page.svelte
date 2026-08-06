@@ -38,9 +38,23 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full justify-center items-center">
-  <Header size="h1">Join Room</Header>
-  <div class="flex gap-1 mt-2">
+<div class="flex min-h-screen flex-col items-center justify-center gap-6 p-4">
+  <div class="text-center">
+    <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M15 7h.01M15 12h.01M15 17h.01M4 7h.01M4 12h.01M4 17h.01M8 7h.01M8 12h.01M8 17h.01"
+        />
+      </svg>
+    </div>
+    <Header size="h1">Join Room</Header>
+    <p class="mt-2 text-muted-foreground">Enter the 8-character room code provided by your host.</p>
+  </div>
+
+  <div class="flex gap-2 mt-2">
     <InputOTP.Root
       maxlength={8}
       spellcheck="false"
@@ -50,11 +64,15 @@
       {#snippet children({ cells })}
         {#each cells as cell (cell)}
           <InputOTP.Group>
-            <InputOTP.Slot class="bg-gray-100 text-slate-900" {cell} />
+            <InputOTP.Slot class="bg-muted text-foreground border-border" {cell} />
           </InputOTP.Group>
         {/each}
       {/snippet}
     </InputOTP.Root>
   </div>
-  <Button variant="link" class="text-white" href="/mathex/app"><MoveLeft class="mr-1" /> Back to home</Button>
+
+  <Button variant="ghost" href="/mathex/app" class="gap-2">
+    <MoveLeft class="h-4 w-4" />
+    Back to home
+  </Button>
 </div>

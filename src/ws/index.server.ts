@@ -43,9 +43,10 @@ export const createWSServer = (base: ServerInstance) => {
     RoomCreateSocketData
   > = io.of("/rooms");
   roomCreateNamespace.on("connection", (socket) => {
-    socket.on("newRoom", (name, questions) => {
+    socket.on("newRoom", (name, questions, runningTimeMs) => {
       const roomName = RoomName.parse(name);
       const roomQuestions = z.array(Question).parse(questions);
+      const clampedTime = Math.min(Math.max(runningTimeMs || 16000, 1000), 60000);
 
       const roomId = randomBytes(4).toString("hex").toUpperCase();
       const runToken = randomBytes(128).toString("hex").toUpperCase();
@@ -54,7 +55,8 @@ export const createWSServer = (base: ServerInstance) => {
         name: roomName,
         questions: roomQuestions,
         runToken,
-        state: "lobby"
+        state: "lobby",
+        runningTimeMs: clampedTime
       });
       socket.emit("goto", `/mathex/app/manage?id=${roomId}&runToken=${runToken}`);
       socket.disconnect();
@@ -164,17 +166,11 @@ export const createWSServer = (base: ServerInstance) => {
       }
     });
     socket.on("answer", (answer) => {
-      // The player is already running
-      // Someone spammed the Submit button to bypass questions
-      // Thanks @BBI-Dev (on GitHub) for reporting this
-      if (socket.data.isRunning) {
-        // io.of(`/manage-${room.id}`).emit("alert", "warning", `${socket.data.name} attempted to spam-click an answer!`);
-        return;
-      }
+      if (socket.data.isRunning) return;
 
       const currentQuestion = room.questions[socket.data.currentQuestion - 1];
       socket.data.isRunning = true;
-      socket.emit("running");
+      socket.emit("running", room.runningTimeMs);
       const isCorrect = checkSolution(answer, currentQuestion);
       setTimeout(async () => {
         if (isCorrect) {
@@ -196,7 +192,7 @@ export const createWSServer = (base: ServerInstance) => {
         }
         socket.emit("stopRunning");
         socket.data.isRunning = false;
-      }, 16 * 1000);
+      }, room.runningTimeMs);
     });
     setTimeout(async () => io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp)));
   });
@@ -223,16 +219,17 @@ export const createWSServer = (base: ServerInstance) => {
 };
 
 function checkSolution(guess: any, question: z.infer<typeof Question>) {
-  if (question.type === "number") {
-    return question.data.solutions.includes(Number(guess));
-  } else if (question.type === "text") {
-    return question.data.solutions.includes(String(guess).trim());
-  } else if (question.type === "expression") {
-    for (const solution of question.data.solutions) {
+  const solutions = question.data.solutions;
+  for (const solution of solutions) {
+    if (solution.type === "number") {
+      if (Number(guess) === solution.value) return true;
+    } else if (solution.type === "text") {
+      if (String(guess).trim() === solution.value) return true;
+    } else if (solution.type === "expression") {
       try {
-        if (math.symbolicEqual(math.parse(solution), math.parse(String(guess)))) return true;
+        if (math.symbolicEqual(math.parse(solution.value), math.parse(String(guess)))) return true;
       } catch {}
     }
-    return false;
   }
+  return false;
 }

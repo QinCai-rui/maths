@@ -13,6 +13,6 @@
   <title>Mathex - Devarsh's Maths, revived</title>
 </svelte:head>
 <Toaster />
-<div class="bg-blue-400 text-white p-3 min-h-screen h-screen w-full">
+<div class="min-h-screen w-full bg-background text-foreground">
   {@render children?.()}
 </div>
