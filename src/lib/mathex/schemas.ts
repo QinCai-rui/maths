@@ -24,6 +24,7 @@ export interface RoomServerToClientEvents {
 export interface RoomClientToServerEvents {
   join: (name: string) => void;
   answer: (value: string | number) => void;
+  visibilityChange: (hidden: boolean) => void;
 }
 
 export interface RoomInterServerEvents {}
@@ -35,6 +36,8 @@ export interface RoomSocketData {
   startingTime: number | null;
   finishingTime: number | null;
   isRunning: boolean;
+  awaySince: number | null;
+  visibilityFlags: number;
 }
 
 export type LogVerbosity = "all" | "submissions" | "finished";
@@ -42,7 +45,7 @@ export type LogVerbosity = "all" | "submissions" | "finished";
 export interface LogEntry {
   timestamp: number;
   playerName: string;
-  type: "submitted" | "running" | "correct" | "wrong" | "finished";
+  type: "submitted" | "running" | "correct" | "wrong" | "finished" | "visibility";
   questionNumber: number;
   detail?: string;
 }
@@ -53,10 +56,16 @@ export interface LeaderboardEntry {
   totalMs: number | null;
   questionsCompleted: number;
   totalQuestions: number;
+  visibilityFlags: number;
 }
 
 export interface RoomCreateClientToServerEvents {
-  newRoom: (name: string, questions: z.infer<typeof Question>[], runningTimeMs: number) => void;
+  newRoom: (
+    name: string,
+    questions: z.infer<typeof Question>[],
+    runningTimeMs: number,
+    visibilityTracking: boolean
+  ) => void;
   checkRoom: (id: string, callback: (exists: boolean) => void) => void;
 }
 
@@ -132,6 +141,7 @@ export interface Room {
   runToken: string;
   state: RoomState;
   runningTimeMs: number;
+  visibilityTracking: boolean;
   logs: LogEntry[];
 }
 
