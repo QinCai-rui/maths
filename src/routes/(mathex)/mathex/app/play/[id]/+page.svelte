@@ -5,6 +5,7 @@
     type RoomServerToClientEvents,
     type RoomClientToServerEvents,
     type State,
+    type LeaderboardEntry,
     Question
   } from "$lib/mathex/schemas";
   import { msToMinutesAndSeconds } from "$lib/utils";
@@ -78,7 +79,10 @@
   socket.on("gameFinish", () => {
     gameState = "finished";
   });
-  socket.on("confetti", () => (confetti = true));
+  socket.on("confetti", () => {
+    confetti = true;
+    setTimeout(() => (confetti = false), 6000);
+  });
   socket.on("newQuestion", (content, type) => {
     answer = null;
     currentQuestion = {
@@ -99,6 +103,9 @@
   socket.on("stopRunning", () => (running = false));
   let questionCount = $state(1);
   socket.on("questionCount", (data) => (questionCount = data));
+
+  let leaderboard: LeaderboardEntry[] = $state([]);
+  socket.on("leaderboard", (data) => (leaderboard = data));
 </script>
 
 {#if confetti}
@@ -192,6 +199,46 @@
     <div class="flex flex-1 items-center justify-center">
       <div class="w-full max-w-md rounded-xl border border-border/60 bg-card p-8 shadow-sm text-center">
         <Header size="h1">Game finished!</Header>
+        {#if leaderboard.length > 0}
+          {@const myEntry = leaderboard.find((e) => e.name === name)}
+          {#if myEntry}
+            <div class="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
+              <span class="text-lg font-bold text-primary">#{myEntry.rank}</span>
+              <span class="text-sm text-muted-foreground">
+                &middot; {myEntry.totalMs !== null ? msToMinutesAndSeconds(myEntry.totalMs) : "DNF"} &middot;
+                {myEntry.questionsCompleted}/{myEntry.totalQuestions} correct
+              </span>
+            </div>
+          {/if}
+          <div class="mt-4 flex flex-col gap-1.5 text-left">
+            {#each leaderboard as entry}
+              <div
+                class="flex items-center gap-2 rounded-lg border border-border/60 p-2 {entry.name === name
+                  ? 'bg-primary/5 border-primary/20'
+                  : 'bg-muted/30'}"
+              >
+                <div
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold {entry.rank ===
+                  1
+                    ? 'bg-yellow-400 text-yellow-900'
+                    : entry.rank === 2
+                      ? 'bg-gray-300 text-gray-700'
+                      : entry.rank === 3
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-muted text-muted-foreground'}"
+                >
+                  {entry.rank}
+                </div>
+                <span class="truncate text-sm font-medium {entry.name === name ? 'text-primary' : ''}"
+                  >{entry.name}</span
+                >
+                <span class="ml-auto shrink-0 text-xs text-muted-foreground">
+                  {entry.totalMs !== null ? msToMinutesAndSeconds(entry.totalMs) : "DNF"} &middot; {entry.questionsCompleted}/{entry.totalQuestions}
+                </span>
+              </div>
+            {/each}
+          </div>
+        {/if}
         <p class="mt-4 text-muted-foreground">
           The host may communicate more information to you via alerts. They will appear at the bottom right.
         </p>

@@ -18,6 +18,7 @@ export interface RoomServerToClientEvents {
   newQuestion: (question: string, questionType: z.infer<typeof Question>["type"]) => void;
   confetti: () => void;
   questionCount: (data: number) => void;
+  leaderboard: (data: LeaderboardEntry[]) => void;
 }
 
 export interface RoomClientToServerEvents {
@@ -30,9 +31,28 @@ export interface RoomInterServerEvents {}
 export interface RoomSocketData {
   name: string | null;
   currentQuestion: number;
+  totalQuestions: number;
   startingTime: number | null;
   finishingTime: number | null;
   isRunning: boolean;
+}
+
+export type LogVerbosity = "all" | "submissions" | "running" | "finished";
+
+export interface LogEntry {
+  timestamp: number;
+  playerName: string;
+  type: "submitted" | "running" | "correct" | "wrong" | "finished";
+  questionNumber: number;
+  detail?: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  totalMs: number | null;
+  questionsCompleted: number;
+  totalQuestions: number;
 }
 
 export interface RoomCreateClientToServerEvents {
@@ -58,6 +78,8 @@ export interface RoomManageServerToClientEvents {
   alert: (type: ToastT["type"], message: string) => void;
   state: (state: RoomState) => void;
   playerData: (data: RoomSocketData[]) => void;
+  log: (entry: LogEntry) => void;
+  leaderboard: (data: LeaderboardEntry[]) => void;
 }
 
 export interface RoomManageInterServerEvents {}

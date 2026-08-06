@@ -19,6 +19,8 @@ import {
   type RoomManageInterServerEvents,
   type RoomManageSocketData,
   type Room,
+  type LogEntry,
+  type LeaderboardEntry,
   RoomName,
   Question
 } from "../lib/mathex/schemas";
@@ -112,14 +114,17 @@ export const createWSServer = (base: ServerInstance) => {
     socket.on("finish", async () => {
       room.state = "finished";
       roomNamespace.emit("alert", "info", "Game has finished for everyone!");
+      const lb = buildLeaderboard(room, roomNamespace);
       for (const playerSocket of await roomNamespace.fetchSockets()) {
         if (!playerSocket.data.finishingTime) {
           playerSocket.data.finishingTime = Date.now();
           playerSocket.emit("gameFinish");
         }
       }
+      roomNamespace.emit("leaderboard", lb);
       roomManageNamespace.emit("state", room.state);
       roomManageNamespace.emit("playerData", await getPlayers(roomNamespace));
+      roomManageNamespace.emit("leaderboard", lb);
     });
   });
 
@@ -139,6 +144,7 @@ export const createWSServer = (base: ServerInstance) => {
     }
     socket.data = {
       currentQuestion: 1,
+      totalQuestions: room.questions.length,
       startingTime: null,
       finishingTime: null,
       name: null,
@@ -171,16 +177,42 @@ export const createWSServer = (base: ServerInstance) => {
       const currentQuestion = room.questions[socket.data.currentQuestion - 1];
       socket.data.isRunning = true;
       socket.emit("running", room.runningTimeMs);
+
+      const submitLog: LogEntry = {
+        timestamp: Date.now(),
+        playerName: socket.data.name || "Unknown",
+        type: "submitted",
+        questionNumber: socket.data.currentQuestion,
+        detail: String(answer)
+      };
+      roomManageNamespace.emit("log", submitLog);
+
       const isCorrect = checkSolution(answer, currentQuestion);
       setTimeout(async () => {
         if (isCorrect) {
           socket.emit("alert", "success", "Correct!");
+          const correctLog: LogEntry = {
+            timestamp: Date.now(),
+            playerName: socket.data.name || "Unknown",
+            type: "correct",
+            questionNumber: socket.data.currentQuestion
+          };
+          roomManageNamespace.emit("log", correctLog);
           if (socket.data.currentQuestion >= room.questions.length) {
             socket.data.finishingTime = Date.now();
             socket.emit("alert", "success", "You have completed the questions!");
             socket.emit("gameFinish");
             socket.emit("confetti");
+            socket.nsp.emit("leaderboard", buildLeaderboard(room, socket.nsp));
             roomManageNamespace.emit("alert", "info", `${socket.data.name} has finished all questions!`);
+            const finishLog: LogEntry = {
+              timestamp: Date.now(),
+              playerName: socket.data.name || "Unknown",
+              type: "finished",
+              questionNumber: socket.data.currentQuestion
+            };
+            roomManageNamespace.emit("log", finishLog);
+            roomManageNamespace.emit("leaderboard", buildLeaderboard(room, socket.nsp));
           } else {
             socket.data.currentQuestion++;
             const nextQuestion = room.questions[socket.data.currentQuestion - 1];
@@ -189,6 +221,14 @@ export const createWSServer = (base: ServerInstance) => {
           io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp));
         } else {
           socket.emit("alert", "error", "Wrong!");
+          const wrongLog: LogEntry = {
+            timestamp: Date.now(),
+            playerName: socket.data.name || "Unknown",
+            type: "wrong",
+            questionNumber: socket.data.currentQuestion,
+            detail: String(answer)
+          };
+          roomManageNamespace.emit("log", wrongLog);
         }
         socket.emit("stopRunning");
         socket.data.isRunning = false;
@@ -205,14 +245,43 @@ export const createWSServer = (base: ServerInstance) => {
       data.push(playerSocket.data);
     }
     data.sort((a, b) => {
-      if (!a.startingTime || !b.startingTime) return 0;
+      if (!a.startingTime && !b.startingTime) return 0;
+      if (!a.startingTime) return 1;
+      if (!b.startingTime) return -1;
       if (a.finishingTime && !b.finishingTime) return -1;
       if (b.finishingTime && !a.finishingTime) return 1;
       if (a.finishingTime && b.finishingTime)
-        return b.finishingTime - b.startingTime - (a.startingTime - a.finishingTime);
+        return a.finishingTime - a.startingTime - (b.finishingTime - b.startingTime);
       return b.currentQuestion - a.currentQuestion;
     });
     return data;
+  }
+
+  function buildLeaderboard(
+    room: Room,
+    ns: Namespace<RoomClientToServerEvents, RoomServerToClientEvents, RoomInterServerEvents, RoomSocketData>
+  ): LeaderboardEntry[] {
+    const players = ns.sockets;
+    const entries: LeaderboardEntry[] = [];
+    for (const [, playerSocket] of players) {
+      const d = playerSocket.data;
+      const totalMs = d.finishingTime && d.startingTime ? d.finishingTime - d.startingTime : null;
+      entries.push({
+        rank: 0,
+        name: d.name || "Unknown",
+        totalMs,
+        questionsCompleted: d.currentQuestion - (d.finishingTime ? 0 : 1),
+        totalQuestions: room.questions.length
+      });
+    }
+    entries.sort((a, b) => {
+      if (a.totalMs !== null && b.totalMs !== null) return a.totalMs - b.totalMs;
+      if (a.totalMs !== null) return -1;
+      if (b.totalMs !== null) return 1;
+      return b.questionsCompleted - a.questionsCompleted;
+    });
+    entries.forEach((e, i) => (e.rank = i + 1));
+    return entries;
   }
 
   return io;
@@ -226,9 +295,13 @@ function checkSolution(guess: any, question: z.infer<typeof Question>) {
     } else if (solution.type === "text") {
       if (String(guess).trim() === solution.value) return true;
     } else if (solution.type === "expression") {
-      try {
-        if (math.symbolicEqual(math.parse(solution.value), math.parse(String(guess)))) return true;
-      } catch {}
+      if (question.type === "expression" && !question.data.allowEquivalent) {
+        if (String(guess).trim() === solution.value) return true;
+      } else {
+        try {
+          if (math.symbolicEqual(math.parse(solution.value), math.parse(String(guess)))) return true;
+        } catch {}
+      }
     }
   }
   return false;
