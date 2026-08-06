@@ -60,6 +60,7 @@ export const createWSServer = (base: ServerInstance) => {
         state: "lobby",
         runningTimeMs: clampedTime,
         visibilityTracking,
+        players: new Map(),
         logs: []
       });
       socket.emit("goto", `/mathex/app/manage?id=${roomId}&runToken=${runToken}`);
@@ -95,40 +96,55 @@ export const createWSServer = (base: ServerInstance) => {
       RoomSocketData
     >;
     setTimeout(async () => {
-      socket.emit("playerData", await getPlayers(roomNamespace));
+      socket.emit("state", room.state);
+      socket.emit("playerData", getPlayers(room));
       socket.emit("logs", room.logs);
+      if (room.state === "finished") socket.emit("leaderboard", buildLeaderboard(room));
     });
     socket.on("alertAll", async (type, message) => {
       roomNamespace.emit("alert", type, message);
     });
     socket.on("start", async () => {
+      if (room.state !== "lobby") return;
       room.state = "started";
       roomNamespace.emit("alert", "info", "Game has started!");
+      const startedAt = Date.now();
       const firstQuestion = room.questions[0];
+      for (const player of room.players.values()) {
+        player.currentQuestion = 1;
+        player.startingTime = startedAt;
+        player.finishingTime = null;
+        player.isRunning = false;
+        player.runningUntil = null;
+      }
       for (const playerSocket of await roomNamespace.fetchSockets()) {
-        if (!playerSocket.data.name) return;
-        playerSocket.emit("gameStart");
-        playerSocket.emit("newQuestion", firstQuestion.contents, [
-          ...new Set(firstQuestion.solutions.map((s) => s.type))
-        ]);
-        playerSocket.data.startingTime = Date.now();
+        if (!playerSocket.data.name) continue;
+        playerSocket.emit("gameStart", startedAt);
+        playerSocket.emit(
+          "newQuestion",
+          firstQuestion.contents,
+          [...new Set(firstQuestion.solutions.map((s) => s.type))],
+          1
+        );
       }
       roomManageNamespace.emit("state", room.state);
-      roomManageNamespace.emit("playerData", await getPlayers(roomNamespace));
+      roomManageNamespace.emit("playerData", getPlayers(room));
     });
     socket.on("finish", async () => {
+      if (room.state !== "started") return;
       room.state = "finished";
       roomNamespace.emit("alert", "info", "Game has finished for everyone!");
-      const lb = buildLeaderboard(room, roomNamespace);
+      const finishedAt = Date.now();
+      for (const player of room.players.values()) {
+        if (!player.finishingTime) player.finishingTime = finishedAt;
+      }
+      const lb = buildLeaderboard(room);
       for (const playerSocket of await roomNamespace.fetchSockets()) {
-        if (!playerSocket.data.finishingTime) {
-          playerSocket.data.finishingTime = Date.now();
-          playerSocket.emit("gameFinish");
-        }
+        playerSocket.emit("gameFinish");
       }
       roomNamespace.emit("leaderboard", lb);
       roomManageNamespace.emit("state", room.state);
-      roomManageNamespace.emit("playerData", await getPlayers(roomNamespace));
+      roomManageNamespace.emit("playerData", getPlayers(room));
       roomManageNamespace.emit("leaderboard", lb);
     });
   });
@@ -148,41 +164,73 @@ export const createWSServer = (base: ServerInstance) => {
       return;
     }
     socket.data = {
+      playerId: null,
       currentQuestion: 1,
       totalQuestions: room.questions.length,
       startingTime: null,
       finishingTime: null,
       name: null,
       isRunning: false,
+      runningUntil: null,
       awaySince: null,
       visibilityFlags: 0
     };
-    socket.on("join", async (name) => {
-      if (!name || name.length > 20) return;
+    socket.on("join", async (name, playerId) => {
+      const playerName = name.trim();
+      if (!playerName || playerName.length > 20 || !playerId || playerId.length > 128) return;
       const room = rooms.get(roomId);
       if (!room) {
         socket.disconnect();
         return;
       }
-      socket.data.name = name;
-      io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp));
+      const existingPlayer = room.players.get(playerId);
+      if (existingPlayer) {
+        socket.data = existingPlayer;
+      } else {
+        const duplicateName = [...room.players.values()].some(
+          (player) => player.name?.toLowerCase() === playerName.toLowerCase()
+        );
+        if (duplicateName) {
+          socket.emit("alert", "error", "That username is already in use");
+          return;
+        }
+        socket.data.playerId = playerId;
+        socket.data.name = playerName;
+        room.players.set(playerId, socket.data);
+      }
+      io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
+      socket.emit("joined", socket.data.name!);
       socket.emit("questionCount", room.questions.length);
       if (room.state === "lobby") {
         socket.emit("lobby");
       } else if (room.state === "started") {
-        socket.emit("gameStart");
-        socket.data.startingTime = Date.now();
-        const firstQuestion = room.questions[0];
-        socket.emit("newQuestion", firstQuestion.contents, [...new Set(firstQuestion.solutions.map((s) => s.type))]);
+        if (socket.data.finishingTime) {
+          socket.emit("gameFinish");
+          socket.emit("leaderboard", buildLeaderboard(room));
+          return;
+        }
+        const question = room.questions[socket.data.currentQuestion - 1];
+        socket.emit("gameStart", socket.data.startingTime || Date.now());
+        socket.emit(
+          "newQuestion",
+          question.contents,
+          [...new Set(question.solutions.map((s) => s.type))],
+          socket.data.currentQuestion
+        );
+        if (socket.data.runningUntil && socket.data.runningUntil > Date.now()) {
+          socket.emit("running", socket.data.runningUntil - Date.now());
+        }
       } else {
         socket.emit("gameFinish");
+        socket.emit("leaderboard", buildLeaderboard(room));
       }
     });
     socket.on("answer", (answer) => {
-      if (socket.data.isRunning) return;
+      if (!socket.data.name || room.state !== "started" || socket.data.isRunning) return;
 
       const currentQuestion = room.questions[socket.data.currentQuestion - 1];
       socket.data.isRunning = true;
+      socket.data.runningUntil = Date.now() + room.runningTimeMs;
       socket.emit("running", room.runningTimeMs);
 
       const submitLog: LogEntry = {
@@ -212,7 +260,7 @@ export const createWSServer = (base: ServerInstance) => {
             socket.emit("alert", "success", "You have completed the questions!");
             socket.emit("gameFinish");
             socket.emit("confetti");
-            socket.nsp.emit("leaderboard", buildLeaderboard(room, socket.nsp));
+            socket.nsp.emit("leaderboard", buildLeaderboard(room));
             roomManageNamespace.emit("alert", "info", `${socket.data.name} has finished all questions!`);
             const finishLog: LogEntry = {
               timestamp: Date.now(),
@@ -222,13 +270,18 @@ export const createWSServer = (base: ServerInstance) => {
             };
             room.logs.push(finishLog);
             roomManageNamespace.emit("log", finishLog);
-            roomManageNamespace.emit("leaderboard", buildLeaderboard(room, socket.nsp));
+            roomManageNamespace.emit("leaderboard", buildLeaderboard(room));
           } else {
             socket.data.currentQuestion++;
             const nextQuestion = room.questions[socket.data.currentQuestion - 1];
-            socket.emit("newQuestion", nextQuestion.contents, [...new Set(nextQuestion.solutions.map((s) => s.type))]);
+            socket.emit(
+              "newQuestion",
+              nextQuestion.contents,
+              [...new Set(nextQuestion.solutions.map((s) => s.type))],
+              socket.data.currentQuestion
+            );
           }
-          io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp));
+          io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
         } else {
           socket.emit("alert", "error", "Wrong!");
           const wrongLog: LogEntry = {
@@ -243,6 +296,7 @@ export const createWSServer = (base: ServerInstance) => {
         }
         socket.emit("stopRunning");
         socket.data.isRunning = false;
+        socket.data.runningUntil = null;
       }, room.runningTimeMs);
     });
     socket.on("visibilityChange", async (hidden) => {
@@ -260,7 +314,7 @@ export const createWSServer = (base: ServerInstance) => {
         };
         room.logs.push(log);
         roomManageNamespace.emit("log", log);
-        roomManageNamespace.emit("playerData", await getPlayers(socket.nsp));
+        roomManageNamespace.emit("playerData", getPlayers(room));
       } else if (!hidden && socket.data.awaySince) {
         const awayMs = Date.now() - socket.data.awaySince;
         socket.data.awaySince = null;
@@ -275,16 +329,11 @@ export const createWSServer = (base: ServerInstance) => {
         roomManageNamespace.emit("log", log);
       }
     });
-    setTimeout(async () => io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp)));
+    setTimeout(() => io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room)));
   });
 
-  async function getPlayers(
-    ns: Namespace<RoomClientToServerEvents, RoomServerToClientEvents, RoomInterServerEvents, RoomSocketData>
-  ) {
-    let data: RoomSocketData[] = [];
-    for (const playerSocket of await ns.fetchSockets()) {
-      data.push(playerSocket.data);
-    }
+  function getPlayers(room: Room) {
+    const data = [...room.players.values()];
     data.sort((a, b) => {
       if (!a.startingTime && !b.startingTime) return 0;
       if (!a.startingTime) return 1;
@@ -298,14 +347,9 @@ export const createWSServer = (base: ServerInstance) => {
     return data;
   }
 
-  function buildLeaderboard(
-    room: Room,
-    ns: Namespace<RoomClientToServerEvents, RoomServerToClientEvents, RoomInterServerEvents, RoomSocketData>
-  ): LeaderboardEntry[] {
-    const players = ns.sockets;
+  function buildLeaderboard(room: Room): LeaderboardEntry[] {
     const entries: LeaderboardEntry[] = [];
-    for (const [, playerSocket] of players) {
-      const d = playerSocket.data;
+    for (const d of room.players.values()) {
       const totalMs = d.finishingTime && d.startingTime ? d.finishingTime - d.startingTime : null;
       entries.push({
         rank: 0,
