@@ -27,7 +27,7 @@ import {
 
 import { z } from "zod";
 
-import { randomBytes } from "crypto";
+import { randomBytes, randomInt } from "crypto";
 import { create, all } from "mathjs";
 
 const config = {};
@@ -50,7 +50,10 @@ export const createWSServer = (base: ServerInstance) => {
       const roomQuestions = z.array(Question).parse(questions);
       const clampedTime = Math.min(Math.max(runningTimeMs || 16000, 1000), 60000);
 
-      const roomId = randomBytes(4).toString("hex").toUpperCase();
+      let roomId = "";
+      do {
+        roomId = randomInt(1_000_000).toString().padStart(6, "0");
+      } while (rooms.has(roomId));
       const runToken = randomBytes(128).toString("hex").toUpperCase();
       rooms.set(roomId, {
         id: roomId,
@@ -69,14 +72,14 @@ export const createWSServer = (base: ServerInstance) => {
     socket.on("checkRoom", (id, callback) => callback(rooms.has(id)));
   });
 
-  const roomManageNamespace = io.of(/^\/manage\-[0-9A-F]{8}$/) as Namespace<
+  const roomManageNamespace = io.of(/^\/manage\-\d{6}$/) as Namespace<
     RoomManageClientToServerEvents,
     RoomManageServerToClientEvents,
     RoomManageInterServerEvents,
     RoomManageSocketData
   >;
   roomManageNamespace.on("connection", (socket) => {
-    const roomId = /[0-9A-F]{8}/gm.exec(socket.nsp.name)?.[0];
+    const roomId = /\d{6}/.exec(socket.nsp.name)?.[0];
     if (!roomId) throw Error("No room ID!");
     const room = rooms.get(roomId);
     if (!room) {
@@ -149,14 +152,14 @@ export const createWSServer = (base: ServerInstance) => {
     });
   });
 
-  const roomNamespaces = io.of(/^\/room\-[0-9A-F]{8}$/) as Namespace<
+  const roomNamespaces = io.of(/^\/room\-\d{6}$/) as Namespace<
     RoomClientToServerEvents,
     RoomServerToClientEvents,
     RoomInterServerEvents,
     RoomSocketData
   >;
   roomNamespaces.on("connection", (socket): void => {
-    const roomId = /[0-9A-F]{8}/gm.exec(socket.nsp.name)?.[0];
+    const roomId = /\d{6}/.exec(socket.nsp.name)?.[0];
     if (!roomId) return;
     const room = rooms.get(roomId);
     if (!room) {

@@ -6,7 +6,7 @@
   import KeyRound from "@lucide/svelte/icons/key-round";
   import UsersRound from "@lucide/svelte/icons/users-round";
   import { toast } from "svelte-sonner";
-  import { REGEXP_ONLY_DIGITS_AND_CHARS } from "bits-ui";
+  import { REGEXP_ONLY_DIGITS } from "bits-ui";
 
   import { goto } from "$app/navigation";
 
@@ -17,8 +17,8 @@
   let code: string = $state("");
   let lastCode: string = "";
   async function setCode(newCode: string) {
-    code = newCode.toUpperCase();
-    if (code.length === 8 && lastCode !== code) {
+    code = newCode;
+    if (code.length === 6 && lastCode !== code) {
       lastCode = code;
       toast.promise(
         new Promise<void>(async (resolve, reject) => {
@@ -57,16 +57,11 @@
       <p class="mathex-kicker mt-7">Player check-in</p>
       <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Enter the room.</Header>
       <p class="mt-3 leading-7 text-muted-foreground">
-        Your host has an 8-character access code. Enter it below to join the competition lobby.
+        Your host has a 6-digit access code. Enter it below to join the competition lobby.
       </p>
       <div class="mt-8 rounded-2xl border border-border/70 bg-background/55 p-4 sm:p-5">
         <p class="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Room code</p>
-        <InputOTP.Root
-          maxlength={8}
-          spellcheck="false"
-          pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
-          bind:value={() => code, setCode}
-        >
+        <InputOTP.Root maxlength={6} spellcheck="false" pattern={REGEXP_ONLY_DIGITS} bind:value={() => code, setCode}>
           {#snippet children({ cells })}
             <div class="flex w-full justify-between gap-1.5 sm:gap-2">
               {#each cells as cell (cell)}
