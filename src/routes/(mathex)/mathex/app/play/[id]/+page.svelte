@@ -43,7 +43,9 @@
     if (type === "normal" || type === "action" || type === "default") {
       toast(message);
     } else {
-      toast[type](message);
+      const notify = toast[type];
+      if (typeof notify === "function") notify(message);
+      else toast(message);
     }
   });
   socket.on("connect", () => {
