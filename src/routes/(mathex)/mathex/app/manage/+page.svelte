@@ -35,8 +35,13 @@
     forceNew: true
   });
   socket.on("alert", (type, message) => {
-    // @ts-ignore
-    toast[type](message);
+    if (type === "normal" || type === "action" || type === "default") {
+      toast(message);
+    } else {
+      const notify = toast[type];
+      if (typeof notify === "function") notify(message);
+      else toast(message);
+    }
   });
   socket.on("connect", () => {
     toast.success("Connected!");
