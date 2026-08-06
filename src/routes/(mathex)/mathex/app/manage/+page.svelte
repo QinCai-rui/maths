@@ -20,6 +20,7 @@
   import { Checkbox } from "$lib/components/ui/checkbox";
   import * as Select from "$lib/components/ui/select";
   import Identicon from "$lib/components/Identicon.svelte";
+  import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 
   const roomId = page.url.searchParams.get("id");
   const runToken = page.url.searchParams.get("runToken");
@@ -156,6 +157,12 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
                 <span class="truncate text-sm font-medium">{player.name || "Choosing..."}</span>
+                {#if player.visibilityFlags > 0}
+                  <span class="flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <TriangleAlert class="h-3.5 w-3.5" />
+                    {player.visibilityFlags}
+                  </span>
+                {/if}
                 {#if elapsed !== null}
                   <span class="shrink-0 text-xs text-muted-foreground">{msToMinutesAndSeconds(elapsed)}</span>
                 {/if}
@@ -244,6 +251,12 @@
                 <div class="min-w-0 flex-1">
                   <span class="truncate text-sm font-medium">{entry.name}</span>
                 </div>
+                {#if entry.visibilityFlags > 0}
+                  <span class="flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <TriangleAlert class="h-3.5 w-3.5" />
+                    {entry.visibilityFlags}
+                  </span>
+                {/if}
                 <span class="shrink-0 text-xs text-muted-foreground">
                   {entry.totalMs !== null ? msToMinutesAndSeconds(entry.totalMs) : "DNF"} &middot; {entry.questionsCompleted}/{entry.totalQuestions}
                 </span>
@@ -298,6 +311,8 @@
                     Q{log.questionNumber} wrong{verbosity === "all" ? ` (${log.detail})` : ""}
                   {:else if log.type === "finished"}
                     finished all questions
+                  {:else if log.type === "visibility"}
+                    {log.detail}
                   {:else}
                     {log.type}
                   {/if}

@@ -3,6 +3,7 @@
   import { Header } from "$lib/components/ui/header";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { Checkbox } from "$lib/components/ui/checkbox";
   import { toast } from "svelte-sonner";
 
   import MoveLeft from "@lucide/svelte/icons/move-left";
@@ -31,6 +32,7 @@
   let creating = $state(false);
   let dragOver = $state(false);
   let runningTime = $state(16);
+  let visibilityTracking = $state(false);
 
   $effect(() => {
     if (!file) {
@@ -105,7 +107,7 @@
     creating = true;
     try {
       const set = useEditorSet && editorSet ? editorSet : z.array(Question).parse(JSON.parse(await file!.text()));
-      socket.emit("newRoom", roomNameResult.data, set, runningTime * 1000);
+      socket.emit("newRoom", roomNameResult.data, set, runningTime * 1000, visibilityTracking);
       socket.once("goto", (path) => {
         socket.disconnect();
         goto(path);
@@ -223,6 +225,16 @@
             <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">sec</span>
           </div>
           <p class="text-xs text-muted-foreground">How long players see "Running…" after submitting (1–60s)</p>
+        </div>
+
+        <div class="flex items-start gap-2 rounded-lg border border-border/60 p-3">
+          <Checkbox id="visibility-tracking" bind:checked={visibilityTracking} />
+          <div>
+            <Label for="visibility-tracking" class="cursor-pointer">Flag players who leave the game tab</Label>
+            <p class="mt-1 text-xs text-muted-foreground">
+              Hosts can review tab changes and time away in the room log.
+            </p>
+          </div>
         </div>
 
         <Button onclick={createRoom} class="w-full" disabled={!canCreate}>

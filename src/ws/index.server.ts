@@ -45,7 +45,7 @@ export const createWSServer = (base: ServerInstance) => {
     RoomCreateSocketData
   > = io.of("/rooms");
   roomCreateNamespace.on("connection", (socket) => {
-    socket.on("newRoom", (name, questions, runningTimeMs) => {
+    socket.on("newRoom", (name, questions, runningTimeMs, visibilityTracking) => {
       const roomName = RoomName.parse(name);
       const roomQuestions = z.array(Question).parse(questions);
       const clampedTime = Math.min(Math.max(runningTimeMs || 16000, 1000), 60000);
@@ -59,6 +59,7 @@ export const createWSServer = (base: ServerInstance) => {
         runToken,
         state: "lobby",
         runningTimeMs: clampedTime,
+        visibilityTracking,
         logs: []
       });
       socket.emit("goto", `/mathex/app/manage?id=${roomId}&runToken=${runToken}`);
@@ -107,7 +108,9 @@ export const createWSServer = (base: ServerInstance) => {
       for (const playerSocket of await roomNamespace.fetchSockets()) {
         if (!playerSocket.data.name) return;
         playerSocket.emit("gameStart");
-        playerSocket.emit("newQuestion", firstQuestion.contents, [...new Set(firstQuestion.solutions.map(s => s.type))]);
+        playerSocket.emit("newQuestion", firstQuestion.contents, [
+          ...new Set(firstQuestion.solutions.map((s) => s.type))
+        ]);
         playerSocket.data.startingTime = Date.now();
       }
       roomManageNamespace.emit("state", room.state);
@@ -150,7 +153,9 @@ export const createWSServer = (base: ServerInstance) => {
       startingTime: null,
       finishingTime: null,
       name: null,
-      isRunning: false
+      isRunning: false,
+      awaySince: null,
+      visibilityFlags: 0
     };
     socket.on("join", async (name) => {
       if (!name || name.length > 20) return;
@@ -168,7 +173,7 @@ export const createWSServer = (base: ServerInstance) => {
         socket.emit("gameStart");
         socket.data.startingTime = Date.now();
         const firstQuestion = room.questions[0];
-        socket.emit("newQuestion", firstQuestion.contents, [...new Set(firstQuestion.solutions.map(s => s.type))]);
+        socket.emit("newQuestion", firstQuestion.contents, [...new Set(firstQuestion.solutions.map((s) => s.type))]);
       } else {
         socket.emit("gameFinish");
       }
@@ -221,7 +226,7 @@ export const createWSServer = (base: ServerInstance) => {
           } else {
             socket.data.currentQuestion++;
             const nextQuestion = room.questions[socket.data.currentQuestion - 1];
-            socket.emit("newQuestion", nextQuestion.contents, [...new Set(nextQuestion.solutions.map(s => s.type))]);
+            socket.emit("newQuestion", nextQuestion.contents, [...new Set(nextQuestion.solutions.map((s) => s.type))]);
           }
           io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp));
         } else {
@@ -239,6 +244,36 @@ export const createWSServer = (base: ServerInstance) => {
         socket.emit("stopRunning");
         socket.data.isRunning = false;
       }, room.runningTimeMs);
+    });
+    socket.on("visibilityChange", async (hidden) => {
+      if (!room.visibilityTracking || room.state !== "started" || !socket.data.name) return;
+
+      if (hidden && !socket.data.awaySince) {
+        socket.data.awaySince = Date.now();
+        socket.data.visibilityFlags++;
+        const log: LogEntry = {
+          timestamp: socket.data.awaySince,
+          playerName: socket.data.name,
+          type: "visibility",
+          questionNumber: socket.data.currentQuestion,
+          detail: "left the game tab"
+        };
+        room.logs.push(log);
+        roomManageNamespace.emit("log", log);
+        roomManageNamespace.emit("playerData", await getPlayers(socket.nsp));
+      } else if (!hidden && socket.data.awaySince) {
+        const awayMs = Date.now() - socket.data.awaySince;
+        socket.data.awaySince = null;
+        const log: LogEntry = {
+          timestamp: Date.now(),
+          playerName: socket.data.name,
+          type: "visibility",
+          questionNumber: socket.data.currentQuestion,
+          detail: `returned after ${Math.ceil(awayMs / 1000)}s away`
+        };
+        room.logs.push(log);
+        roomManageNamespace.emit("log", log);
+      }
     });
     setTimeout(async () => io.of(`/manage-${room.id}`).emit("playerData", await getPlayers(socket.nsp)));
   });
@@ -277,7 +312,8 @@ export const createWSServer = (base: ServerInstance) => {
         name: d.name || "Unknown",
         totalMs,
         questionsCompleted: d.currentQuestion - (d.finishingTime ? 0 : 1),
-        totalQuestions: room.questions.length
+        totalQuestions: room.questions.length,
+        visibilityFlags: d.visibilityFlags
       });
     }
     entries.sort((a, b) => {
