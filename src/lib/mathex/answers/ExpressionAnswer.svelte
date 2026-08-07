@@ -32,18 +32,7 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <Input
-    type="text"
-    bind:value={answer}
-    oninput={updatePreview}
-    placeholder="Type a math expression"
-    class="text-lg"
-    onkeydown={(e) => {
-      if (e.key === "Enter") {
-        e.currentTarget.closest("form")?.requestSubmit();
-      }
-    }}
-  />
+  <Input type="text" bind:value={answer} oninput={updatePreview} placeholder="Type a math expression" class="text-lg" />
   {#if preview}
     <div class="rounded border border-border/40 bg-muted/30 p-2 text-center text-sm">
       {@html preview}

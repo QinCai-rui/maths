@@ -233,7 +233,22 @@
       <div class="flex flex-col gap-4">
         <div class="mathex-panel rounded-2xl p-5 sm:p-6">
           <Header size="h2">Alerts</Header>
-          <div class="mt-4 flex w-full flex-col gap-3 sm:flex-row">
+          <form
+            class="mt-4 flex w-full flex-col gap-3 sm:flex-row"
+            onsubmit={(e) => {
+              e.preventDefault();
+              if (alertType === undefined) {
+                toast.error("Choose an alert type!");
+                return;
+              }
+              if (!alertText) {
+                toast.error("Write some alert text!");
+                return;
+              }
+              socket.emit("alertAll", alertType, alertText);
+              alertText = "";
+            }}
+          >
             <Select.Root type="single" bind:value={alertType}>
               <Select.Trigger class="w-full sm:w-[180px]">
                 {alertType ? alertType.charAt(0).toUpperCase() + alertType.substring(1).toLowerCase() : "Alert Type"}
@@ -247,21 +262,8 @@
               </Select.Content>
             </Select.Root>
             <Input bind:value={alertText} class="flex-1" placeholder="Alert Text" />
-            <Button
-              onclick={() => {
-                if (alertType === undefined) {
-                  toast.error("Choose an alert type!");
-                  return;
-                }
-                if (!alertText) {
-                  toast.error("Write some alert text!");
-                  return;
-                }
-                socket.emit("alertAll", alertType, alertText);
-                alertText = "";
-              }}>Send</Button
-            >
-          </div>
+            <Button type="submit">Send</Button>
+          </form>
         </div>
 
         {#if currentState === "finished" && leaderboard.length > 0}
