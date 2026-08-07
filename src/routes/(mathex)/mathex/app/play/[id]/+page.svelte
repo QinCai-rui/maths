@@ -180,7 +180,13 @@
         <p class="mathex-kicker">Player check-in</p>
         <Header size="h1" class="mt-2 text-3xl tracking-[-0.04em]">Choose your name.</Header>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">This is how you will appear on the live leaderboard.</p>
-        <div class="flex flex-col items-center">
+        <form
+          class="flex flex-col items-center"
+          onsubmit={(e) => {
+            e.preventDefault();
+            joinRoom();
+          }}
+        >
           {#if name}
             <Identicon seed={name} className="w-16 h-16 rounded-lg" />
           {:else}
@@ -194,8 +200,8 @@
             <Label for="name" class="text-sm font-medium">Your name</Label>
             <Input bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
           </div>
-          <Button class="mt-5 w-full shadow-lg shadow-primary/20" size="lg" onclick={joinRoom}>Join competition</Button>
-        </div>
+          <Button type="submit" class="mt-5 w-full shadow-lg shadow-primary/20" size="lg">Join competition</Button>
+        </form>
       </div>
     </div>
   {:else if gameState === "waiting_start"}

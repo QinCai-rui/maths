@@ -172,7 +172,13 @@
             </div>
             <span class="rounded-xl bg-primary/10 p-2.5 text-primary"><FileJson class="h-5 w-5" /></span>
           </div>
-          <div class="space-y-4">
+          <form
+            class="space-y-4"
+            onsubmit={(e) => {
+              e.preventDefault();
+              createRoom();
+            }}
+          >
             <div class="space-y-2">
               <Label class="font-semibold">Question set</Label>
               {#if editorSet}
@@ -274,15 +280,10 @@
               </div>
             </div>
 
-            <Button
-              onclick={createRoom}
-              class="mt-2 w-full shadow-lg shadow-primary/20"
-              size="lg"
-              disabled={!canCreate}
-            >
+            <Button type="submit" class="mt-2 w-full shadow-lg shadow-primary/20" size="lg" disabled={!canCreate}>
               {creating ? "Creating…" : "Create Room"}
             </Button>
-          </div>
+          </form>
         </div>
 
         <div
