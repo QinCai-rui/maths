@@ -8,7 +8,7 @@
     type LeaderboardEntry,
     Question
   } from "$lib/mathex/schemas";
-  import { msToMinutesAndSeconds } from "$lib/utils";
+  import { createId, msToMinutesAndSeconds } from "$lib/utils";
 
   import Identicon from "$lib/components/Identicon.svelte";
   import { Input } from "$lib/components/ui/input";
@@ -153,7 +153,7 @@
       return;
     }
     name = trimmedName;
-    playerId = crypto.randomUUID();
+    playerId = createId();
     socket.emit("join", name, playerId);
   }
 </script>

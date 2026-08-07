@@ -29,7 +29,7 @@
   const runToken = page.url.searchParams.get("runToken");
 
   import { toast } from "svelte-sonner";
-  import { msToMinutesAndSeconds } from "$lib/utils";
+  import { copyText, msToMinutesAndSeconds } from "$lib/utils";
 
   const socket: Socket<RoomManageServerToClientEvents, RoomManageClientToServerEvents> = io(`/manage-${roomId}`, {
     query: {
@@ -126,8 +126,12 @@
   }
 
   async function copyRoomCode() {
-    await navigator.clipboard.writeText(roomId || "");
-    toast.success("Room code copied");
+    try {
+      await copyText(roomId || "");
+      toast.success("Room code copied");
+    } catch {
+      toast.error("Could not copy room code");
+    }
   }
 </script>
 
