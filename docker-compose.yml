@@ -6,7 +6,7 @@ services:
     # use `docker compose up --build` to build the image locally
     build: .
     ports:
-      - "5185:5185"
+      - "5186:5185"
     environment:
       - PORT=5185
       - HOST=0.0.0.0
