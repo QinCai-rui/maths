@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { page } from "$app/state";
+  import SiteFooter from "$lib/components/SiteFooter.svelte";
+  import SiteNav from "$lib/components/SiteNav.svelte";
   import { Toaster } from "$lib/components/ui/sonner";
   import ThemeToggle from "$lib/components/ui/theme-toggle/theme-toggle.svelte";
   import { ModeWatcher } from "mode-watcher";
@@ -9,6 +12,9 @@
   }
 
   let { children }: Props = $props();
+
+  const siteShellRoutes = ["/mathex/app", "/mathex/app/create", "/mathex/app/play"];
+  const usesSiteShell = $derived(siteShellRoutes.includes(page.url.pathname));
 </script>
 
 <svelte:head>
@@ -16,9 +22,17 @@
 </svelte:head>
 <Toaster />
 <ModeWatcher />
-<div class="min-h-screen w-full bg-background text-foreground">
-  {@render children?.()}
-</div>
-<div class="fixed bottom-4 right-4 z-50">
-  <ThemeToggle />
-</div>
+{#if usesSiteShell}
+  <div class="flex min-h-screen flex-col bg-background text-foreground">
+    <SiteNav />
+    <main class="flex-1">{@render children?.()}</main>
+    <SiteFooter />
+  </div>
+{:else}
+  <div class="min-h-screen w-full bg-background text-foreground">
+    {@render children?.()}
+  </div>
+  <div class="fixed bottom-4 right-4 z-50">
+    <ThemeToggle />
+  </div>
+{/if}

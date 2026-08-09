@@ -4,25 +4,10 @@
   import { ArrowUpRight, Calculator, CirclePlay, FileQuestion, ShieldCheck, Timer } from "@lucide/svelte/icons";
 </script>
 
-<div class="mathex-shell relative min-h-screen overflow-hidden px-4 py-5 sm:px-8 sm:py-8">
+<div class="mathex-shell relative min-h-full overflow-hidden px-4 py-5 sm:px-8 sm:py-8">
   <div class="mathex-grid pointer-events-none absolute inset-0 opacity-70"></div>
-  <main class="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col">
-    <nav class="flex items-center justify-between">
-      <a href="/mathex/app" class="flex items-center gap-2.5 font-semibold tracking-tight">
-        <span
-          class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-        >
-          <Calculator class="h-5 w-5" />
-        </span>
-        <span>mathex<span class="text-primary">.</span></span>
-      </a>
-      <span
-        class="rounded-full border border-border/70 bg-card/70 px-3 py-1.5 text-xs font-medium text-muted-foreground"
-        >Competition platform</span
-      >
-    </nav>
-
-    <section class="grid flex-1 items-center gap-10 py-16 lg:grid-cols-[1.15fr_0.85fr] lg:py-20">
+  <main class="relative mx-auto max-w-6xl">
+    <section class="grid items-center gap-10 py-16 lg:grid-cols-[1.15fr_0.85fr] lg:py-20">
       <div>
         <p class="mathex-kicker">Fast. Focused. Fair.</p>
         <Header size="h1" class="mt-3 max-w-3xl text-5xl leading-[0.95] tracking-[-0.055em] sm:text-7xl">
@@ -89,8 +74,5 @@
         </div>
       </div>
     </section>
-    <footer class="pb-2 text-center text-xs text-muted-foreground">
-      Built for classrooms, clubs, and quick-thinking teams.
-    </footer>
   </main>
 </div>

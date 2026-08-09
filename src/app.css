@@ -5,7 +5,8 @@
 
 @theme inline {
   --font-sans:
-    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+    "Noto Color Emoji";
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -144,10 +145,6 @@
 
   .mathex-kicker {
     @apply text-[0.68rem] font-bold uppercase tracking-[0.14em] text-primary;
-  }
-
-  .display-type {
-    font-family: Georgia, "Times New Roman", serif;
   }
 
   .scrollbar-thin {
