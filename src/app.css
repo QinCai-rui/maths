@@ -140,11 +140,11 @@
   }
 
   .mathex-panel {
-    @apply border border-border bg-card shadow-sm;
+    @apply border border-border/70 bg-card/85 shadow-sm backdrop-blur-sm;
   }
 
   .mathex-kicker {
-    @apply text-[0.68rem] font-bold uppercase tracking-[0.14em] text-primary;
+    @apply text-[0.68rem] font-bold uppercase tracking-[0.18em] text-primary;
   }
 
   .scrollbar-thin {

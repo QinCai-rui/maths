@@ -2,6 +2,7 @@
   import "../../app.css";
 
   import { page } from "$app/state";
+  import DisclaimerDialog from "$lib/components/DisclaimerDialog.svelte";
   import { Toaster } from "$lib/components/ui/sonner";
 
   import { Menu, X, Github, Sigma } from "@lucide/svelte/icons";
@@ -46,6 +47,7 @@
 
 <Toaster />
 <ModeWatcher />
+<DisclaimerDialog />
 
 <div class="min-h-screen flex flex-col">
   <nav

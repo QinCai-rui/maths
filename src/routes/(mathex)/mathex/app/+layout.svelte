@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import DisclaimerDialog from "$lib/components/DisclaimerDialog.svelte";
   import SiteFooter from "$lib/components/SiteFooter.svelte";
   import SiteNav from "$lib/components/SiteNav.svelte";
   import { Toaster } from "$lib/components/ui/sonner";
@@ -22,6 +23,7 @@
 </svelte:head>
 <Toaster />
 <ModeWatcher />
+<DisclaimerDialog />
 {#if usesSiteShell}
   <div class="flex min-h-screen flex-col bg-background text-foreground">
     <SiteNav />

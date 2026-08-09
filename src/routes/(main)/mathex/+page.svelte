@@ -4,8 +4,7 @@
   import { Calculator } from "@lucide/svelte/icons";
 </script>
 
-<section class="mathex-shell relative isolate min-h-full overflow-hidden py-20">
-  <div class="mathex-grid pointer-events-none absolute inset-0 opacity-70"></div>
+<section class="relative isolate min-h-full overflow-hidden py-20">
   <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
     <div class="mx-auto max-w-2xl text-center">
       <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
