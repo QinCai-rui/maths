@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Header } from "$lib/components/ui/header";
-  import { Gamepad2 } from "@lucide/svelte/icons";
+  import { Brain, CircleDot, Gamepad2, Zap } from "@lucide/svelte/icons";
 
   interface Game {
     name: string;
@@ -18,6 +18,30 @@
       colour:
         "bg-blue-500/10 text-blue-600 border-blue-200 hover:border-blue-400 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-800",
       icon: Gamepad2
+    },
+    {
+      name: "Basic Facts",
+      description: "Beat the clock with arithmetic, multiplication, powers, and square roots.",
+      url: "/games/number-rush",
+      colour:
+        "bg-amber-500/10 text-amber-600 border-amber-200 hover:border-amber-400 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-800",
+      icon: Zap
+    },
+    {
+      name: "Sequencing",
+      description: "Read increasingly challenging number patterns and choose the next value.",
+      url: "/games/sequence-sprint",
+      colour:
+        "bg-violet-500/10 text-violet-600 border-violet-200 hover:border-violet-400 dark:bg-violet-500/20 dark:text-violet-400 dark:border-violet-800",
+      icon: Brain
+    },
+    {
+      name: "Factor Finder",
+      description: "Test your divisibility skills by finding every factor of a target number.",
+      url: "/games/factor-finder",
+      colour:
+        "bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-800",
+      icon: CircleDot
     }
   ];
 </script>

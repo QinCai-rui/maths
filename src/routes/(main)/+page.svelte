@@ -9,13 +9,12 @@
     <div class="grid border-y border-border lg:grid-cols-[1.15fr_0.85fr]">
       <div class="py-8 pr-0 lg:py-14 lg:pr-14">
         <p class="mathex-kicker">Devarsh's Maths, revived</p>
-        <h1
-          class="display-type mt-5 max-w-3xl text-5xl font-bold leading-[0.98] tracking-[-0.045em] text-foreground sm:text-7xl"
-        >
+        <h1 class="mt-5 max-w-3xl text-5xl font-bold leading-[0.91] tracking-[-0.065em] text-foreground sm:text-7xl lg:text-8xl">
           Mathematics,<br />worth lingering over.
         </h1>
         <p class="mt-6 max-w-lg text-base leading-7 text-muted-foreground sm:text-lg">
-          Explore interesting number facts, play a game of Wordle (but with numbers), and put your quick thinking and accuracy to the test in a live Mathex round.
+          Explore interesting number facts, play a game of Wordle (but with numbers), and put your quick thinking and
+          accuracy to the test in a live Mathex round.
         </p>
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
           <Button href="/utilities/number" size="lg" class="gap-2">
@@ -42,7 +41,7 @@
           </span>
         </div>
         <div class="mt-12 border-b border-border pb-5">
-          <div class="display-type text-8xl leading-none text-foreground">π</div>
+          <div class="text-8xl leading-none text-foreground">π</div>
           <p class="mt-4 font-mono text-xl font-medium tracking-tight">3.14159...</p>
         </div>
         <p class="mt-4 max-w-xs text-sm leading-6 text-muted-foreground">
@@ -62,7 +61,7 @@
           >
           <span class="font-mono text-xs text-muted-foreground">01</span>
         </div>
-        <h2 class="display-type mt-8 text-2xl font-bold">Number explorer</h2>
+        <h2 class="mt-8 text-2xl font-bold">Number explorer</h2>
         <p class="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
           Pull apart any number to see its factors, patterns, and surprising properties.
         </p>
@@ -78,7 +77,7 @@
           >
           <span class="font-mono text-xs text-muted-foreground">02</span>
         </div>
-        <h2 class="display-type mt-8 text-2xl font-bold">Games with bite</h2>
+        <h2 class="mt-8 text-2xl font-bold">Games with bite</h2>
         <p class="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
           Play games that reward pattern-spotting, quick thinking, and a little persistence.
         </p>
@@ -97,7 +96,7 @@
           >
           <span class="font-mono text-xs text-background/65">03</span>
         </div>
-        <h2 class="display-type mt-8 text-2xl font-bold">Live Mathex</h2>
+        <h2 class="mt-8 text-2xl font-bold">Live Mathex</h2>
         <p class="mt-2 max-w-sm text-sm leading-6 text-background/75">
           Host a room or race your friends through a real-time mathematics competition.
         </p>

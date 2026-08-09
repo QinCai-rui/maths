@@ -1,14 +1,19 @@
+# syntax=docker/dockerfile:1.7
+
 # ---- Build stage ----
 FROM oven/bun:1 AS build
 WORKDIR /app
 
 COPY package.json bun.lock .npmrc ./
-RUN bun install --frozen-lockfile
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile
 
 COPY svelte.config.js vite.config.ts tsconfig.json components.json ./
 COPY src/ src/
 COPY static/ static/
-RUN NODE_ENV=production bun run build
+ARG GIT_COMMIT
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    --mount=type=cache,target=/app/node_modules/.vite \
+    GIT_COMMIT=$GIT_COMMIT NODE_ENV=production bun run build
 
 # ---- Runtime stage ----
 FROM oven/bun:1-debian AS runtime
@@ -18,7 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/package.json /app/bun.lock ./
-RUN bun install --frozen-lockfile --production && bun pm cache rm
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile --production
 
 COPY --from=build /app/build ./build
 COPY server.ts ./

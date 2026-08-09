@@ -2,9 +2,10 @@
   import "../../app.css";
 
   import { page } from "$app/state";
+  import DisclaimerDialog from "$lib/components/DisclaimerDialog.svelte";
   import { Toaster } from "$lib/components/ui/sonner";
 
-  import { Menu, X, Github } from "@lucide/svelte/icons";
+  import { Menu, X, Github, Sigma } from "@lucide/svelte/icons";
   import ThemeToggle from "$lib/components/ui/theme-toggle/theme-toggle.svelte";
   import { ModeWatcher } from "mode-watcher";
 
@@ -34,6 +35,9 @@
     }
   ];
 
+  const buildCommit = __BUILD_COMMIT__;
+  const buildTime = __BUILD_TIME__;
+
   let mobileOpen = $state(false);
 </script>
 
@@ -43,6 +47,7 @@
 
 <Toaster />
 <ModeWatcher />
+<DisclaimerDialog />
 
 <div class="min-h-screen flex flex-col">
   <nav
@@ -51,8 +56,8 @@
     <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
       <a href="/" class="flex items-center gap-2 text-lg font-semibold tracking-tight">
         <span
-          class="display-type flex h-8 w-8 items-center justify-center border border-primary bg-primary text-primary-foreground text-base font-bold"
-          >∑</span
+          class="flex h-8 w-8 items-center justify-center border border-primary bg-primary text-primary-foreground text-base font-bold leading-none"
+          ><Sigma class="h-4 w-4" /></span
         >
         Devarsh's Maths, revived
       </a>
@@ -126,8 +131,8 @@
     <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
         <div class="flex flex-col items-center gap-1 sm:items-start">
-          <p class="text-sm font-medium text-foreground">Devarsh's Maths, revived</p>
-          <p class="text-sm text-muted-foreground">Learn and have fun with mathematics.</p>
+          <p class="text-sm font-medium text-foreground">Made with ♥ by <a href="https://qincai.xyz" class="underline-offset-4 hover:underline">Raymont</a> to celebrate Maths Week.</p>
+          <p class="text-sm text-muted-foreground">Originally made by <a href="https://devarsh.me" class="font-medium underline-offset-4 hover:underline">Devarsh</a> as a side project in Room 22 @ BBI.</p>
         </div>
         <div class="flex items-center gap-4">
           <a
@@ -141,7 +146,12 @@
         </div>
       </div>
       <div class="mt-6 border-t border-border/40 pt-6 text-center">
-        <p class="text-xs text-muted-foreground">A small, independent place for mathematical play.</p>
+        <p class="text-xs text-muted-foreground">Built with SvelteKit, Tailwind CSS, and Bun.</p>
+        <p class="mt-2 text-xs text-muted-foreground">
+          <code class="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.7rem] text-foreground/80"
+            >git:{buildCommit} · build:{buildTime}</code
+          >
+        </p>
       </div>
     </div>
   </footer>

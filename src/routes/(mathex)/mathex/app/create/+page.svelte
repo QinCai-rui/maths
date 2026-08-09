@@ -122,7 +122,7 @@
 </script>
 
 <div
-  class="mathex-shell min-h-screen px-4 py-5 sm:px-8 sm:py-8"
+  class="mathex-shell min-h-full px-4 py-5 sm:px-8 sm:py-8"
   role="region"
   aria-label="Create room"
   ondragover={(e) => {
@@ -139,7 +139,7 @@
       ><ArrowLeft class="h-4 w-4" /> Competition home</a
     >
     <div class="mt-10 grid gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-start">
-      <section class="lg:sticky lg:top-8">
+      <section class="lg:sticky lg:top-24">
         <p class="mathex-kicker">Host setup</p>
         <Header size="h1" class="mt-2 text-4xl leading-none tracking-[-0.04em] sm:text-5xl"
           >Build the<br /><span class="text-primary">starting line.</span></Header

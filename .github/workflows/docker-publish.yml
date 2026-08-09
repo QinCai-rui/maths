@@ -88,6 +88,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}-${{ matrix.slug }}
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.slug }}
           cache-to: type=gha,scope=${{ matrix.slug }},mode=max
 
