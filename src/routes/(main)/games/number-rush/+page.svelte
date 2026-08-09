@@ -32,7 +32,7 @@
     const left = Math.floor(Math.random() * 12) + 2;
     const right = Math.floor(Math.random() * 12) + 2;
     const multiplier = Math.floor(Math.random() * 6) + 2;
-    return { text: `(${left} + ${right}) x ${multiplier}`, answer: (left + right) * multiplier, level: 5, label: "Brackets" };
+    return { text: `(${left} + ${right}) x ${multiplier}`, answer: (left + right) * multiplier, level: 4, label: "Brackets" };
   };
 
   const makeQuestion = (level: number): Question => {
