@@ -4,7 +4,7 @@
   import { RefreshCw, Timer, Zap } from "@lucide/svelte/icons";
   import { onDestroy, tick } from "svelte";
 
-  type Question = { text: string; answer: number; level: number; label: string };
+  type Question = { text: string; answer: number; level: number; pointsMultiplier: number; label: string };
 
   const makeQuestionForLevel = (level: number): Question => {
     if (level === 1) {
@@ -12,27 +12,27 @@
       const right = Math.floor(Math.random() * 12) + 1;
       const addition = Math.random() > 0.5;
       const [first, second] = addition ? [left, right] : [Math.max(left, right), Math.min(left, right)];
-      return { text: `${first} ${addition ? "+" : "-"} ${second}`, answer: addition ? first + second : first - second, level: 1, label: "Arithmetic" };
+      return { text: `${first} ${addition ? "+" : "-"} ${second}`, answer: addition ? first + second : first - second, level: 1, pointsMultiplier: 1, label: "Arithmetic" };
     }
     if (level === 2) {
       const left = Math.floor(Math.random() * 10) + 2;
       const right = Math.floor(Math.random() * 10) + 2;
-      if (Math.random() > 0.5) return { text: `${left} x ${right}`, answer: left * right, level: 2, label: "Multiplication and division" };
-      return { text: `${left * right} ÷ ${right}`, answer: left, level: 2, label: "Multiplication and division" };
+      if (Math.random() > 0.5) return { text: `${left} x ${right}`, answer: left * right, level: 2, pointsMultiplier: 2, label: "Multiplication and division" };
+      return { text: `${left * right} ÷ ${right}`, answer: left, level: 2, pointsMultiplier: 2, label: "Multiplication and division" };
     }
     if (level === 3) {
       if (Math.random() > 0.5) {
         const base = Math.floor(Math.random() * 9) + 2;
         const exponent = Math.random() > 0.5 ? 2 : 3;
-        return { text: `${base}${exponent === 2 ? "²" : "³"}`, answer: base ** exponent, level: 3, label: "Powers and roots" };
+        return { text: `${base}${exponent === 2 ? "²" : "³"}`, answer: base ** exponent, level: 3, pointsMultiplier: 3, label: "Powers" };
       }
       const root = Math.floor(Math.random() * 11) + 2;
-      return { text: `√${root * root}`, answer: root, level: 3, label: "Powers and roots" };
+      return { text: `√${root * root}`, answer: root, level: 3, pointsMultiplier: 2.75, label: "Roots" };
     }
     const left = Math.floor(Math.random() * 12) + 2;
     const right = Math.floor(Math.random() * 12) + 2;
     const multiplier = Math.floor(Math.random() * 6) + 2;
-    return { text: `(${left} + ${right}) x ${multiplier}`, answer: (left + right) * multiplier, level: 4, label: "Brackets" };
+    return { text: `(${left} + ${right}) x ${multiplier}`, answer: (left + right) * multiplier, level: 4, pointsMultiplier: 6, label: "Brackets" };
   };
 
   const makeQuestion = (level: number): Question => {
@@ -92,7 +92,9 @@
     const timeTaken = (performance.now() - questionStartedAt) / 1000;
     if (Number(input) === question.answer) {
       streak++;
-      score += Math.max(1, Math.round(20 / (1 + timeTaken))) * question.level;
+      const speedPoints = Math.max(1, Math.round(20 / (1 + timeTaken)));
+      const streakMultiplier = 1 + Math.min(1, Math.floor(streak / 5) * 0.1);
+      score += Math.round(speedPoints * question.pointsMultiplier * streakMultiplier);
       correctAtLevel++;
       if (correctAtLevel >= 10 && level < 4) {
         level++;
@@ -151,7 +153,7 @@
         <div class="mt-10 text-center">
           <Timer class="mx-auto h-10 w-10 text-primary" />
           <p class="mt-4 text-lg font-semibold">{seconds === 0 ? `Time! You scored ${score} points.` : "Ready to race?"}</p>
-          <p class="mt-2 text-sm text-muted-foreground">Speed is everything: points drop sharply as each question takes longer, then scale with difficulty.</p>
+          <p class="mt-2 text-sm text-muted-foreground">Speed and difficulty determine points. Every five correct answers in a streak adds 10%, up to a 100% bonus.</p>
           <Button onclick={start} class="mt-6 gap-2"><RefreshCw class="h-4 w-4" /> {seconds === 60 ? "Start round" : "Play again"}</Button>
         </div>
       {/if}

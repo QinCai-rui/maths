@@ -22,7 +22,7 @@
     {
       name: "Basic Facts",
       description: "Beat the clock with arithmetic, multiplication, powers, and square roots.",
-      url: "/games/number-rush",
+      url: "/games/basic-facts",
       colour:
         "bg-amber-500/10 text-amber-600 border-amber-200 hover:border-amber-400 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-800",
       icon: Zap
@@ -30,7 +30,7 @@
     {
       name: "Sequencing",
       description: "Read increasingly challenging number patterns and choose the next value.",
-      url: "/games/sequence-sprint",
+      url: "/games/sequencing",
       colour:
         "bg-violet-500/10 text-violet-600 border-violet-200 hover:border-violet-400 dark:bg-violet-500/20 dark:text-violet-400 dark:border-violet-800",
       icon: Brain
