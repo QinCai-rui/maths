@@ -27,7 +27,13 @@
   let setName = $state("");
   let instructions = $state("");
   let coverResetKey = $state(0);
-  let pdfOptions = $state({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 });
+  let pdfOptions = $state({
+    questionTextSize: 11,
+    answerTextSize: 11,
+    imageHeight: 30,
+    slipHeight: 49.5,
+    cutMargin: 50
+  });
   let currentQuestionIdx = $state(0);
   let currentQuestion = $derived(questions[currentQuestionIdx]);
   let isDirty = $state(false);
@@ -415,7 +421,7 @@
             </label>
           </div>
           <p class="mb-2 text-xs leading-4 text-muted-foreground">
-            Six 49.5 mm slips fit exactly on A4. The cut-off margin is marked with a dashed line on the right.
+            Six slips fit on A4; the final row is 0.1 mm shorter for print tolerance. The right cut-off is dashed.
           </p>
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
