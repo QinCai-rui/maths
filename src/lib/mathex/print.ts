@@ -277,7 +277,7 @@ export async function downloadQuestionSet(set: Set) {
       `Question ${index + 1}`,
       set.pdfOptions.questionTextSize,
       set.pdfOptions.imageHeight,
-      92
+      108
     );
     slips.push({ stack: fitted.nodes, size: fitted.size, label: `Question ${index + 1}` });
   }
@@ -377,15 +377,19 @@ function openPrintDocument(title: string, body: string, styles: string, fitSlips
   popup.document
     .write(`<!doctype html><html><head><meta charset="utf-8"><title>${title.replace(/[<>&]/g, "")}</title><style>${styles}</style></head><body>${body}<script>
     const fit = ${fitSlips};
-    addEventListener('load', () => setTimeout(() => {
+    addEventListener('load', async () => {
+      await document.fonts?.ready;
+      await Promise.all([...document.images].map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => {
+        image.addEventListener('load', resolve, { once: true });
+        image.addEventListener('error', resolve, { once: true });
+      })));
       if (fit) for (const slip of document.querySelectorAll('.slip')) {
         const content = slip.querySelector('.slip-content');
         let size = Number(slip.dataset.size), image = Number(slip.dataset.imageHeight);
         while (content.scrollHeight > content.clientHeight && size > 6) { size -= .5; content.style.fontSize = size + 'pt'; }
         while (content.scrollHeight > content.clientHeight && image > 5) { image--; for (const img of content.querySelectorAll('img')) img.style.maxHeight = image + 'mm'; }
       }
-      print();
-    }, 100));
+    });
   <\/script></body></html>`);
   popup.document.close();
   return true;
@@ -423,7 +427,7 @@ export function previewAnswerSet(set: Set) {
     .join("");
   return openPrintDocument(
     `${set.name || "Mathex set"} answers`,
-    `<h1>${set.name.replace(/[<>&]/g, "") || "Untitled set"}</h1><h2>Answer key</h2><table><thead><tr><th>Question</th><th>Answer</th><th>Marker comments</th></tr></thead><tbody>${rows}</tbody></table>`,
-    `@page { size: A4 portrait; margin: 14.82mm; } * { box-sizing: border-box; } body { color: #111; background: #fff; font-family: Arial, sans-serif; font-size: ${set.pdfOptions.answerTextSize}pt; } h1 { margin: 0 0 1.06mm; font-size: 20pt; } h2 { margin: 0 0 4.94mm; font-size: 12pt; font-weight: normal; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #333; padding: 3mm; text-align: left; vertical-align: top; } th { background: #eee; } th:first-child, td:first-child { width: 10.75%; } th:nth-child(2), td:nth-child(2) { width: 28.36%; } tr { break-inside: avoid; }`
+    `<main class="answer-preview"><h1>${set.name.replace(/[<>&]/g, "") || "Untitled set"}</h1><h2>Answer key</h2><table><thead><tr><th>Question</th><th>Answer</th><th>Marker comments</th></tr></thead><tbody>${rows}</tbody></table></main>`,
+    `@page { size: A4 portrait; margin: 14.82mm; } * { box-sizing: border-box; } body { color: #111; background: #fff; font-family: Arial, sans-serif; font-size: ${set.pdfOptions.answerTextSize}pt; } .answer-preview { width: 100%; } h1 { margin: 0 0 1.06mm; font-size: 20pt; } h2 { margin: 0 0 4.94mm; font-size: 12pt; font-weight: normal; } table { width: 100%; border-collapse: collapse; } thead { display: table-header-group; } tbody { display: table-row-group; } th, td { border: 1px solid #333; padding: 3mm; text-align: left; vertical-align: top; } th { background: #eee; } th:first-child, td:first-child { width: 10.75%; } th:nth-child(2), td:nth-child(2) { width: 28.36%; } tr { break-inside: avoid; page-break-inside: avoid; } @media print { .answer-preview { width: auto; } }`
   );
 }

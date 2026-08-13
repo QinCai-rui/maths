@@ -208,7 +208,8 @@
     font-size: inherit;
   }
   .quill-wrapper :global(.ql-editor) {
-    min-height: 4rem;
+    /* Keep a little writing room without implying the question has blank lines. */
+    min-height: 2.5rem;
     padding: 0.75rem 1rem;
   }
   .quill-wrapper :global(.ql-editor.ql-blank::before) {
