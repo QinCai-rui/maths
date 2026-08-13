@@ -4,9 +4,10 @@
 
   interface Props {
     html?: string;
+    resetKey?: number;
   }
 
-  let { html = $bindable("") }: Props = $props();
+  let { html = $bindable(""), resetKey = 0 }: Props = $props();
 
   let node: HTMLDivElement;
   let quill: any = null;
@@ -132,6 +133,13 @@
     if (quill) {
       quill = null;
     }
+  });
+
+  $effect(() => {
+    resetKey;
+    if (!quill) return;
+    quill.setText("");
+    if (html) quill.clipboard.dangerouslyPasteHTML(html);
   });
 
   // Handle click outside to close popover

@@ -26,6 +26,7 @@
   let questions: z.infer<typeof Question>[] = $state([]);
   let setName = $state("");
   let instructions = $state("");
+  let coverResetKey = $state(0);
   let pdfOptions = $state({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30 });
   let currentQuestionIdx = $state(0);
   let currentQuestion = $derived(questions[currentQuestionIdx]);
@@ -179,6 +180,7 @@
     questions = [];
     setName = "";
     instructions = "";
+    coverResetKey++;
     pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30 };
     currentQuestionIdx = 0;
     clearDraft();
@@ -445,7 +447,7 @@
           <div class="grid gap-1.5 cover-instructions">
             <span class="text-sm font-medium">Cover instructions</span>
             <p class="text-xs text-muted-foreground">Printed on the first tear-off slip.</p>
-            <Quill bind:html={instructions} />
+            <Quill bind:html={instructions} resetKey={coverResetKey} />
           </div>
         </div>
         {#if questions.length > 0 && currentQuestion}
