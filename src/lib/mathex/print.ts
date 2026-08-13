@@ -8,7 +8,6 @@ type PdfNode = Record<string, unknown>;
 
 const PT_PER_MM = 72 / 25.4;
 const PAGE_WIDTH = 210 * PT_PER_MM;
-const PAGE_HEIGHT = 297 * PT_PER_MM;
 let mathDocument: Promise<{
   convert(tex: string, options: { display: boolean }): unknown;
   outerHTML(node: unknown): string;
@@ -295,56 +294,49 @@ export async function downloadQuestionSet(set: Set) {
     slips.push({ stack: fitted.nodes, size: fitted.size, label: `Question ${index + 1}` });
   }
 
-  const content: PdfNode[] = [];
-  for (let pageStart = 0, pageNumber = 0; pageStart < slips.length; pageStart += slipsPerPage, pageNumber++) {
-    const pageSlips = slips.slice(pageStart, pageStart + slipsPerPage);
-    content.push({ text: "", fontSize: 0.1, pageBreak: pageNumber ? "before" : undefined });
-
-    const guides: PdfNode[] = [];
-    const cutX = PAGE_WIDTH - cutMargin;
-    for (let row = 0; row < pageSlips.length; row++) {
-      const top = row * slipHeight;
-      const isLastPageSlot = row === slipsPerPage - 1;
-      const rowHeight = slipHeight - (isLastPageSlot ? 0.1 * PT_PER_MM : 0);
-      const bottom = Math.min(top + rowHeight, PAGE_HEIGHT - 0.25);
-      guides.push(
-        { type: "line", x1: 28, y1: top, x2: 28, y2: bottom, lineWidth: 0.5, lineColor: "#aaaaaa" },
-        {
-          type: "line",
-          x1: 0,
-          y1: bottom,
-          x2: PAGE_WIDTH,
-          y2: bottom,
-          lineWidth: 0.5,
-          lineColor: "#777777",
-          dash: { length: 3, space: 3 }
-        }
-      );
-      if (cutMargin > 0) {
-        guides.push({
-          type: "line",
-          x1: cutX,
-          y1: top,
-          x2: cutX,
-          y2: bottom,
-          lineWidth: 0.5,
-          lineColor: "#777777",
-          dash: { length: 3, space: 3 }
-        });
+  const guides: PdfNode[] = [];
+  const cutX = PAGE_WIDTH - cutMargin;
+  for (let row = 0; row < slipsPerPage; row++) {
+    const top = row * slipHeight;
+    const bottom = top + slipHeight;
+    guides.push(
+      { type: "line", x1: 28, y1: top, x2: 28, y2: bottom, lineWidth: 0.5, lineColor: "#aaaaaa" },
+      {
+        type: "line",
+        x1: 0,
+        y1: bottom,
+        x2: PAGE_WIDTH,
+        y2: bottom,
+        lineWidth: 0.5,
+        lineColor: "#777777",
+        dash: { length: 3, space: 3 }
       }
+    );
+    if (cutMargin > 0) {
+      guides.push({
+        type: "line",
+        x1: cutX,
+        y1: top,
+        x2: cutX,
+        y2: bottom,
+        lineWidth: 0.5,
+        lineColor: "#777777",
+        dash: { length: 3, space: 3 }
+      });
     }
-    content.push({
-      absolutePosition: { x: 0, y: 0 },
-      canvas: guides
-    });
+  }
 
-    for (let row = 0; row < pageSlips.length; row++) {
-      const slip = pageSlips[row];
-      content.push({
-        absolutePosition: { x: 46, y: row * slipHeight + 5 },
-        columns: [
+  const content: PdfNode[] = [];
+  for (let pageStart = 0; pageStart < slips.length; pageStart += slipsPerPage) {
+    const pageSlips = slips.slice(pageStart, pageStart + slipsPerPage);
+    content.push({
+      table: {
+        widths: [28, contentWidth, cutMargin],
+        heights: pageSlips.map(() => slipHeight),
+        dontBreakRows: true,
+        body: pageSlips.map((slip) => [
+          { text: "" },
           {
-            width: contentWidth - 32,
             stack: [
               ...(slip.label
                 ? [{ text: slip.label, bold: true, fontSize: 8, characterSpacing: 0.5, margin: [0, 0, 0, 2] }]
@@ -353,17 +345,28 @@ export async function downloadQuestionSet(set: Set) {
             ],
             fontSize: slip.size,
             lineHeight: 1.1,
-            margin: [0, 0, 0, 0]
-          }
-        ]
-      });
-    }
+            margin: [18, 5, 14, 4]
+          },
+          { text: "" }
+        ])
+      },
+      layout: {
+        hLineWidth: () => 0,
+        vLineWidth: () => 0,
+        paddingLeft: () => 0,
+        paddingRight: () => 0,
+        paddingTop: () => 0,
+        paddingBottom: () => 0
+      },
+      pageBreak: pageStart + slipsPerPage < slips.length ? "after" : undefined
+    });
   }
 
   await pdfMake
     .createPdf({
       pageSize: "A4",
       pageMargins: [0, 0, 0, 0],
+      background: () => ({ canvas: guides }),
       defaultStyle: { font: "Roboto", color: "#111111" },
       content
     })
@@ -448,7 +451,7 @@ export function previewQuestionSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip:nth-child(${Math.floor(297 / options.slipHeight)}n) { height: ${options.slipHeight - 0.1}mm; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
+    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
     true
   );
 }

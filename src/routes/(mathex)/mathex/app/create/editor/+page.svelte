@@ -31,7 +31,7 @@
     questionTextSize: 11,
     answerTextSize: 11,
     imageHeight: 30,
-    slipHeight: 49.5,
+    slipHeight: 49.4,
     cutMargin: 50
   });
   let currentQuestionIdx = $state(0);
@@ -100,7 +100,7 @@
         questionTextSize: source.pdfOptions?.questionTextSize ?? 11,
         answerTextSize: source.pdfOptions?.answerTextSize ?? 11,
         imageHeight: source.pdfOptions?.imageHeight ?? 30,
-        slipHeight: source.pdfOptions?.slipHeight ?? 49.5,
+        slipHeight: Math.min(source.pdfOptions?.slipHeight ?? 49.4, 49.4),
         cutMargin: source.pdfOptions?.cutMargin ?? 50
       };
       questions = source.questions.map(migrateQuestion);
@@ -189,7 +189,7 @@
     setName = "";
     instructions = "";
     coverResetKey++;
-    pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 };
+    pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.4, cutMargin: 50 };
     currentQuestionIdx = 0;
     clearDraft();
     clearDialogOpen = false;
@@ -401,11 +401,11 @@
                 class="h-8 rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="35"
-                max="49.5"
+                max="49.4"
                 step="0.5"
                 bind:value={pdfOptions.slipHeight}
               />
-              <span>35-49.5 mm</span>
+              <span>35-49.4 mm</span>
             </label>
             <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Cut-off margin
