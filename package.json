@@ -43,6 +43,8 @@
     "clsx": "^2.1.1",
     "dompurify": "^3.4.13",
     "express": "^5.2.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "katex": "^0.16.47",
     "mathjs": "^14.9.1",
     "minidenticons": "^4.2.1",

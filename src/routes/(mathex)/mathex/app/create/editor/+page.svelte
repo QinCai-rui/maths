@@ -5,7 +5,7 @@
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Question, QuestionSet, SolutionItem } from "$lib/mathex/schemas";
   import { stripTags } from "$lib/mathex/content";
-  import { printAnswerSet, printQuestionSet } from "$lib/mathex/print";
+  import { downloadAnswerSet, downloadQuestionSet } from "$lib/mathex/print";
   import { toast } from "svelte-sonner";
 
   import QuestionEditor from "$lib/mathex/editors/QuestionEditor.svelte";
@@ -240,14 +240,22 @@
     URL.revokeObjectURL(url);
   }
 
-  function exportQuestions() {
+  async function exportQuestions() {
     if (!questions.length) return toast.error("Nothing to export");
-    if (!printQuestionSet({ name: setName, instructions, questions })) toast.error("Allow pop-ups to export PDFs");
+    try {
+      await downloadQuestionSet({ name: setName, instructions, questions });
+    } catch {
+      toast.error("Could not create the question PDF");
+    }
   }
 
-  function exportAnswers() {
+  async function exportAnswers() {
     if (!questions.length) return toast.error("Nothing to export");
-    if (!printAnswerSet({ name: setName, instructions, questions })) toast.error("Allow pop-ups to export PDFs");
+    try {
+      await downloadAnswerSet({ name: setName, instructions, questions });
+    } catch {
+      toast.error("Could not create the answer PDF");
+    }
   }
 
   function useInRoom() {
@@ -317,11 +325,11 @@
           >
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
-            onclick={exportQuestions}><FileText class="h-3.5 w-3.5" /> Question slips PDF</button
+            onclick={exportQuestions}><FileText class="h-3.5 w-3.5" /> Download question PDF</button
           >
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
-            onclick={exportAnswers}><FileText class="h-3.5 w-3.5" /> Answer key PDF</button
+            onclick={exportAnswers}><FileText class="h-3.5 w-3.5" /> Download answer PDF</button
           >
         </div>
       </details>
