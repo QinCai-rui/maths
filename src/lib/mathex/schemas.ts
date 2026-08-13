@@ -124,7 +124,8 @@ export const Question = z.preprocess(
       return {
         contents: q.data.contents || "",
         solutions: q.data.solutions || [],
-        allowEquivalent: q.data.allowEquivalent ?? true
+        allowEquivalent: q.data.allowEquivalent ?? true,
+        answerComment: q.data.answerComment || ""
       };
     }
     return val;
@@ -132,9 +133,16 @@ export const Question = z.preprocess(
   z.object({
     contents: z.string(),
     solutions: z.array(SolutionItem),
-    allowEquivalent: z.boolean()
+    allowEquivalent: z.boolean(),
+    answerComment: z.string().max(2000).default("")
   })
 );
+
+export const QuestionSet = z.object({
+  name: z.string().max(120),
+  instructions: z.string(),
+  questions: z.array(Question).max(100)
+});
 
 export type RoomState = "lobby" | "started" | "finished";
 

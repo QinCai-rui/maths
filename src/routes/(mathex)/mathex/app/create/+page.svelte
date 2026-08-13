@@ -36,6 +36,11 @@
   let runningTime = $state(16);
   let visibilityTracking = $state(false);
 
+  function parseQuestions(value: unknown) {
+    const source = value && typeof value === "object" && "questions" in value ? value.questions : value;
+    return z.array(Question).safeParse(source);
+  }
+
   $effect(() => {
     if (!file) {
       fileValid = false;
@@ -46,7 +51,7 @@
       try {
         const text = await file!.text();
         const parsed = JSON.parse(text);
-        const result = z.array(Question).safeParse(parsed);
+        const result = parseQuestions(parsed);
         if (!result.success) {
           fileValid = false;
           questionCount = 0;
@@ -63,7 +68,7 @@
 
   $effect(() => {
     try {
-      const result = z.array(Question).safeParse(JSON.parse(localStorage.getItem(ROOM_SET_KEY) || "null"));
+      const result = parseQuestions(JSON.parse(localStorage.getItem(ROOM_SET_KEY) || "null"));
       if (result.success && result.data.length > 0) {
         editorSet = result.data;
         useEditorSet = true;
@@ -108,7 +113,10 @@
     }
     creating = true;
     try {
-      const set = useEditorSet && editorSet ? editorSet : z.array(Question).parse(JSON.parse(await file!.text()));
+      const parsed = useEditorSet && editorSet ? editorSet : JSON.parse(await file!.text());
+      const result = parseQuestions(parsed);
+      if (!result.success) throw new Error("Invalid question set");
+      const set = result.data;
       socket.emit("newRoom", roomNameResult.data, set, runningTime * 1000, visibilityTracking);
       socket.once("goto", (path) => {
         socket.disconnect();

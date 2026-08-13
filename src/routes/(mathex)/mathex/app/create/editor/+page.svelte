@@ -3,11 +3,13 @@
   import { Button, buttonVariants } from "$lib/components/ui/button";
   import { Header } from "$lib/components/ui/header";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import { Question, SolutionItem } from "$lib/mathex/schemas";
+  import { Question, QuestionSet, SolutionItem } from "$lib/mathex/schemas";
   import { stripTags } from "$lib/mathex/content";
+  import { printAnswerSet, printQuestionSet } from "$lib/mathex/print";
   import { toast } from "svelte-sonner";
 
   import QuestionEditor from "$lib/mathex/editors/QuestionEditor.svelte";
+  import Quill from "$lib/components/Quill.svelte";
 
   import Plus from "@lucide/svelte/icons/plus";
   import Copy from "@lucide/svelte/icons/copy";
@@ -15,12 +17,15 @@
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import Upload from "@lucide/svelte/icons/upload";
   import Download from "@lucide/svelte/icons/download";
+  import FileText from "@lucide/svelte/icons/file-text";
   import Trash2 from "@lucide/svelte/icons/trash-2";
 
   const DRAFT_KEY = "mathex-draft";
   const ROOM_SET_KEY = "mathex-room-set";
 
   let questions: z.infer<typeof Question>[] = $state([]);
+  let setName = $state("");
+  let instructions = $state("");
   let currentQuestionIdx = $state(0);
   let currentQuestion = $derived(questions[currentQuestionIdx]);
   let isDirty = $state(false);
@@ -42,17 +47,19 @@
       return {
         contents: q.data.contents || "",
         solutions: q.data.solutions ? migrateSolutions(q.data.solutions) : [],
-        allowEquivalent: q.data.allowEquivalent ?? true
+        allowEquivalent: q.data.allowEquivalent ?? true,
+        answerComment: q.data.answerComment || ""
       };
     }
     // New format: { contents, solutions, allowEquivalent }
     if (q.data) {
-      return { ...q.data, allowEquivalent: q.data.allowEquivalent ?? true };
+      return { ...q.data, allowEquivalent: q.data.allowEquivalent ?? true, answerComment: q.data.answerComment || "" };
     }
     return {
       contents: q.contents || "",
       solutions: q.solutions ? migrateSolutions(q.solutions) : [],
-      allowEquivalent: q.allowEquivalent ?? true
+      allowEquivalent: q.allowEquivalent ?? true,
+      answerComment: q.answerComment || ""
     };
   }
 
@@ -60,7 +67,7 @@
   function saveDraft() {
     if (!loaded) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(questions));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ name: setName, instructions, questions }));
       isDirty = false;
     } catch {}
   }
@@ -77,8 +84,11 @@
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return false;
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) return false;
-      questions = parsed.map(migrateQuestion);
+      const source = Array.isArray(parsed) ? { questions: parsed } : parsed;
+      if (!Array.isArray(source.questions) || source.questions.length === 0) return false;
+      setName = source.name || "";
+      instructions = source.instructions || "";
+      questions = source.questions.map(migrateQuestion);
       currentQuestionIdx = 0;
       return true;
     } catch {
@@ -92,7 +102,8 @@
   }
 
   $effect(() => {
-    if (loaded && questions.length >= 0) {
+    JSON.stringify({ setName, instructions, questions });
+    if (loaded) {
       scheduleSave();
     }
   });
@@ -124,7 +135,7 @@
       toast.error("Maximum 100 questions per set");
       return;
     }
-    questions = [...questions, { contents: "", solutions: [], allowEquivalent: true }];
+    questions = [...questions, { contents: "", solutions: [], allowEquivalent: true, answerComment: "" }];
     currentQuestionIdx = questions.length - 1;
   }
 
@@ -160,6 +171,8 @@
   let clearDialogOpen = $state(false);
   function clearAll() {
     questions = [];
+    setName = "";
+    instructions = "";
     currentQuestionIdx = 0;
     clearDraft();
     clearDialogOpen = false;
@@ -176,20 +189,29 @@
       try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        const migrated = Array.isArray(parsed) ? parsed.map(migrateQuestion) : parsed;
-        const result = z.array(Question).safeParse(migrated);
+        const source = Array.isArray(parsed) ? { questions: parsed } : parsed;
+        const migrated = {
+          name: source.name || "",
+          instructions: source.instructions || "",
+          questions: Array.isArray(source.questions) ? source.questions.map(migrateQuestion) : []
+        };
+        const result = QuestionSet.safeParse(migrated);
         if (!result.success) {
           toast.error(`Invalid set: ${result.error.issues[0]?.message || "bad format"}`);
           return;
         }
-        if (result.data.length > 100) {
+        if (result.data.questions.length > 100) {
           toast.error("Set has more than 100 questions — rejected");
           return;
         }
-        questions = result.data;
+        setName = result.data.name;
+        instructions = result.data.instructions;
+        questions = result.data.questions;
         currentQuestionIdx = 0;
         clearDraft();
-        toast.success(`Imported ${result.data.length} question${result.data.length === 1 ? "" : "s"}`);
+        toast.success(
+          `Imported ${result.data.questions.length} question${result.data.questions.length === 1 ? "" : "s"}`
+        );
       } catch {
         toast.error("Could not parse JSON file");
       }
@@ -202,13 +224,30 @@
       toast.error("Nothing to export");
       return;
     }
-    const blob = new Blob([JSON.stringify(questions, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ name: setName, instructions, questions }, null, 2)], {
+      type: "application/json"
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `set-${questions.length}.json`;
+    a.download = `${
+      setName
+        .trim()
+        .replace(/[^a-z0-9]+/gi, "-")
+        .replace(/^-|-$/g, "") || "set"
+    }.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportQuestions() {
+    if (!questions.length) return toast.error("Nothing to export");
+    if (!printQuestionSet({ name: setName, instructions, questions })) toast.error("Allow pop-ups to export PDFs");
+  }
+
+  function exportAnswers() {
+    if (!questions.length) return toast.error("Nothing to export");
+    if (!printAnswerSet({ name: setName, instructions, questions })) toast.error("Allow pop-ups to export PDFs");
   }
 
   function useInRoom() {
@@ -217,7 +256,7 @@
       return;
     }
     try {
-      localStorage.setItem(ROOM_SET_KEY, JSON.stringify(questions));
+      localStorage.setItem(ROOM_SET_KEY, JSON.stringify({ name: setName, instructions, questions }));
     } catch {
       toast.error("Couldn't store set for room creation");
       return;
@@ -265,9 +304,27 @@
       <Button variant="outline" size="sm" class="gap-1" onclick={importFile}>
         <Upload class="h-3.5 w-3.5" /> Import
       </Button>
-      <Button variant="outline" size="sm" class="gap-1" onclick={exportFile} disabled={questions.length === 0}>
-        <Download class="h-3.5 w-3.5" /> Export
-      </Button>
+      <details class="relative">
+        <summary
+          class="inline-flex h-8 cursor-pointer list-none items-center gap-1 rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm hover:bg-accent"
+        >
+          <Download class="h-3.5 w-3.5" /> Export
+        </summary>
+        <div class="absolute right-0 z-10 mt-1 w-48 rounded-md border bg-popover p-1 shadow-md">
+          <button
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onclick={exportFile}>JSON file</button
+          >
+          <button
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onclick={exportQuestions}><FileText class="h-3.5 w-3.5" /> Question slips PDF</button
+          >
+          <button
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onclick={exportAnswers}><FileText class="h-3.5 w-3.5" /> Answer key PDF</button
+          >
+        </div>
+      </details>
       <Button variant="outline" size="sm" class="gap-1" onclick={useInRoom} disabled={questions.length === 0}>
         Use in Room
       </Button>
@@ -286,8 +343,25 @@
   <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
     <!-- Main editor area -->
     <div class="min-h-0 flex-1 overflow-auto p-4 lg:p-6">
-      {#if questions.length > 0 && currentQuestion}
-        <div class="mx-auto max-w-3xl">
+      <div class="mx-auto max-w-3xl">
+        <div class="mb-6 grid gap-4 rounded-xl border border-border/60 bg-card p-5 shadow-sm">
+          <div class="grid gap-1.5">
+            <label class="text-sm font-medium" for="set-name">Set name</label>
+            <input
+              id="set-name"
+              class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              bind:value={setName}
+              maxlength={120}
+              placeholder="e.g. Senior Mathex Round 1"
+            />
+          </div>
+          <div class="grid gap-1.5">
+            <span class="text-sm font-medium">Cover instructions</span>
+            <p class="text-xs text-muted-foreground">Printed on the first tear-off slip.</p>
+            <Quill bind:html={instructions} />
+          </div>
+        </div>
+        {#if questions.length > 0 && currentQuestion}
           <div class="mb-4 flex items-center gap-3">
             <Header size="h2" class="!m-0">Question {currentQuestionIdx + 1}</Header>
           </div>
@@ -296,28 +370,28 @@
               <QuestionEditor question={currentQuestion} />
             {/key}
           </div>
-        </div>
-      {:else}
-        <div
-          class="mx-auto flex max-w-3xl flex-col items-center justify-center rounded-xl border border-border/60 bg-card p-12 shadow-sm text-center"
-        >
-          <div class="mb-6 text-2xl font-semibold text-foreground">Create your first question</div>
-          <p class="mb-6 max-w-md text-muted-foreground">
-            Start building a question set by adding a question, or import an existing set.
-          </p>
-          <div class="flex flex-wrap justify-center gap-3">
-            <Button variant="outline" size="lg" class="gap-2" onclick={newQuestion}>
-              <Plus class="h-4 w-4" /> New Question
-            </Button>
+        {:else}
+          <div
+            class="flex flex-col items-center justify-center rounded-xl border border-border/60 bg-card p-12 shadow-sm text-center"
+          >
+            <div class="mb-6 text-2xl font-semibold text-foreground">Create your first question</div>
+            <p class="mb-6 max-w-md text-muted-foreground">
+              Start building a question set by adding a question, or import an existing set.
+            </p>
+            <div class="flex flex-wrap justify-center gap-3">
+              <Button variant="outline" size="lg" class="gap-2" onclick={newQuestion}>
+                <Plus class="h-4 w-4" /> New Question
+              </Button>
+            </div>
+            <p class="mt-6 text-sm text-muted-foreground">
+              or
+              <button class="text-primary underline underline-offset-2 hover:text-primary/80" onclick={importFile}>
+                import a JSON set
+              </button>
+            </p>
           </div>
-          <p class="mt-6 text-sm text-muted-foreground">
-            or
-            <button class="text-primary underline underline-offset-2 hover:text-primary/80" onclick={importFile}>
-              import a JSON set
-            </button>
-          </p>
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
 
     <!-- Sidebar -->
