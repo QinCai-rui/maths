@@ -218,6 +218,7 @@ function estimateHeight(nodes: PdfNode[], fontSize: number) {
         (total, row) => total + Math.max(...row.map((cell) => estimateHeight([cell], fontSize)), fontSize * 1.25),
         0
       );
+    }
     else {
       const text = Array.isArray(node.text)
         ? (node.text as Array<Record<string, unknown>>).map((part) => String(part.text || "")).join("")
