@@ -5,7 +5,7 @@
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Question, QuestionSet, SolutionItem } from "$lib/mathex/schemas";
   import { stripTags } from "$lib/mathex/content";
-  import { downloadAnswerSet, downloadQuestionSet } from "$lib/mathex/print";
+  import { downloadAnswerSet, downloadQuestionSet, previewAnswerSet, previewQuestionSet } from "$lib/mathex/print";
   import { toast } from "svelte-sonner";
 
   import QuestionEditor from "$lib/mathex/editors/QuestionEditor.svelte";
@@ -26,7 +26,7 @@
   let questions: z.infer<typeof Question>[] = $state([]);
   let setName = $state("");
   let instructions = $state("");
-  let pdfOptions = $state({ questionTextSize: 11, answerTextSize: 10, imageHeight: 30 });
+  let pdfOptions = $state({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30 });
   let currentQuestionIdx = $state(0);
   let currentQuestion = $derived(questions[currentQuestionIdx]);
   let isDirty = $state(false);
@@ -91,7 +91,7 @@
       instructions = source.instructions || "";
       pdfOptions = {
         questionTextSize: source.pdfOptions?.questionTextSize ?? 11,
-        answerTextSize: source.pdfOptions?.answerTextSize ?? 10,
+        answerTextSize: source.pdfOptions?.answerTextSize ?? 11,
         imageHeight: source.pdfOptions?.imageHeight ?? 30
       };
       questions = source.questions.map(migrateQuestion);
@@ -179,7 +179,7 @@
     questions = [];
     setName = "";
     instructions = "";
-    pdfOptions = { questionTextSize: 11, answerTextSize: 10, imageHeight: 30 };
+    pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30 };
     currentQuestionIdx = 0;
     clearDraft();
     clearDialogOpen = false;
@@ -273,6 +273,20 @@
     }
   }
 
+  function previewQuestions() {
+    if (!questions.length) return toast.error("Nothing to export");
+    const result = QuestionSet.safeParse({ name: setName, instructions, questions, pdfOptions });
+    if (!result.success) return toast.error(result.error.issues[0]?.message || "Invalid print settings");
+    if (!previewQuestionSet(result.data)) toast.error("Allow pop-ups to open the print preview");
+  }
+
+  function previewAnswers() {
+    if (!questions.length) return toast.error("Nothing to export");
+    const result = QuestionSet.safeParse({ name: setName, instructions, questions, pdfOptions });
+    if (!result.success) return toast.error(result.error.issues[0]?.message || "Invalid print settings");
+    if (!previewAnswerSet(result.data)) toast.error("Allow pop-ups to open the print preview");
+  }
+
   function useInRoom() {
     if (questions.length === 0) {
       toast.error("Add at least one question first");
@@ -337,21 +351,44 @@
           <div class="mb-3 grid grid-cols-3 gap-2 border-b pb-3">
             <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Question text
-              <input class="h-8 rounded border bg-background px-2 text-sm text-foreground" type="number" min="6" max="18" step="0.5" bind:value={pdfOptions.questionTextSize} />
+              <input
+                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                type="number"
+                min="6"
+                max="18"
+                step="0.5"
+                bind:value={pdfOptions.questionTextSize}
+              />
               <span>6-18 pt</span>
             </label>
             <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Answer text
-              <input class="h-8 rounded border bg-background px-2 text-sm text-foreground" type="number" min="6" max="16" step="0.5" bind:value={pdfOptions.answerTextSize} />
+              <input
+                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                type="number"
+                min="6"
+                max="16"
+                step="0.5"
+                bind:value={pdfOptions.answerTextSize}
+              />
               <span>6-16 pt</span>
             </label>
             <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Image height
-              <input class="h-8 rounded border bg-background px-2 text-sm text-foreground" type="number" min="5" max="35" step="1" bind:value={pdfOptions.imageHeight} />
+              <input
+                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                type="number"
+                min="5"
+                max="35"
+                step="1"
+                bind:value={pdfOptions.imageHeight}
+              />
               <span>5-35 mm</span>
             </label>
           </div>
-          <p class="mb-2 text-xs leading-4 text-muted-foreground">Oversized slips automatically shrink text and images to fit.</p>
+          <p class="mb-2 text-xs leading-4 text-muted-foreground">
+            Oversized slips automatically shrink text and images to fit.
+          </p>
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
             onclick={exportFile}>JSON file</button
@@ -363,6 +400,15 @@
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
             onclick={exportAnswers}><FileText class="h-3.5 w-3.5" /> Download answer PDF</button
+          >
+          <div class="my-1 border-t"></div>
+          <button
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onclick={previewQuestions}><FileText class="h-3.5 w-3.5" /> Preview question print</button
+          >
+          <button
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onclick={previewAnswers}><FileText class="h-3.5 w-3.5" /> Preview answer print</button
           >
         </div>
       </details>

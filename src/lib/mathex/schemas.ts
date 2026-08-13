@@ -148,7 +148,7 @@ export const QuestionSet = z.object({
       answerTextSize: z.number().min(6).max(16),
       imageHeight: z.number().min(5).max(35)
     })
-    .default({ questionTextSize: 11, answerTextSize: 10, imageHeight: 30 })
+    .default({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30 })
 });
 
 export type RoomState = "lobby" | "started" | "finished";
