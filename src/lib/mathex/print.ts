@@ -218,7 +218,13 @@ function estimateHeight(nodes: PdfNode[], fontSize: number) {
         (total, row) => total + Math.max(...row.map((cell) => estimateHeight([cell], fontSize)), fontSize * 1.25),
         0
       );
-    } else height += Math.max(fontSize * 1.25, (JSON.stringify(node).length / 85) * fontSize * 1.25);
+    else {
+      const text = Array.isArray(node.text)
+        ? (node.text as Array<Record<string, unknown>>).map((part) => String(part.text || "")).join("")
+        : String(node.text || "");
+      // Estimate wrapping from visible text, not serialization of PDF style metadata.
+      height += Math.max(fontSize * 1.1, Math.ceil(text.length / 105) * fontSize * 1.1 + 3);
+    }
   }
   return height;
 }
@@ -265,7 +271,7 @@ export async function downloadQuestionSet(set: Set) {
     "The cover",
     set.pdfOptions.questionTextSize,
     set.pdfOptions.imageHeight,
-    96
+    110
   );
   slips.push({
     stack: [{ text: set.name || "Untitled set", bold: true, fontSize: 18, margin: [0, 0, 0, 5] }, ...cover.nodes],
@@ -277,7 +283,7 @@ export async function downloadQuestionSet(set: Set) {
       `Question ${index + 1}`,
       set.pdfOptions.questionTextSize,
       set.pdfOptions.imageHeight,
-      108
+      122
     );
     slips.push({ stack: fitted.nodes, size: fitted.size, label: `Question ${index + 1}` });
   }
@@ -294,13 +300,13 @@ export async function downloadQuestionSet(set: Set) {
           {
             stack: [
               ...(slip.label
-                ? [{ text: slip.label, bold: true, fontSize: 8, characterSpacing: 0.5, margin: [0, 0, 0, 4] }]
+                ? [{ text: slip.label, bold: true, fontSize: 8, characterSpacing: 0.5, margin: [0, 0, 0, 2] }]
                 : []),
               ...slip.stack
             ],
             fontSize: slip.size,
             lineHeight: 1.1,
-            margin: [18, 10, 14, 8]
+            margin: [18, 5, 14, 4]
           }
         ])
       },
@@ -407,7 +413,7 @@ export function previewQuestionSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: 50mm; padding: 3.53mm 4.94mm 2.82mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip-content { height: 32.5mm; overflow: hidden; line-height: 1.1; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1.41mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
+    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: 50mm; padding: 1.76mm 4.94mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip-content { height: 38mm; overflow: hidden; line-height: 1.1; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
     true
   );
 }

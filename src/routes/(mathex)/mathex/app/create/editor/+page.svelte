@@ -544,15 +544,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  .cover-instructions :global(.ql-container) {
-    height: 12rem;
-    overflow: hidden;
-  }
-
-  .cover-instructions :global(.ql-editor) {
-    height: 100%;
-    overflow-y: auto;
-  }
-</style>
