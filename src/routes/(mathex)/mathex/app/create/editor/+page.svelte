@@ -465,8 +465,14 @@
 </div>
 
 <style>
+  .cover-instructions :global(.ql-container) {
+    height: 12rem;
+    overflow: hidden;
+  }
+
   .cover-instructions :global(.ql-editor) {
-    max-height: 12rem;
+    height: 100%;
     overflow-y: auto;
   }
 </style>
+
