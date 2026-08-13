@@ -1,4 +1,4 @@
-# Devarsh's Maths, revived
+# Raymont's Maths
 
 This is a website that contains resources about maths. It uses Bun and SvelteKit. You can try it [here](https://dvmaths.qincai.xyz).
 

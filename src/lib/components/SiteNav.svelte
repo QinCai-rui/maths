@@ -21,7 +21,7 @@
         class="flex h-8 w-8 items-center justify-center border border-primary bg-primary text-primary-foreground text-base font-bold leading-none"
         ><Sigma class="h-4 w-4" /></span
       >
-      Devarsh's Maths, revived
+      Raymont's Maths
     </a>
     <div class="hidden md:flex md:items-center md:gap-1">
       {#each links as link}

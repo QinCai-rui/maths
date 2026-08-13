@@ -8,7 +8,7 @@
   <div class="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
     <div class="grid border-y border-border lg:grid-cols-[1.15fr_0.85fr]">
       <div class="py-8 pr-0 lg:py-14 lg:pr-14">
-        <p class="mathex-kicker">Devarsh's Maths, revived</p>
+        <p class="mathex-kicker">Raymont's Maths</p>
         <h1 class="mt-5 max-w-3xl text-5xl font-bold leading-[0.91] tracking-[-0.065em] text-foreground sm:text-7xl lg:text-8xl">
           Mathematics,<br />worth lingering over.
         </h1>

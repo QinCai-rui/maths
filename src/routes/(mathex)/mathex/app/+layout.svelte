@@ -19,7 +19,7 @@
 </script>
 
 <svelte:head>
-  <title>Mathex - Devarsh's Maths, revived</title>
+  <title>Mathex - Raymont's Maths</title>
 </svelte:head>
 <Toaster />
 <ModeWatcher />

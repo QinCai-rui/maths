@@ -10,7 +10,7 @@
       <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
         <Calculator class="h-7 w-7" />
       </div>
-      <Header size="h1">Mathex on Devarsh's Maths, revived</Header>
+      <Header size="h1">Mathex on Raymont's Maths</Header>
       <p class="mt-4 text-center text-lg text-muted-foreground">An application designed for Mathex-style events.</p>
       <div class="mt-8 flex justify-center">
         <Button href="/mathex/app" class="gap-2">
