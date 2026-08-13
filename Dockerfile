@@ -30,10 +30,12 @@ COPY --from=build /app/build ./build
 COPY server.ts ./
 COPY src/ws/index.server.ts ./src/ws/index.server.ts
 COPY src/lib/mathex/schemas.ts ./src/lib/mathex/schemas.ts
+COPY src/lib/mathex/rooms.server.ts ./src/lib/mathex/rooms.server.ts
 
 ENV NODE_ENV=production
 ENV PORT=5185
 ENV HOST=0.0.0.0
+ENV MATHEX_DB_PATH=/data/mathex.sqlite
 EXPOSE 5185/tcp
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

@@ -51,6 +51,30 @@
     }
   }
 
+  function insertImage() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        window.alert("Images must be 5 MB or smaller.");
+        return;
+      }
+      const image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const range = quill.getSelection(true);
+      quill.insertEmbed(range.index, "image", image, "user");
+      quill.setSelection(range.index + 1, 0);
+    };
+    input.click();
+  }
+
   onMount(async () => {
     const Quill = (await import("quill")).default;
 
@@ -58,14 +82,17 @@
       ["bold", "italic", "underline", "strike"],
       ["blockquote"],
       [{ list: "ordered" }, { list: "bullet" }],
-      ["link"],
+       ["link", "image"],
       ["clean"]
     ];
 
     quill = new Quill(node, {
       theme: "snow",
       modules: {
-        toolbar: toolbarOptions
+        toolbar: {
+          container: toolbarOptions,
+          handlers: { image: insertImage }
+        }
       },
       placeholder: "Enter question text…"
     });

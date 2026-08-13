@@ -272,7 +272,7 @@
           <div class="mb-7 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">
             <Flag class="h-3.5 w-3.5" /> Problem {currentQuestion.number}
           </div>
-          <div class="prose prose-slate max-w-none dark:prose-invert">
+           <div class="question-content prose prose-slate max-w-none dark:prose-invert">
             {@html renderMath(currentQuestion.content)}
           </div>
           <div class="mt-6">
@@ -364,3 +364,12 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .question-content :global(img) {
+    max-width: 100%;
+    max-height: 32rem;
+    margin-inline: auto;
+    border-radius: 0.5rem;
+  }
+</style>

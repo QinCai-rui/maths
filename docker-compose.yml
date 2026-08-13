@@ -14,4 +14,7 @@ services:
     environment:
       - PORT=5185
       - HOST=0.0.0.0
+      - MATHEX_DB_PATH=/data/mathex.sqlite
+    volumes:
+      - ./data:/data
     restart: unless-stopped
