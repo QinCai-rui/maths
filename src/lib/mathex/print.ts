@@ -32,7 +32,7 @@ export function printQuestionSet(set: Set) {
   return printDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 12mm 12mm 10mm 18mm; } * { box-sizing: border-box; } body { margin: 0; color: #111; font-family: Arial, sans-serif; font-size: 11pt; } .slip { height: 50mm; padding: 6mm 5mm 5mm 10mm; border-bottom: 1px dashed #777; position: relative; break-inside: avoid; overflow: hidden; } .slip::before { content: ""; position: absolute; top: 0; bottom: 0; left: 4mm; border-left: 1px solid #bbb; } .number { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3mm; } .cover h1 { margin: 0 0 3mm; font-size: 20pt; } p { margin: 0 0 2mm; } img { max-width: 100%; max-height: 30mm; display: block; } blockquote { margin: 2mm 0; padding-left: 3mm; border-left: 2px solid #777; }`
+    `@page { size: A4 portrait; margin: 12mm 12mm 10mm 54mm; } * { box-sizing: border-box; } body { margin: 0; color: #111; font-family: Arial, sans-serif; font-size: 11pt; } .slip { height: 50mm; padding: 6mm 5mm 5mm 10mm; border-bottom: 1px dashed #777; position: relative; break-inside: avoid; overflow: hidden; } .slip::before { content: ""; position: absolute; top: 0; bottom: 0; left: 4mm; border-left: 1px solid #bbb; } .number { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3mm; } .cover h1 { margin: 0 0 3mm; font-size: 20pt; } p { margin: 0 0 2mm; } img { max-width: 100%; max-height: 30mm; display: block; } blockquote { margin: 2mm 0; padding-left: 3mm; border-left: 2px solid #777; }`
   );
 }
 

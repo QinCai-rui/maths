@@ -355,7 +355,7 @@
               placeholder="e.g. Senior Mathex Round 1"
             />
           </div>
-          <div class="grid gap-1.5">
+          <div class="grid gap-1.5 cover-instructions">
             <span class="text-sm font-medium">Cover instructions</span>
             <p class="text-xs text-muted-foreground">Printed on the first tear-off slip.</p>
             <Quill bind:html={instructions} />
@@ -455,3 +455,10 @@
     </div>
   </div>
 </div>
+
+<style>
+  .cover-instructions :global(.ql-editor) {
+    max-height: 12rem;
+    overflow-y: auto;
+  }
+</style>
