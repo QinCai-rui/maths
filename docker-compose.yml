@@ -3,8 +3,12 @@ services:
     # use `docker compose up` to pull/use prebuilt image
     image: ghcr.io/qincai-rui/maths:latest
 
-    # use `docker compose up --build` to build the image locally
-    build: .
+    # use `GIT_COMMIT="$(git rev-parse --short=7 HEAD)" docker compose up --build` 
+    # to include git hash on local builds
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-}
     ports:
       - "5185:5185"
     environment:
