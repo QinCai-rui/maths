@@ -141,7 +141,14 @@ export const Question = z.preprocess(
 export const QuestionSet = z.object({
   name: z.string().max(120),
   instructions: z.string(),
-  questions: z.array(Question).max(100)
+  questions: z.array(Question).max(100),
+  pdfOptions: z
+    .object({
+      questionTextSize: z.number().min(6).max(18),
+      answerTextSize: z.number().min(6).max(16),
+      imageHeight: z.number().min(5).max(35)
+    })
+    .default({ questionTextSize: 11, answerTextSize: 10, imageHeight: 30 })
 });
 
 export type RoomState = "lobby" | "started" | "finished";

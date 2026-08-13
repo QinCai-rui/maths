@@ -26,6 +26,7 @@
   let questions: z.infer<typeof Question>[] = $state([]);
   let setName = $state("");
   let instructions = $state("");
+  let pdfOptions = $state({ questionTextSize: 11, answerTextSize: 10, imageHeight: 30 });
   let currentQuestionIdx = $state(0);
   let currentQuestion = $derived(questions[currentQuestionIdx]);
   let isDirty = $state(false);
@@ -67,7 +68,7 @@
   function saveDraft() {
     if (!loaded) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ name: setName, instructions, questions }));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ name: setName, instructions, questions, pdfOptions }));
       isDirty = false;
     } catch {}
   }
@@ -88,6 +89,11 @@
       if (!Array.isArray(source.questions) || source.questions.length === 0) return false;
       setName = source.name || "";
       instructions = source.instructions || "";
+      pdfOptions = {
+        questionTextSize: source.pdfOptions?.questionTextSize ?? 11,
+        answerTextSize: source.pdfOptions?.answerTextSize ?? 10,
+        imageHeight: source.pdfOptions?.imageHeight ?? 30
+      };
       questions = source.questions.map(migrateQuestion);
       currentQuestionIdx = 0;
       return true;
@@ -102,7 +108,7 @@
   }
 
   $effect(() => {
-    JSON.stringify({ setName, instructions, questions });
+    JSON.stringify({ setName, instructions, questions, pdfOptions });
     if (loaded) {
       scheduleSave();
     }
@@ -173,6 +179,7 @@
     questions = [];
     setName = "";
     instructions = "";
+    pdfOptions = { questionTextSize: 11, answerTextSize: 10, imageHeight: 30 };
     currentQuestionIdx = 0;
     clearDraft();
     clearDialogOpen = false;
@@ -193,7 +200,8 @@
         const migrated = {
           name: source.name || "",
           instructions: source.instructions || "",
-          questions: Array.isArray(source.questions) ? source.questions.map(migrateQuestion) : []
+          questions: Array.isArray(source.questions) ? source.questions.map(migrateQuestion) : [],
+          pdfOptions: source.pdfOptions || undefined
         };
         const result = QuestionSet.safeParse(migrated);
         if (!result.success) {
@@ -207,6 +215,7 @@
         setName = result.data.name;
         instructions = result.data.instructions;
         questions = result.data.questions;
+        pdfOptions = result.data.pdfOptions;
         currentQuestionIdx = 0;
         clearDraft();
         toast.success(
@@ -224,7 +233,7 @@
       toast.error("Nothing to export");
       return;
     }
-    const blob = new Blob([JSON.stringify({ name: setName, instructions, questions }, null, 2)], {
+    const blob = new Blob([JSON.stringify({ name: setName, instructions, questions, pdfOptions }, null, 2)], {
       type: "application/json"
     });
     const url = URL.createObjectURL(blob);
@@ -243,7 +252,9 @@
   async function exportQuestions() {
     if (!questions.length) return toast.error("Nothing to export");
     try {
-      await downloadQuestionSet({ name: setName, instructions, questions });
+      const result = QuestionSet.safeParse({ name: setName, instructions, questions, pdfOptions });
+      if (!result.success) throw new Error(result.error.issues[0]?.message || "Invalid PDF settings");
+      await downloadQuestionSet(result.data);
     } catch (error) {
       console.error("Question PDF generation failed", error);
       toast.error(`Could not create the question PDF: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -253,7 +264,9 @@
   async function exportAnswers() {
     if (!questions.length) return toast.error("Nothing to export");
     try {
-      await downloadAnswerSet({ name: setName, instructions, questions });
+      const result = QuestionSet.safeParse({ name: setName, instructions, questions, pdfOptions });
+      if (!result.success) throw new Error(result.error.issues[0]?.message || "Invalid PDF settings");
+      await downloadAnswerSet(result.data);
     } catch (error) {
       console.error("Answer PDF generation failed", error);
       toast.error(`Could not create the answer PDF: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -266,7 +279,7 @@
       return;
     }
     try {
-      localStorage.setItem(ROOM_SET_KEY, JSON.stringify({ name: setName, instructions, questions }));
+      localStorage.setItem(ROOM_SET_KEY, JSON.stringify({ name: setName, instructions, questions, pdfOptions }));
     } catch {
       toast.error("Couldn't store set for room creation");
       return;
@@ -320,7 +333,25 @@
         >
           <Download class="h-3.5 w-3.5" /> Export
         </summary>
-        <div class="absolute right-0 z-10 mt-1 w-48 rounded-md border bg-popover p-1 shadow-md">
+        <div class="absolute right-0 z-10 mt-1 w-72 rounded-md border bg-popover p-3 shadow-md">
+          <div class="mb-3 grid grid-cols-3 gap-2 border-b pb-3">
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+              Question text
+              <input class="h-8 rounded border bg-background px-2 text-sm text-foreground" type="number" min="6" max="18" step="0.5" bind:value={pdfOptions.questionTextSize} />
+              <span>6-18 pt</span>
+            </label>
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+              Answer text
+              <input class="h-8 rounded border bg-background px-2 text-sm text-foreground" type="number" min="6" max="16" step="0.5" bind:value={pdfOptions.answerTextSize} />
+              <span>6-16 pt</span>
+            </label>
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+              Image height
+              <input class="h-8 rounded border bg-background px-2 text-sm text-foreground" type="number" min="5" max="35" step="1" bind:value={pdfOptions.imageHeight} />
+              <span>5-35 mm</span>
+            </label>
+          </div>
+          <p class="mb-2 text-xs leading-4 text-muted-foreground">Oversized slips automatically shrink text and images to fit.</p>
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
             onclick={exportFile}>JSON file</button
