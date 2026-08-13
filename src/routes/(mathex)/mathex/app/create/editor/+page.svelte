@@ -27,7 +27,7 @@
   let setName = $state("");
   let instructions = $state("");
   let coverResetKey = $state(0);
-  let pdfOptions = $state({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30 });
+  let pdfOptions = $state({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 });
   let currentQuestionIdx = $state(0);
   let currentQuestion = $derived(questions[currentQuestionIdx]);
   let isDirty = $state(false);
@@ -93,7 +93,9 @@
       pdfOptions = {
         questionTextSize: source.pdfOptions?.questionTextSize ?? 11,
         answerTextSize: source.pdfOptions?.answerTextSize ?? 11,
-        imageHeight: source.pdfOptions?.imageHeight ?? 30
+        imageHeight: source.pdfOptions?.imageHeight ?? 30,
+        slipHeight: source.pdfOptions?.slipHeight ?? 49.5,
+        cutMargin: source.pdfOptions?.cutMargin ?? 50
       };
       questions = source.questions.map(migrateQuestion);
       currentQuestionIdx = 0;
@@ -181,7 +183,7 @@
     setName = "";
     instructions = "";
     coverResetKey++;
-    pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30 };
+    pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 };
     currentQuestionIdx = 0;
     clearDraft();
     clearDialogOpen = false;
@@ -350,7 +352,7 @@
           <Download class="h-3.5 w-3.5" /> Export
         </summary>
         <div class="absolute right-0 z-10 mt-1 w-72 rounded-md border bg-popover p-3 shadow-md">
-          <div class="mb-3 grid grid-cols-3 gap-2 border-b pb-3">
+          <div class="mb-3 grid grid-cols-2 gap-2 border-b pb-3 sm:grid-cols-3">
             <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Question text
               <input
@@ -387,9 +389,33 @@
               />
               <span>5-35 mm</span>
             </label>
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+              Slip height
+              <input
+                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                type="number"
+                min="35"
+                max="49.5"
+                step="0.5"
+                bind:value={pdfOptions.slipHeight}
+              />
+              <span>35-49.5 mm</span>
+            </label>
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+              Cut-off margin
+              <input
+                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                type="number"
+                min="0"
+                max="80"
+                step="1"
+                bind:value={pdfOptions.cutMargin}
+              />
+              <span>right, 0-80 mm</span>
+            </label>
           </div>
           <p class="mb-2 text-xs leading-4 text-muted-foreground">
-            Oversized slips automatically shrink text and images to fit.
+            Six 49.5 mm slips fit exactly on A4. The cut-off margin is marked with a dashed line on the right.
           </p>
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"

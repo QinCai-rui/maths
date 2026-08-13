@@ -8,7 +8,6 @@ type PdfNode = Record<string, unknown>;
 
 const PT_PER_MM = 72 / 25.4;
 const PAGE_WIDTH = 210 * PT_PER_MM;
-const SLIP_HEIGHT = 50 * PT_PER_MM;
 let mathDocument: Promise<{
   convert(tex: string, options: { display: boolean }): unknown;
   outerHTML(node: unknown): string;
@@ -248,7 +247,8 @@ async function fittedSlip(
   label: string,
   configuredSize: number,
   imageHeight: number,
-  availableHeight: number
+  availableHeight: number,
+  slipHeight: number
 ) {
   let currentImageHeight = imageHeight;
   const nodes = await htmlToPdf(html, currentImageHeight);
@@ -259,20 +259,25 @@ async function fittedSlip(
     resizeImages(nodes, currentImageHeight);
   }
   if (estimateHeight(nodes, size) > availableHeight) {
-    throw new Error(`${label} does not fit a 5 cm slip. Reduce its content or configured sizes.`);
+    throw new Error(`${label} does not fit the ${slipHeight} mm slip. Reduce its content or configured sizes.`);
   }
   return { nodes, size };
 }
 
 export async function downloadQuestionSet(set: Set) {
   const pdfMake = await loadPdfMake();
+  const slipHeight = set.pdfOptions.slipHeight * PT_PER_MM;
+  const cutMargin = set.pdfOptions.cutMargin * PT_PER_MM;
+  const contentWidth = PAGE_WIDTH - cutMargin - 28;
+  const slipsPerPage = Math.floor(297 / set.pdfOptions.slipHeight);
   const slips: Array<{ stack: PdfNode[]; size: number; label?: string }> = [];
   const cover = await fittedSlip(
     set.instructions,
     "The cover",
     set.pdfOptions.questionTextSize,
     set.pdfOptions.imageHeight,
-    110
+    slipHeight - 30,
+    set.pdfOptions.slipHeight
   );
   slips.push({
     stack: [{ text: set.name || "Untitled set", bold: true, fontSize: 18, margin: [0, 0, 0, 5] }, ...cover.nodes],
@@ -284,18 +289,19 @@ export async function downloadQuestionSet(set: Set) {
       `Question ${index + 1}`,
       set.pdfOptions.questionTextSize,
       set.pdfOptions.imageHeight,
-      122
+      slipHeight - 20,
+      set.pdfOptions.slipHeight
     );
     slips.push({ stack: fitted.nodes, size: fitted.size, label: `Question ${index + 1}` });
   }
 
   const content: PdfNode[] = [];
-  for (let pageStart = 0; pageStart < slips.length; pageStart += 5) {
-    const pageSlips = slips.slice(pageStart, pageStart + 5);
+  for (let pageStart = 0; pageStart < slips.length; pageStart += slipsPerPage) {
+    const pageSlips = slips.slice(pageStart, pageStart + slipsPerPage);
     content.push({
       table: {
-        widths: [28, PAGE_WIDTH - 28],
-        heights: pageSlips.map(() => SLIP_HEIGHT),
+        widths: [28, contentWidth, cutMargin],
+        heights: pageSlips.map(() => slipHeight),
         body: pageSlips.map((slip) => [
           { text: "" },
           {
@@ -308,7 +314,8 @@ export async function downloadQuestionSet(set: Set) {
             fontSize: slip.size,
             lineHeight: 1.1,
             margin: [18, 5, 14, 4]
-          }
+          },
+          { text: "" }
         ])
       },
       layout: {
@@ -319,11 +326,12 @@ export async function downloadQuestionSet(set: Set) {
         hLineWidth: (index: number) => (index === 0 ? 0 : 0.5),
         hLineColor: () => "#777777",
         hLineStyle: () => ({ dash: { length: 3, space: 3 } }),
-        vLineWidth: (index: number) => (index === 1 ? 0.5 : 0),
-        vLineColor: () => "#aaaaaa"
+        vLineWidth: (index: number) => (index === 1 || index === 2 ? 0.5 : 0),
+        vLineColor: (index: number) => (index === 2 ? "#777777" : "#aaaaaa"),
+        vLineStyle: (index: number) => (index === 2 ? { dash: { length: 3, space: 3 } } : undefined)
       }
     });
-    if (pageStart + 5 < slips.length) content.push({ text: "", pageBreak: "after" });
+    if (pageStart + slipsPerPage < slips.length) content.push({ text: "", pageBreak: "after" });
   }
 
   await pdfMake
@@ -414,7 +422,7 @@ export function previewQuestionSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: 50mm; padding: 1.76mm 4.94mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip-content { height: 38mm; overflow: hidden; line-height: 1.1; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
+    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
     true
   );
 }

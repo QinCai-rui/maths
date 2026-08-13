@@ -146,9 +146,11 @@ export const QuestionSet = z.object({
     .object({
       questionTextSize: z.number().min(6).max(18),
       answerTextSize: z.number().min(6).max(16),
-      imageHeight: z.number().min(5).max(35)
+      imageHeight: z.number().min(5).max(35),
+      slipHeight: z.number().min(35).max(49.5),
+      cutMargin: z.number().min(0).max(80)
     })
-    .default({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30 })
+    .default({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 })
 });
 
 export type RoomState = "lobby" | "started" | "finished";
