@@ -244,8 +244,9 @@
     if (!questions.length) return toast.error("Nothing to export");
     try {
       await downloadQuestionSet({ name: setName, instructions, questions });
-    } catch {
-      toast.error("Could not create the question PDF");
+    } catch (error) {
+      console.error("Question PDF generation failed", error);
+      toast.error(`Could not create the question PDF: ${error instanceof Error ? error.message : "unknown error"}`);
     }
   }
 
@@ -253,8 +254,9 @@
     if (!questions.length) return toast.error("Nothing to export");
     try {
       await downloadAnswerSet({ name: setName, instructions, questions });
-    } catch {
-      toast.error("Could not create the answer PDF");
+    } catch (error) {
+      console.error("Answer PDF generation failed", error);
+      toast.error(`Could not create the answer PDF: ${error instanceof Error ? error.message : "unknown error"}`);
     }
   }
 
@@ -475,4 +477,3 @@
     overflow-y: auto;
   }
 </style>
-

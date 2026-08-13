@@ -1,12 +1,15 @@
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
-
 import { renderMath } from "./content";
 import type { z } from "zod";
 import type { Question, QuestionSet } from "./schemas";
 
 type Set = z.infer<typeof QuestionSet>;
 type Item = z.infer<typeof Question>;
+type Pdf = InstanceType<(typeof import("jspdf"))["jsPDF"]>;
+
+async function loadRenderers() {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  return { html2canvas, jsPDF };
+}
 
 function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -17,9 +20,27 @@ function filename(name: string, suffix: string) {
   return `${base}-${suffix}.pdf`;
 }
 
-async function imagePage(pdf: jsPDF, page: HTMLElement, addPage: boolean) {
+async function waitForImages(page: HTMLElement) {
+  await Promise.all(
+    [...page.querySelectorAll("img")].map((image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        image.addEventListener("load", () => resolve(), { once: true });
+        image.addEventListener("error", () => resolve(), { once: true });
+      });
+    })
+  );
+}
+
+async function imagePage(
+  pdf: Pdf,
+  page: HTMLElement,
+  addPage: boolean,
+  html2canvas: (element: HTMLElement, options: { backgroundColor: string; scale: number; useCORS: boolean }) => Promise<HTMLCanvasElement>
+) {
   document.body.append(page);
   try {
+    await waitForImages(page);
     const canvas = await html2canvas(page, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
     if (addPage) pdf.addPage();
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297);
@@ -47,6 +68,7 @@ function addStyles(page: HTMLElement, styles: string) {
 }
 
 export async function downloadQuestionSet(set: Set) {
+  const { html2canvas, jsPDF } = await loadRenderers();
   const slips = [
     `<section class="slip cover"><h1>${escapeHtml(set.name || "Untitled set")}</h1><div>${renderMath(set.instructions || "<p>No instructions provided.</p>")}</div></section>`,
     ...set.questions.map(
@@ -61,7 +83,7 @@ export async function downloadQuestionSet(set: Set) {
       page,
       `.slip { height: 50mm; padding: 6mm 8mm 5mm 18mm; border-bottom: 1px dashed #777; position: relative; overflow: hidden; font-size: 11pt; } .slip::before { content: ""; position: absolute; top: 0; bottom: 0; left: 10mm; border-left: 1px solid #aaa; } .number { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3mm; } .cover h1 { margin: 0 0 3mm; font-size: 20pt; }`
     );
-    await imagePage(pdf, page, start > 0);
+    await imagePage(pdf, page, start > 0, html2canvas);
   }
   pdf.save(filename(set.name, "questions"));
 }
@@ -75,6 +97,7 @@ function answer(question: Item) {
 }
 
 export async function downloadAnswerSet(set: Set) {
+  const { html2canvas, jsPDF } = await loadRenderers();
   const rows = set.questions
     .map(
       (question, index) =>
@@ -91,6 +114,7 @@ export async function downloadAnswerSet(set: Set) {
   );
   document.body.append(page);
   try {
+    await waitForImages(page);
     const canvas = await html2canvas(page, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageHeight = Math.floor((canvas.width * 297) / 210);
