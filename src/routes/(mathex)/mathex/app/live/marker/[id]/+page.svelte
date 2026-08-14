@@ -61,7 +61,7 @@
   socket.on("snapshot", (next) => (snapshot = next));
 
   function unlock() {
-    if (!/^\d{4,12}$/.test(pin)) return;
+    if (!/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(pin)) return;
     checkingPin = true;
     socket.auth = { code: id, pin };
     socket.connect();
@@ -126,14 +126,19 @@
             id="marker-pin"
             class="mt-2 h-12 text-center font-mono text-xl tracking-[0.35em]"
             type="password"
-            inputmode="numeric"
-            pattern={"[0-9]{4,12}"}
+            autocapitalize="characters"
+            pattern={"(?:[A-Z0-9]{8}|[0-9]{4,12})"}
             maxlength={12}
             bind:value={pin}
+            oninput={() =>
+              (pin = pin
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, "")
+                .slice(0, 12))}
             autofocus
           />
         </div>
-        <Button type="submit" class="mt-4 h-11 w-full" disabled={checkingPin || !/^\d{4,12}$/.test(pin)}
+        <Button type="submit" class="mt-4 h-11 w-full" disabled={checkingPin || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(pin)}
           >{checkingPin ? "Checking..." : "Open marker desk"}</Button
         >
       </form>

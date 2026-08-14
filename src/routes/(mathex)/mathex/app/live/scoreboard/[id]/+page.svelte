@@ -49,23 +49,24 @@
 
 <svelte:head><title>{snapshot?.name || "Mathex Live"} - Scoreboard</title></svelte:head>
 
-<div class="min-h-screen bg-slate-950 px-3 py-4 text-slate-50 sm:px-7 sm:py-6">
+<div class="min-h-screen bg-background px-3 py-4 text-foreground sm:px-7 sm:py-6">
   <main class="mx-auto max-w-[100rem]">
-    <header class="flex flex-wrap items-end justify-between gap-4 border-b border-white/15 pb-5">
+    <header class="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div>
-        <p class="text-xs font-bold uppercase tracking-[0.2em] text-blue-400">Mathex live</p>
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-primary">Mathex live</p>
         <h1 class="mt-1 text-3xl font-black tracking-tight sm:text-5xl">{snapshot?.name || "Connecting..."}</h1>
       </div>
       <div class="flex items-center gap-5">
         <span
           class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider {connected
-            ? 'text-emerald-400'
-            : 'text-amber-400'}"><Radio class="h-4 w-4" />{connected ? snapshot?.state || "Live" : "Reconnecting"}</span
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-amber-600 dark:text-amber-400'}"
+          ><Radio class="h-4 w-4" />{connected ? snapshot?.state || "Live" : "Reconnecting"}</span
         >
         {#if clock !== null}<div
             class="flex items-center gap-3 rounded-2xl border px-4 py-2 {remainingMs !== null && remainingMs < 0
-              ? 'border-red-400/60 bg-red-500/15 text-red-300'
-              : 'border-white/15 bg-white/5'}"
+              ? 'border-destructive/50 bg-destructive/10 text-destructive'
+              : 'border-border bg-muted/50'}"
           >
             <Clock3 class="h-5 w-5" /><span class="text-3xl font-black tabular-nums sm:text-5xl">{clock}</span>
           </div>{/if}
@@ -76,50 +77,50 @@
       <div class="mt-5 grid gap-6 {groups.length > 1 ? 'xl:grid-cols-2' : ''}">
         {#each groups as group}
           <section>
-            {#if groups.length > 1}<h2 class="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-300">
+            {#if groups.length > 1}<h2 class="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-primary">
                 {group.name}
               </h2>{/if}
             <div class="space-y-2">
               {#each group.teams as team}
                 <article
-                  class="grid grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.055] px-3 py-3 sm:grid-cols-[4rem_1fr_9rem_auto] sm:px-5"
+                  class="grid grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm sm:grid-cols-[4rem_1fr_9rem_auto] sm:px-5"
                 >
-                  <span class="text-center text-2xl font-black tabular-nums text-slate-400 sm:text-3xl"
+                  <span class="text-center text-2xl font-black tabular-nums text-muted-foreground sm:text-3xl"
                     >{team.rank}</span
                   >
                   <div class="min-w-0">
                     <h3 class="truncate text-lg font-bold sm:text-2xl">{team.name}</h3>
-                    {#if team.group}<p class="truncate text-xs text-slate-400 sm:hidden">{team.group}</p>{/if}
+                    {#if team.group}<p class="truncate text-xs text-muted-foreground sm:hidden">{team.group}</p>{/if}
                   </div>
                   <div class="hidden text-center sm:block">
-                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Question</p>
+                    <p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Question</p>
                     <p class="text-2xl font-black tabular-nums">
-                      {Math.min(team.currentQuestion, snapshot.questionCount)}<span class="text-sm text-slate-500"
-                        >/{snapshot.questionCount}</span
+                      {Math.min(team.currentQuestion, snapshot.questionCount)}<span
+                        class="text-sm text-muted-foreground">/{snapshot.questionCount}</span
                       >
                     </p>
                   </div>
                   <div class="flex items-center gap-2">
                     <span
-                      class="flex items-center gap-1 rounded-lg bg-emerald-400/12 px-2 py-1 text-sm font-bold text-emerald-300"
+                      class="flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2 py-1 text-sm font-bold text-emerald-700 dark:text-emerald-300"
                       ><Check class="h-4 w-4" />{team.correct}</span
                     >
                     <span
-                      class="flex items-center gap-1 rounded-lg bg-red-400/12 px-2 py-1 text-sm font-bold text-red-300"
+                      class="flex items-center gap-1 rounded-lg bg-destructive/10 px-2 py-1 text-sm font-bold text-destructive"
                       ><X class="h-4 w-4" />{team.incorrect}</span
                     >
                     <span
-                      class="hidden items-center gap-1 rounded-lg bg-amber-400/12 px-2 py-1 text-sm font-bold text-amber-300 sm:flex"
+                      class="hidden items-center gap-1 rounded-lg bg-amber-500/10 px-2 py-1 text-sm font-bold text-amber-700 dark:text-amber-300 sm:flex"
                       ><CircleMinus class="h-4 w-4" />{team.skipped}</span
                     >
                   </div>
-                  <div class="col-span-3 flex items-center justify-between border-t border-white/10 pt-2 sm:col-span-4">
+                  <div class="col-span-3 flex items-center justify-between border-t border-border pt-2 sm:col-span-4">
                     <span
                       class="text-xs font-bold uppercase tracking-wider {team.lastResult === 'correct'
-                        ? 'text-emerald-300'
+                        ? 'text-emerald-700 dark:text-emerald-300'
                         : team.lastResult === 'skip'
-                          ? 'text-amber-300'
-                          : 'text-blue-300'}"
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-primary'}"
                     >
                       {team.currentQuestion > snapshot.questionCount
                         ? team.correct === snapshot.questionCount
@@ -131,7 +132,7 @@
                             ? `Skipped Q${Math.max(1, team.currentQuestion - 1)}`
                             : `Working on Q${team.currentQuestion}`}
                     </span>
-                    <span class="text-xs text-slate-500 sm:hidden"
+                    <span class="text-xs text-muted-foreground sm:hidden"
                       >Q {Math.min(team.currentQuestion, snapshot.questionCount)}/{snapshot.questionCount}</span
                     >
                   </div>
@@ -145,12 +146,12 @@
                           ? `, ${question.incorrect} wrong`
                           : ''}"
                         class="min-w-0 flex-1 {question.outcome === 'correct'
-                          ? 'bg-emerald-400'
+                          ? 'bg-emerald-500'
                           : question.outcome === 'skipped'
-                            ? 'bg-amber-400'
+                            ? 'bg-amber-500'
                             : question.questionNumber === team.currentQuestion
-                              ? 'bg-blue-400'
-                              : 'bg-white/10'}"
+                              ? 'bg-primary'
+                              : 'bg-muted'}"
                       ></span>
                     {/each}
                   </div>
@@ -161,7 +162,7 @@
         {/each}
       </div>
     {:else}
-      <div class="grid min-h-[60vh] place-items-center text-slate-400">Waiting for competition data...</div>
+      <div class="grid min-h-[60vh] place-items-center text-muted-foreground">Waiting for competition data...</div>
     {/if}
   </main>
 </div>

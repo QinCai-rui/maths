@@ -20,7 +20,13 @@
   let questionCount = $state(20);
   let timerEnabled = $state(true);
   let timerMinutes = $state(30);
-  let markerPin = $state("");
+  const markerPinCharacters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const createMarkerPin = () => {
+    const values = crypto.getRandomValues(new Uint32Array(8));
+    return Array.from(values, (value) => markerPinCharacters[value % markerPinCharacters.length]).join("");
+  };
+
+  let markerPin = $state(createMarkerPin());
   let creating = $state(false);
   let teams: EditableTeam[] = $state([
     { id: crypto.randomUUID(), name: "Team 1", group: "" },
@@ -35,7 +41,7 @@
       questionCount >= 1 &&
       questionCount <= 200 &&
       (!timerEnabled || timerMinutes >= 1) &&
-      /^\d{4,12}$/.test(markerPin) &&
+      /^[A-Z0-9]{8}$/.test(markerPin) &&
       validTeams.length > 0 &&
       !creating
   );
@@ -137,12 +143,21 @@
                 id="marker-pin"
                 class="mt-2 h-11 font-mono tracking-[0.25em]"
                 type="password"
-                inputmode="numeric"
-                pattern={"[0-9]{4,12}"}
-                maxlength={12}
+                autocapitalize="characters"
+                pattern={"[A-Z0-9]{8}"}
+                maxlength={8}
                 bind:value={markerPin}
-                placeholder="4-12 digits"
+                oninput={() =>
+                  (markerPin = markerPin
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9]/g, "")
+                    .slice(0, 8))}
               />
+              <button
+                type="button"
+                class="mt-2 text-xs font-semibold text-primary hover:underline"
+                onclick={() => (markerPin = createMarkerPin())}>Generate a new PIN</button
+              >
             </div>
           </div>
           <div class="mt-5 rounded-2xl border border-border/70 bg-background/55 p-4">

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const PhysicalCompetitionName = z.string().trim().min(3).max(80);
 export const PhysicalCode = z.string().regex(/^\d{6}$/);
-export const PhysicalMarkerPin = z.string().regex(/^\d{4,12}$/);
+export const PhysicalMarkerPin = z.string().regex(/^(?:[A-Z0-9]{8}|\d{4,12})$/);
 export const PhysicalQuestionCount = z.number().int().min(1).max(200);
 export const PhysicalCountdownDuration = z
   .number()

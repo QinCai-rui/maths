@@ -107,7 +107,7 @@
   }
 
   function resetMarkerPin() {
-    if (!/^\d{4,12}$/.test(markerPin)) return;
+    if (!/^[A-Z0-9]{8}$/.test(markerPin)) return;
     socket.emit("configure", { markerPin }, (result) => {
       if (!result.ok) {
         toast.error(result.error);
@@ -232,15 +232,20 @@
                 <Input
                   aria-label="New marker PIN"
                   type="password"
-                  inputmode="numeric"
-                  maxlength={12}
-                  placeholder="New PIN"
+                  autocapitalize="characters"
+                  maxlength={8}
+                  placeholder="New 8-char PIN"
                   bind:value={markerPin}
+                  oninput={() =>
+                    (markerPin = markerPin
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, "")
+                      .slice(0, 8))}
                 /><Button
                   size="sm"
                   variant="outline"
                   onclick={resetMarkerPin}
-                  disabled={!connected || !/^\d{4,12}$/.test(markerPin)}>Set</Button
+                  disabled={!connected || !/^[A-Z0-9]{8}$/.test(markerPin)}>Set</Button
                 >
               </div>
             </div>
