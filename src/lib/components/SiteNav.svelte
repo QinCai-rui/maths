@@ -5,7 +5,7 @@
 
   const links = [
     { url: "/utilities/number", text: "Numbers" },
-    { url: "/games", text: "Games" },
+    { url: "/tools", text: "Tools" },
     { url: "/mathex", text: "Mathex" }
   ];
 

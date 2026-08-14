@@ -26,8 +26,8 @@
       text: "Numbers"
     },
     {
-      url: "/games",
-      text: "Games"
+      url: "/tools",
+      text: "Tools"
     },
     {
       url: "/mathex",

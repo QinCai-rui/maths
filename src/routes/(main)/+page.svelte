@@ -70,7 +70,7 @@
         >
       </a>
 
-      <a href="/games" class="group border-b border-r border-border p-6 transition-colors hover:bg-muted/50 sm:p-7">
+      <a href="/tools" class="group border-b border-r border-border p-6 transition-colors hover:bg-muted/50 sm:p-7">
         <div class="relative flex items-start justify-between">
           <span class="flex h-10 w-10 items-center justify-center border border-primary/30 bg-primary/5 text-primary"
             ><Gamepad2 class="h-5 w-5" /></span

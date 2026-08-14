@@ -21,7 +21,7 @@
       </p>
       {#if page.status === 404}
         <p class="mt-2 text-lg text-muted-foreground">
-          Or maybe solve a <a href="/games" class="font-medium text-primary underline-offset-4 hover:underline"
+          Or maybe solve a <a href="/tools" class="font-medium text-primary underline-offset-4 hover:underline"
             >maths problem</a
           >?
         </p>
@@ -29,7 +29,7 @@
       <div class="mt-8 flex items-center justify-center gap-3">
         <Button href="/" class="gap-2">Go back home</Button>
         {#if page.status === 404}
-          <Button href="/games" variant="outline">Play a game</Button>
+          <Button href="/tools" variant="outline">Open tools</Button>
         {/if}
       </div>
       <p class="mt-6 text-sm text-muted-foreground">
