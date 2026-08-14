@@ -273,7 +273,7 @@ export async function downloadQuestionSet(set: Set) {
   const slipHeight = set.pdfOptions.slipHeight * PT_PER_MM;
   const cutMargin = set.pdfOptions.cutMargin * PT_PER_MM;
   const contentWidth = PAGE_WIDTH - cutMargin - 28;
-  const slipsPerPage = Math.floor(297 / set.pdfOptions.slipHeight);
+  const slipsPerPage = Math.max(1, Math.floor(297 / set.pdfOptions.slipHeight));
   const slips: Array<{ stack: PdfNode[]; size: number; label?: string }> = [];
   const cover = await fittedSlip(
     set.instructions,

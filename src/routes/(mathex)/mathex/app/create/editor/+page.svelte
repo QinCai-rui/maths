@@ -111,7 +111,7 @@
         questionTextSize: source.pdfOptions?.questionTextSize ?? 11,
         answerTextSize: source.pdfOptions?.answerTextSize ?? 11,
         imageHeight: source.pdfOptions?.imageHeight ?? 30,
-        slipHeight: Math.min(source.pdfOptions?.slipHeight ?? 49.4, 49.4),
+        slipHeight: source.pdfOptions?.slipHeight ?? 49.4,
         cutMargin: source.pdfOptions?.cutMargin ?? 50
       };
       questions = source.questions.map(migrateQuestion);
@@ -310,25 +310,33 @@
 
   async function exportQuestions() {
     if (!questions.length) return toast.error("Nothing to export");
+    const toastId = toast.loading("Exporting question PDF...");
     try {
       const result = QuestionSet.safeParse({ name: setName, instructions, questions, pdfOptions });
       if (!result.success) throw new Error(result.error.issues[0]?.message || "Invalid PDF settings");
       await downloadQuestionSet(result.data);
+      toast.success("Question PDF downloaded", { id: toastId });
     } catch (error) {
       console.error("Question PDF generation failed", error);
-      toast.error(`Could not create the question PDF: ${error instanceof Error ? error.message : "unknown error"}`);
+      toast.error(`Could not create the question PDF: ${error instanceof Error ? error.message : "unknown error"}`, {
+        id: toastId
+      });
     }
   }
 
   async function exportAnswers() {
     if (!questions.length) return toast.error("Nothing to export");
+    const toastId = toast.loading("Exporting answer PDF...");
     try {
       const result = QuestionSet.safeParse({ name: setName, instructions, questions, pdfOptions });
       if (!result.success) throw new Error(result.error.issues[0]?.message || "Invalid PDF settings");
       await downloadAnswerSet(result.data);
+      toast.success("Answer PDF downloaded", { id: toastId });
     } catch (error) {
       console.error("Answer PDF generation failed", error);
-      toast.error(`Could not create the answer PDF: ${error instanceof Error ? error.message : "unknown error"}`);
+      toast.error(`Could not create the answer PDF: ${error instanceof Error ? error.message : "unknown error"}`, {
+        id: toastId
+      });
     }
   }
 
@@ -493,11 +501,10 @@
                 class="h-8 rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="35"
-                max="49.4"
                 step="0.5"
                 bind:value={pdfOptions.slipHeight}
               />
-              <span>35-49.4 mm</span>
+              <span>Any height, in mm</span>
             </label>
             <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Cut-off margin
