@@ -21,19 +21,42 @@
   function serializeEditor() {
     const clone = quill.root.cloneNode(true) as HTMLElement;
     for (const equation of clone.querySelectorAll<HTMLElement>(".mathex-equation")) {
-      equation.replaceWith(document.createTextNode(`$$${equation.dataset.latex || ""}$$`));
+      const previous = equation.previousSibling?.textContent || "";
+      const next = equation.nextSibling?.textContent || "";
+      const before = previous && !/\s$/.test(previous) ? " " : "";
+      const after = next && !/^\s/.test(next) ? " " : "";
+      equation.replaceWith(document.createTextNode(`${before}$$${equation.dataset.latex || ""}$$${after}`));
     }
     return clone.innerHTML;
   }
 
-  function hydrateMathTokens() {
-    const text = quill.getText() as string;
-    const matches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
-    for (const match of matches.reverse()) {
-      const index = match.index!;
-      quill.deleteText(index, match[0].length, "silent");
-      quill.insertEmbed(index, "mathexMath", match[1], "silent");
+  function prepareMathHtml(sourceHtml: string) {
+    const container = document.createElement("div");
+    container.innerHTML = sourceHtml;
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const textNodes: Text[] = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+    for (const textNode of textNodes) {
+      const text = textNode.data;
+      const matches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
+      if (!matches.length) continue;
+      const fragment = document.createDocumentFragment();
+      let offset = 0;
+      for (const match of matches) {
+        fragment.append(document.createTextNode(text.slice(offset, match.index)));
+        const equation = document.createElement("span");
+        equation.dataset.mathexEquation = match[1];
+        fragment.append(equation);
+        offset = (match.index || 0) + match[0].length;
+      }
+      fragment.append(document.createTextNode(text.slice(offset)));
+      textNode.replaceWith(fragment);
     }
+    return container.innerHTML;
+  }
+
+  function pasteHtml(sourceHtml: string) {
+    quill.clipboard.dangerouslyPasteHTML(prepareMathHtml(sourceHtml));
   }
 
   function openMathEditor(index: number | null, latex = "") {
@@ -47,7 +70,8 @@
     const index = editingMathIndex ?? quill.getSelection(true).index;
     if (editingMathIndex !== null) quill.deleteText(editingMathIndex, 1, "user");
     quill.insertEmbed(index, "mathexMath", mathInput.trim(), "user");
-    quill.setSelection(index + 1, 0);
+    if (editingMathIndex === null) quill.insertText(index + 1, " ", "user");
+    quill.setSelection(index + (editingMathIndex === null ? 2 : 1), 0);
     mathPopoverOpen = false;
     editingMathIndex = null;
     mathInput = "";
@@ -126,11 +150,12 @@
       },
       placeholder: "Enter question text…"
     });
+    const Delta = Quill.import("delta") as any;
+    quill.clipboard.addMatcher("span[data-mathex-equation]", (element: HTMLElement) =>
+      new Delta().insert({ mathexMath: element.dataset.mathexEquation || "" })
+    );
 
-    if (html) {
-      quill.clipboard.dangerouslyPasteHTML(html);
-      hydrateMathTokens();
-    }
+    if (html) pasteHtml(html);
 
     quill.on("text-change", () => {
       const nextHtml = serializeEditor();
@@ -178,10 +203,7 @@
     resetKey;
     if (!quill) return;
     quill.setText("");
-    if (html) {
-      quill.clipboard.dangerouslyPasteHTML(html);
-      hydrateMathTokens();
-    }
+    if (html) pasteHtml(html);
   });
 
   function handleClickOutside(event: MouseEvent) {
@@ -260,6 +282,7 @@
     align-items: center;
     border-radius: 0.3rem;
     padding: 0.08rem 0.2rem;
+    margin-inline: 0.12em;
     vertical-align: middle;
   }
   .quill-wrapper :global(.mathex-equation:hover),
