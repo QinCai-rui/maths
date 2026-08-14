@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { Question, QuestionSet } from "./schemas";
 import { parseStoredMath, renderMath } from "./content";
+import { expressionToLatex } from "./expression";
 
 type Set = z.infer<typeof QuestionSet>;
 type Item = z.infer<typeof Question>;
@@ -407,7 +408,10 @@ async function answerCell(question: Item, fontSize: number) {
       const solution = group[index];
       if (index) groupStack.push({ text: "OR", italics: true, margin: [0, 2, 0, 2] });
       if (solution.type === "expression")
-        groupStack.push({ svg: await texToSvg(String(solution.value)), fit: [120, fontSize * 1.15] });
+        groupStack.push({
+          svg: await texToSvg(expressionToLatex(String(solution.value))),
+          fit: [120, fontSize * 1.15]
+        });
       else groupStack.push({ text: String(solution.value) });
     }
     if (groups.length > 1 && group.length > 1) groupStack.push({ text: ")" });
@@ -441,7 +445,7 @@ function previewAnswerLogic(question: Item) {
       const alternatives = group
         .map((solution) =>
           solution.type === "expression"
-            ? renderMath(`$$${String(solution.value)}$$`)
+            ? renderMath(`$$${expressionToLatex(String(solution.value))}$$`)
             : String(solution.value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         )
         .join("<br><em>OR</em><br>");

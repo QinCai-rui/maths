@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import "mathlive/fonts.css";
+  import { expressionToLatex } from "$lib/mathex/expression";
 
   interface Props {
     value?: string;
@@ -41,6 +42,14 @@
     { label: "Angle", value: "\\angle" }
   ];
 
+  function initialValue() {
+    return inputFormat === "ascii-math" ? expressionToLatex(value) : value;
+  }
+
+  function initialFormat() {
+    return inputFormat === "ascii-math" ? "latex" : inputFormat;
+  }
+
   onMount(() => {
     let active = true;
     const syncTheme = () => {
@@ -59,7 +68,7 @@
       field.setAttribute("placeholder", placeholder);
       field.disabled = disabled;
       field.readOnly = disabled;
-      field.setValue(value, { format: inputFormat });
+      field.setValue(initialValue(), { format: initialFormat() });
       field.addEventListener("input", () => {
         value = field.getValue(outputFormat);
         onValueChange?.(value);
@@ -77,7 +86,7 @@
   $effect(() => {
     if (!mathfield) return;
     const current = mathfield.getValue(outputFormat);
-    if (current !== value) mathfield.setValue(value, { format: inputFormat, silenceNotifications: true });
+    if (current !== value) mathfield.setValue(initialValue(), { format: initialFormat(), silenceNotifications: true });
   });
 
   $effect(() => {
