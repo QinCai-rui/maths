@@ -42,7 +42,7 @@
         onclick={() => (question.solutionOrderMatters = !question.solutionOrderMatters)}
         {disabled}
       >
-        {question.solutionOrderMatters ? "Must match group order" : "Any order"}
+        {question.solutionOrderMatters ? "Must match group order" : "Any order allowed"}
       </Button>
     </div>
   {/if}
