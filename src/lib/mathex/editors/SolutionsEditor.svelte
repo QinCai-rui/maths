@@ -19,9 +19,10 @@
 
   interface Props {
     solutions: SolutionItem[];
+    disabled?: boolean;
   }
 
-  let { solutions = $bindable() }: Props = $props();
+  let { solutions = $bindable(), disabled = false }: Props = $props();
   let errors: (string | null)[] = $state(solutions.map(() => null));
 
   function validateAll() {
@@ -88,6 +89,7 @@
             type="single"
             value={solutions[i].type}
             onValueChange={(v) => v && onTypeChange(i, v as SolutionType)}
+            {disabled}
           >
             <Select.Trigger class="w-[110px] shrink-0 h-9 text-xs">
               {solutions[i].type}
@@ -106,6 +108,7 @@
                 outputFormat="ascii-math"
                 placeholder="Enter an equivalent expression"
                 compact
+                {disabled}
                 onValueChange={(value) => {
                   solutions[i] = { ...solutions[i], value };
                   validateAll();
@@ -118,10 +121,17 @@
                 oninput={() => onInput(i)}
                 placeholder={solutions[i].type === "number" ? "e.g. 42" : "e.g. hello"}
                 class={errors[i] ? "border-destructive focus-visible:border-destructive" : ""}
+                {disabled}
               />
             {/if}
           </div>
-          <Button variant="destructive" size="sm" class="shrink-0 h-9 w-9 p-0" onclick={() => removeSolution(i)}>
+          <Button
+            variant="destructive"
+            size="sm"
+            class="shrink-0 h-9 w-9 p-0"
+            onclick={() => removeSolution(i)}
+            {disabled}
+          >
             <Minus class="h-4 w-4" />
           </Button>
         </div>
@@ -132,7 +142,7 @@
     {/each}
   </div>
   <div class="flex gap-2 mt-1">
-    <Button onclick={addSolution} variant="outline" size="sm" class="gap-1">
+    <Button onclick={addSolution} variant="outline" size="sm" class="gap-1" {disabled}>
       <Plus class="h-3 w-3" /> Add solution
     </Button>
   </div>

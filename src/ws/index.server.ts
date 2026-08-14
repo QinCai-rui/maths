@@ -32,6 +32,7 @@ import { create, all } from "mathjs";
 import { RoomStore } from "../lib/mathex/rooms.server";
 import { registerPhysicalCompetitionServer } from "./physical.server";
 import { registerSetShareServer } from "./set-share.server";
+import { registerCollaborativeSetServer } from "./collaborative-set.server";
 
 const config = {};
 const math = create(all, config);
@@ -47,6 +48,7 @@ export const createWSServer = (base: ServerInstance) => {
   });
   registerPhysicalCompetitionServer(io);
   registerSetShareServer(io);
+  registerCollaborativeSetServer(io);
   const roomCreateNamespace: Namespace<
     RoomCreateClientToServerEvents,
     RoomCreateServerToClientEvents,
@@ -64,7 +66,7 @@ export const createWSServer = (base: ServerInstance) => {
         roomId = randomInt(1_000_000).toString().padStart(6, "0");
       } while (rooms.has(roomId));
       const runToken = randomBytes(128).toString("hex").toUpperCase();
-       const room: Room = {
+      const room: Room = {
         id: roomId,
         name: roomName,
         questions: roomQuestions,
@@ -74,9 +76,9 @@ export const createWSServer = (base: ServerInstance) => {
         visibilityTracking,
         players: new Map(),
         logs: []
-       };
-       rooms.set(roomId, room);
-       saveRoom(room);
+      };
+      rooms.set(roomId, room);
+      saveRoom(room);
       socket.emit("goto", `/mathex/app/manage?id=${roomId}&runToken=${runToken}`);
       socket.disconnect();
     });
@@ -118,7 +120,7 @@ export const createWSServer = (base: ServerInstance) => {
     socket.on("alertAll", async (type, message) => {
       roomNamespace.emit("alert", type, message);
     });
-       socket.on("start", async () => {
+    socket.on("start", async () => {
       if (room.state !== "lobby") return;
       room.state = "started";
       roomNamespace.emit("alert", "info", "Game has started!");
@@ -131,7 +133,7 @@ export const createWSServer = (base: ServerInstance) => {
         player.isRunning = false;
         player.runningUntil = null;
       }
-       for (const playerSocket of await roomNamespace.fetchSockets()) {
+      for (const playerSocket of await roomNamespace.fetchSockets()) {
         if (!playerSocket.data.name) continue;
         playerSocket.emit("gameStart", startedAt);
         playerSocket.emit(
@@ -140,20 +142,20 @@ export const createWSServer = (base: ServerInstance) => {
           [...new Set(firstQuestion.solutions.map((s) => s.type))],
           1
         );
-       }
-       saveRoom(room);
+      }
+      saveRoom(room);
       roomManageNamespace.emit("state", room.state);
       roomManageNamespace.emit("playerData", getPlayers(room));
     });
-       socket.on("finish", async () => {
+    socket.on("finish", async () => {
       if (room.state !== "started") return;
       room.state = "finished";
       roomNamespace.emit("alert", "info", "Game has finished for everyone!");
       const finishedAt = Date.now();
-       for (const player of room.players.values()) {
+      for (const player of room.players.values()) {
         if (!player.finishingTime) player.finishingTime = finishedAt;
-       }
-       saveRoom(room);
+      }
+      saveRoom(room);
       const lb = buildLeaderboard(room);
       for (const playerSocket of await roomNamespace.fetchSockets()) {
         playerSocket.emit("gameFinish");
@@ -200,8 +202,8 @@ export const createWSServer = (base: ServerInstance) => {
         return;
       }
       const existingPlayer = room.players.get(playerId);
-       if (existingPlayer) {
-         socket.data = existingPlayer;
+      if (existingPlayer) {
+        socket.data = existingPlayer;
       } else {
         const duplicateName = [...room.players.values()].some(
           (player) => player.name?.toLowerCase() === playerName.toLowerCase()
@@ -212,8 +214,8 @@ export const createWSServer = (base: ServerInstance) => {
         }
         socket.data.playerId = playerId;
         socket.data.name = playerName;
-         room.players.set(playerId, socket.data);
-         saveRoom(room);
+        room.players.set(playerId, socket.data);
+        saveRoom(room);
       }
       io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
       socket.emit("joined", socket.data.name!);
@@ -257,8 +259,8 @@ export const createWSServer = (base: ServerInstance) => {
         questionNumber: socket.data.currentQuestion,
         detail: String(answer)
       };
-       room.logs.push(submitLog);
-       saveRoom(room);
+      room.logs.push(submitLog);
+      saveRoom(room);
       roomManageNamespace.emit("log", submitLog);
 
       const isCorrect = checkSolution(answer, currentQuestion);
@@ -292,13 +294,13 @@ export const createWSServer = (base: ServerInstance) => {
                 type: "finished",
                 questionNumber: socket.data.currentQuestion
               };
-               room.logs.push(finishLog);
-               saveRoom(room);
+              room.logs.push(finishLog);
+              saveRoom(room);
               roomManageNamespace.emit("log", finishLog);
               roomManageNamespace.emit("leaderboard", buildLeaderboard(room));
             } else {
-               socket.data.currentQuestion++;
-               saveRoom(room);
+              socket.data.currentQuestion++;
+              saveRoom(room);
               const nextQuestion = room.questions[socket.data.currentQuestion - 1];
               socket.emit(
                 "newQuestion",
@@ -322,9 +324,9 @@ export const createWSServer = (base: ServerInstance) => {
             roomManageNamespace.emit("log", wrongLog);
           }
           socket.emit("stopRunning");
-           socket.data.isRunning = false;
-           socket.data.runningUntil = null;
-           saveRoom(room);
+          socket.data.isRunning = false;
+          socket.data.runningUntil = null;
+          saveRoom(room);
         }, 900);
       }, room.runningTimeMs);
     });
@@ -358,7 +360,11 @@ export const createWSServer = (base: ServerInstance) => {
         room.logs.push(log);
         saveRoom(room);
         roomManageNamespace.emit("log", log);
-        socket.emit("alert", "info", "You left the competition tab. Your return was recorded and the host was notified.");
+        socket.emit(
+          "alert",
+          "info",
+          "You left the competition tab. Your return was recorded and the host was notified."
+        );
       }
     });
     setTimeout(() => io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room)));

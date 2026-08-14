@@ -6,11 +6,12 @@
   interface Props {
     html?: string;
     resetKey?: number;
+    disabled?: boolean;
   }
 
   type MathScale = "0.5" | "0.75" | "1" | "1.25" | "1.5" | "1.75" | "2.5";
 
-  let { html = $bindable(""), resetKey = 0 }: Props = $props();
+  let { html = $bindable(""), resetKey = 0, disabled = false }: Props = $props();
   let node: HTMLDivElement;
   let quill: any = null;
   let mathPopoverOpen = $state(false);
@@ -20,6 +21,7 @@
   let mathScale = $state<MathScale>("1");
   let mathButtonEl: HTMLButtonElement | undefined;
   let removeEquationClick: (() => void) | undefined;
+  let appliedResetKey: number | undefined;
 
   function serializeEditor() {
     const clone = quill.root.cloneNode(true) as HTMLElement;
@@ -66,6 +68,7 @@
   }
 
   function openMathEditor(index: number | null, latex = "", scale: MathScale = "1") {
+    if (disabled) return;
     editingMathIndex = index;
     mathInput = latex;
     mathScale = scale;
@@ -73,7 +76,7 @@
   }
 
   function saveMath() {
-    if (!quill || !mathInput.trim()) return;
+    if (!quill || disabled || !mathInput.trim()) return;
     const index = editingMathIndex ?? quill.getSelection(true).index;
     if (editingMathIndex !== null) quill.deleteText(editingMathIndex, 1, "user");
     quill.insertEmbed(index, "mathexMath", { latex: mathInput.trim(), scale: mathScale }, "user");
@@ -85,6 +88,7 @@
   }
 
   function deleteMath() {
+    if (disabled) return;
     if (editingMathIndex !== null) {
       quill.deleteText(editingMathIndex, 1, "user");
       quill.setSelection(editingMathIndex, 0);
@@ -94,6 +98,7 @@
   }
 
   function insertImage() {
+    if (disabled) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -147,6 +152,7 @@
 
     quill = new Quill(node, {
       theme: "snow",
+      readOnly: disabled,
       modules: {
         toolbar: {
           container: [
@@ -180,11 +186,7 @@
       if (!equation) return;
       event.preventDefault();
       const blot = Quill.find(equation);
-      openMathEditor(
-        quill.getIndex(blot),
-        equation.dataset.latex || "",
-        (equation.dataset.scale as MathScale) || "1"
-      );
+      openMathEditor(quill.getIndex(blot), equation.dataset.latex || "", (equation.dataset.scale as MathScale) || "1");
     };
     quill.root.addEventListener("click", equationClick);
     quill.root.addEventListener("keydown", (event: KeyboardEvent) => {
@@ -217,10 +219,35 @@
   });
 
   $effect(() => {
-    resetKey;
+    const requestedReset = resetKey;
+    const nextHtml = html;
     if (!quill) return;
-    quill.setText("");
-    if (html) pasteHtml(html);
+    const currentHtml = serializeEditor();
+    if (requestedReset !== appliedResetKey || nextHtml !== currentHtml) {
+      appliedResetKey = requestedReset;
+      quill.setText("");
+      if (nextHtml) pasteHtml(nextHtml);
+    }
+  });
+
+  $effect(() => {
+    if (!quill || !quillReady) return;
+    quill.enable(!disabled);
+    if (mathButtonEl) mathButtonEl.disabled = disabled;
+    for (const control of node.parentElement?.querySelectorAll<HTMLButtonElement | HTMLSelectElement>(
+      ".ql-toolbar button, .ql-toolbar select"
+    ) || []) {
+      control.disabled = disabled;
+    }
+    for (const equation of quill.root.querySelectorAll(".mathex-equation") as NodeListOf<HTMLElement>) {
+      equation.tabIndex = disabled ? -1 : 0;
+      equation.setAttribute("aria-disabled", String(disabled));
+    }
+    if (disabled) {
+      mathPopoverOpen = false;
+      editingMathIndex = null;
+      quill.blur();
+    }
   });
 
   function handleClickOutside(event: MouseEvent) {

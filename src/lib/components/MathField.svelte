@@ -8,6 +8,7 @@
     outputFormat?: "latex" | "ascii-math";
     placeholder?: string;
     compact?: boolean;
+    disabled?: boolean;
     onValueChange?: (value: string) => void;
   }
 
@@ -17,6 +18,7 @@
     outputFormat = "latex",
     placeholder = "Type an equation",
     compact = false,
+    disabled = false,
     onValueChange
   }: Props = $props();
 
@@ -55,6 +57,8 @@
       field.mathVirtualKeyboardPolicy = "auto";
       field.setAttribute("aria-label", placeholder);
       field.setAttribute("placeholder", placeholder);
+      field.disabled = disabled;
+      field.readOnly = disabled;
       field.setValue(value, { format: inputFormat });
       field.addEventListener("input", () => {
         value = field.getValue(outputFormat);
@@ -76,7 +80,15 @@
     if (current !== value) mathfield.setValue(value, { format: inputFormat, silenceNotifications: true });
   });
 
+  $effect(() => {
+    if (!mathfield) return;
+    mathfield.disabled = disabled;
+    mathfield.readOnly = disabled;
+    if (disabled) mathfield.blur();
+  });
+
   function insertTemplate(template: string) {
+    if (disabled) return;
     mathfield?.insert(template, { selectionMode: "placeholder", focus: true });
   }
 </script>
@@ -89,6 +101,7 @@
         type="button"
         title={template.label}
         onmousedown={(event) => event.preventDefault()}
+        {disabled}
         onclick={() => insertTemplate(template.value)}>{template.label}</button
       >
     {/each}
