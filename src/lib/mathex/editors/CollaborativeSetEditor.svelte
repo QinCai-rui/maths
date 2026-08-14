@@ -156,14 +156,20 @@
     return { name: setName, instructions, questions: questions.map(plainQuestion), pdfOptions };
   }
 
+  // Svelte state proxies and editor integrations are not always structured-cloneable.
+  // Document data is JSON by design, so use JSON serialization for history snapshots.
+  function cloneDocument<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
+  }
+
   function editorSnapshot(): CollaborativeSetSnapshot {
-    return {
-      ...structuredClone(plainSet()),
+    return cloneDocument({
+      ...plainSet(),
       sessionToken: sessionToken || "___________________________________________",
       status: sessionStatus,
-      questions: structuredClone(questions),
+      questions,
       updatedAt: 0
-    };
+    });
   }
 
   function sameValue(left: unknown, right: unknown) {
@@ -230,9 +236,9 @@
       }
     ].slice(-100);
     if (sessionToken) {
-      liveHistoryBaseline = structuredClone(after);
+      liveHistoryBaseline = cloneDocument(after);
       liveHistoryPending = false;
-    } else localBaseline = structuredClone(after);
+    } else localBaseline = cloneDocument(after);
   }
 
   function scheduleHistory() {
@@ -246,8 +252,8 @@
     applyingLocalHistory = true;
     setName = snapshot.name;
     instructions = snapshot.instructions;
-    questions = structuredClone(snapshot.questions);
-    pdfOptions = structuredClone(snapshot.pdfOptions);
+    questions = cloneDocument(snapshot.questions);
+    pdfOptions = cloneDocument(snapshot.pdfOptions);
     if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
       currentQuestionId = questions[0]?.id || null;
     }
@@ -317,7 +323,7 @@
     if (pendingLiveStructure) {
       pendingLiveStructure = false;
       scheduleHistory();
-    } else if (!liveHistoryPending) liveHistoryBaseline = structuredClone(editorSnapshot());
+    } else if (!liveHistoryPending) liveHistoryBaseline = cloneDocument(editorSnapshot());
   }
 
   function joinSession(reconnecting = false) {
@@ -388,7 +394,7 @@
       if (index < 0) return;
       questions[index] = question;
       lastQuestionSent.set(question.id, JSON.stringify(plainQuestion(question)));
-      if (!liveHistoryPending) liveHistoryBaseline = structuredClone(editorSnapshot());
+      if (!liveHistoryPending) liveHistoryBaseline = cloneDocument(editorSnapshot());
     });
     socket.on("sessionDeleted", () => {
       deleted = true;
@@ -565,7 +571,7 @@
       socket?.emit("duplicateQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
     }
-    const copy = { ...structuredClone(question), id: crypto.randomUUID() };
+    const copy = { ...cloneDocument(question), id: crypto.randomUUID() };
     const index = questions.findIndex(({ id }) => id === question.id) + 1;
     questions.splice(index, 0, copy);
     currentQuestionId = copy.id;
@@ -624,7 +630,7 @@
         undoHistory = undoHistory.map((candidate) =>
           candidate === entry ? { ...candidate, status: "undone" as const } : candidate
         );
-        liveHistoryBaseline = structuredClone(entry.before);
+        liveHistoryBaseline = cloneDocument(entry.before);
         liveHistoryPending = false;
       }
     );
@@ -651,7 +657,7 @@
         undoHistory = undoHistory.map((candidate) =>
           candidate === entry ? { ...candidate, status: "applied" as const } : candidate
         );
-        liveHistoryBaseline = structuredClone(entry.after);
+        liveHistoryBaseline = cloneDocument(entry.after);
         liveHistoryPending = false;
       }
     );
