@@ -101,6 +101,7 @@
   let settingsTimer: ReturnType<typeof setTimeout> | null = null;
   let localTimer: ReturnType<typeof setTimeout> | null = null;
   let lockHeartbeat: ReturnType<typeof setInterval> | null = null;
+  let activeQuestionCard: HTMLElement | null = null;
 
   let isHost = $derived(
     !!socket?.id &&
@@ -248,6 +249,16 @@
       ready = true;
     }
 
+    const isExternalMathControl = (target: EventTarget | null) =>
+      target instanceof Element && !!target.closest(".ML__keyboard, .ML__virtual-keyboard-toggle");
+    const releaseOnOutsidePointer = (event: PointerEvent) => {
+      if (!currentQuestionId || !activeQuestionCard || !ownedLocks[currentQuestionId]) return;
+      if (isExternalMathControl(event.target)) return;
+      if (activeQuestionCard.contains(event.target as Node)) return;
+      releaseQuestion(currentQuestionId);
+    };
+    window.addEventListener("pointerdown", releaseOnOutsidePointer, true);
+
     lockHeartbeat = setInterval(() => {
       for (const [questionId, owned] of Object.entries(ownedLocks)) {
         if (owned) socket?.emit("refreshLock", { questionId });
@@ -256,6 +267,7 @@
 
     return () => {
       if (lockHeartbeat) clearInterval(lockHeartbeat);
+      window.removeEventListener("pointerdown", releaseOnOutsidePointer, true);
       for (const questionId of Object.keys(ownedLocks)) {
         if (ownedLocks[questionId]) {
           sendQuestion(questionId);
@@ -356,15 +368,6 @@
         return;
       }
       ownedLocks = { ...ownedLocks, [questionId]: true };
-    });
-  }
-
-  function blurQuestion(event: FocusEvent, questionId: string) {
-    const card = event.currentTarget as HTMLElement;
-    if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
-    setTimeout(() => {
-      if (card.contains(document.activeElement) || !ownedLocks[questionId]) return;
-      releaseQuestion(questionId);
     });
   }
 
@@ -858,9 +861,9 @@
               </div>
             {/if}
             <section
+              bind:this={activeQuestionCard}
               class="document-page relative"
               onfocusin={() => focusQuestion(currentQuestion!.id)}
-              onfocusout={(event) => blurQuestion(event, currentQuestion!.id)}
             >
               {#if sessionToken && sessionStatus === "active" && !currentLock && !hasOwnLock}
                 <button

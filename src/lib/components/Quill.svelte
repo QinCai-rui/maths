@@ -233,6 +233,10 @@
   $effect(() => {
     if (!quill || !quillReady) return;
     quill.enable(!disabled);
+    // Quill can retain its disabled DOM state when it was mounted read-only.
+    // Keep the underlying editable root in sync with the live lock transition.
+    quill.root.contentEditable = disabled ? "false" : "true";
+    quill.container.classList.toggle("ql-disabled", disabled);
     if (mathButtonEl) mathButtonEl.disabled = disabled;
     for (const control of node.parentElement?.querySelectorAll<HTMLButtonElement | HTMLSelectElement>(
       ".ql-toolbar button, .ql-toolbar select"
