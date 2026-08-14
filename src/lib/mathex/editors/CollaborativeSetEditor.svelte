@@ -101,7 +101,7 @@
   let settingsTimer: ReturnType<typeof setTimeout> | null = null;
   let localTimer: ReturnType<typeof setTimeout> | null = null;
   let lockHeartbeat: ReturnType<typeof setInterval> | null = null;
-  let activeQuestionCard: HTMLElement | null = null;
+  let activeQuestionCard = $state.raw<HTMLElement | null>(null);
 
   let isHost = $derived(
     !!socket?.id &&

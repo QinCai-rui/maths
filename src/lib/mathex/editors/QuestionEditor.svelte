@@ -17,7 +17,9 @@
 
 <div class="grid w-full gap-1.5">
   <Label>Question text</Label>
-  <Quill bind:html={question.contents} {disabled} />
+  {#key disabled}
+    <Quill bind:html={question.contents} {disabled} />
+  {/key}
 </div>
 <div class="mt-4"><SolutionsEditor bind:solutions={question.solutions} {disabled} /></div>
 <div class="flex items-center space-x-2 mt-3">
