@@ -195,13 +195,21 @@ async function convertMathNodes(nodes: PdfNode[], mathHeight: number): Promise<P
     const columns: PdfNode[] = [];
     for (const match of matches) {
       const before = plain.slice(offset, match.index);
-      if (before) columns.push({ text: before, width: "auto" });
-      columns.push({ svg: await texToSvg(match[1]), fit: [160, mathHeight * 1.15], width: "auto" });
-      offset = (match.index || 0) + match[0].length;
+      const matchEnd = (match.index || 0) + match[0].length;
+      const hasSpaceBefore = /\s$/.test(before);
+      const hasSpaceAfter = /^\s/.test(plain.slice(matchEnd));
+      if (before) columns.push({ text: before.trimEnd(), width: "auto" });
+      columns.push({
+        svg: await texToSvg(match[1]),
+        fit: [160, mathHeight * 1.15],
+        width: "auto",
+        margin: [hasSpaceBefore ? mathHeight * 0.3 : 0, 0, hasSpaceAfter ? mathHeight * 0.3 : 0, 0]
+      });
+      offset = matchEnd;
     }
     const after = plain.slice(offset);
-    if (after) columns.push({ text: after, width: "auto" });
-    converted.push({ columns, columnGap: 1, margin: [0, 0, 0, 3] });
+    if (after) columns.push({ text: after.trimStart(), width: "auto" });
+    converted.push({ columns, columnGap: 0, margin: [0, 0, 0, 3] });
   }
   return converted;
 }

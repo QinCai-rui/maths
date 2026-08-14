@@ -457,13 +457,9 @@
         >
           <Download class="h-3.5 w-3.5" /> Export
         </summary>
-        <div
-          class="absolute right-0 z-10 mt-1 w-96 max-w-[calc(100vw-1rem)] rounded-md border bg-popover p-3 shadow-md"
-        >
-          <div class="mb-3 grid grid-cols-2 gap-2 border-b pb-3">
-            <label
-              class="grid gap-1 rounded-md border border-border/70 bg-background/60 p-2 text-[0.7rem] text-muted-foreground"
-            >
+        <div class="absolute right-0 z-10 mt-1 w-72 rounded-md border bg-popover p-3 shadow-md">
+          <div class="mb-3 grid grid-cols-2 gap-2 border-b pb-3 sm:grid-cols-3">
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Question text
               <input
                 class="h-8 rounded border bg-background px-2 text-sm text-foreground"
@@ -475,9 +471,7 @@
               />
               <span>6-18 pt</span>
             </label>
-            <label
-              class="grid gap-1 rounded-md border border-border/70 bg-background/60 p-2 text-[0.7rem] text-muted-foreground"
-            >
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Answer text
               <input
                 class="h-8 rounded border bg-background px-2 text-sm text-foreground"
@@ -489,9 +483,7 @@
               />
               <span>6-16 pt</span>
             </label>
-            <label
-              class="grid gap-1 rounded-md border border-border/70 bg-background/60 p-2 text-[0.7rem] text-muted-foreground"
-            >
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Image height
               <input
                 class="h-8 rounded border bg-background px-2 text-sm text-foreground"
@@ -503,9 +495,7 @@
               />
               <span>5-35 mm</span>
             </label>
-            <label
-              class="grid gap-1 rounded-md border border-border/70 bg-background/60 p-2 text-[0.7rem] text-muted-foreground"
-            >
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Slip height
               <input
                 class="h-8 rounded border bg-background px-2 text-sm text-foreground"
@@ -514,11 +504,9 @@
                 step="0.5"
                 bind:value={pdfOptions.slipHeight}
               />
-              <span>Positive height, in mm</span>
+              <span>Any height, in mm</span>
             </label>
-            <label
-              class="grid gap-1 rounded-md border border-border/70 bg-background/60 p-2 text-[0.7rem] text-muted-foreground"
-            >
+            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Cut-off margin
               <input
                 class="h-8 rounded border bg-background px-2 text-sm text-foreground"
@@ -532,7 +520,7 @@
             </label>
           </div>
           <p class="mb-2 text-xs leading-4 text-muted-foreground">
-            Pages fit as many slips as their chosen height allows. The right cut-off is dashed.
+            Six slips fit on A4; the final row is 0.1 mm shorter for print tolerance. The right cut-off is dashed.
           </p>
           <button
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
