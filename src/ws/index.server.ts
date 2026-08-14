@@ -22,7 +22,8 @@ import {
   type LogEntry,
   type LeaderboardEntry,
   RoomName,
-  Question
+  Question,
+  SolutionType
 } from "../lib/mathex/schemas";
 
 import { z } from "zod";
@@ -139,7 +140,9 @@ export const createWSServer = (base: ServerInstance) => {
         playerSocket.emit(
           "newQuestion",
           firstQuestion.contents,
-          [...new Set(firstQuestion.solutions.map((s) => s.type))],
+          answerGroups(firstQuestion),
+          firstQuestion.requireAllSolutionGroups,
+          firstQuestion.solutionOrderMatters,
           1
         );
       }
@@ -233,7 +236,9 @@ export const createWSServer = (base: ServerInstance) => {
         socket.emit(
           "newQuestion",
           question.contents,
-          [...new Set(question.solutions.map((s) => s.type))],
+          answerGroups(question),
+          question.requireAllSolutionGroups,
+          question.solutionOrderMatters,
           socket.data.currentQuestion
         );
         if (socket.data.runningUntil && socket.data.runningUntil > Date.now()) {
@@ -305,7 +310,9 @@ export const createWSServer = (base: ServerInstance) => {
               socket.emit(
                 "newQuestion",
                 nextQuestion.contents,
-                [...new Set(nextQuestion.solutions.map((s) => s.type))],
+                answerGroups(nextQuestion),
+                nextQuestion.requireAllSolutionGroups,
+                nextQuestion.solutionOrderMatters,
                 socket.data.currentQuestion
               );
             }
@@ -411,22 +418,62 @@ export const createWSServer = (base: ServerInstance) => {
   return io;
 };
 
-function checkSolution(guess: any, question: z.infer<typeof Question>) {
-  const solutions = question.solutions;
-  for (const solution of solutions) {
-    if (solution.type === "number") {
-      if (Number(guess) === solution.value) return true;
-    } else if (solution.type === "text") {
-      if (String(guess).trim() === solution.value) return true;
-    } else if (solution.type === "expression") {
-      if (!question.allowEquivalent) {
-        if (String(guess).trim() === solution.value) return true;
-      } else {
-        try {
-          if (math.symbolicEqual(math.parse(solution.value), math.parse(String(guess)))) return true;
-        } catch {}
-      }
-    }
+function answerGroups(question: z.infer<typeof Question>): SolutionType[][] {
+  if (!question.requireAllSolutionGroups) return [[...new Set(question.solutions.map((solution) => solution.type))]];
+  const groups = new Map<number, SolutionType[]>();
+  for (const solution of question.solutions) {
+    const group = solution.group ?? 0;
+    groups.set(group, [...new Set([...(groups.get(group) || []), solution.type])]);
   }
-  return false;
+  return [...groups.entries()].sort(([a], [b]) => a - b).map(([, types]) => types);
+}
+
+function matchesSolution(
+  guess: string | number,
+  solution: z.infer<typeof Question>["solutions"][number],
+  question: z.infer<typeof Question>
+) {
+  if (solution.type === "number") return Number(guess) === solution.value;
+  if (solution.type === "text") return String(guess).trim() === solution.value;
+  if (!question.allowEquivalent) return String(guess).trim() === solution.value;
+  try {
+    return math.symbolicEqual(math.parse(solution.value), math.parse(String(guess)));
+  } catch {
+    return false;
+  }
+}
+
+function checkSolution(guess: string | number | (string | number)[], question: z.infer<typeof Question>) {
+  if (!question.requireAllSolutionGroups) {
+    const answer = Array.isArray(guess) ? guess[0] : guess;
+    return question.solutions.some((solution) => matchesSolution(answer, solution, question));
+  }
+
+  const grouped = new Map<number, z.infer<typeof Question>["solutions"]>();
+  for (const solution of question.solutions) {
+    const group = solution.group ?? 0;
+    grouped.set(group, [...(grouped.get(group) || []), solution]);
+  }
+  const groups = [...grouped.entries()].sort(([a], [b]) => a - b).map(([, solutions]) => solutions);
+  const answers = Array.isArray(guess) ? guess : [guess];
+  if (answers.length !== groups.length || answers.some((answer) => String(answer).trim() === "")) return false;
+  if (question.solutionOrderMatters) {
+    return groups.every((solutions, index) =>
+      solutions.some((solution) => matchesSolution(answers[index], solution, question))
+    );
+  }
+
+  const usedGroups = new Set<number>();
+  function matchAnswer(index: number): boolean {
+    if (index === answers.length) return true;
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      if (usedGroups.has(groupIndex)) continue;
+      if (!groups[groupIndex].some((solution) => matchesSolution(answers[index], solution, question))) continue;
+      usedGroups.add(groupIndex);
+      if (matchAnswer(index + 1)) return true;
+      usedGroups.delete(groupIndex);
+    }
+    return false;
+  }
+  return matchAnswer(0);
 }

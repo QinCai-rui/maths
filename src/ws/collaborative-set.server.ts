@@ -48,7 +48,9 @@ const emptyQuestion = (): DraftQuestionValue => ({
   contents: "",
   solutions: [],
   allowEquivalent: true,
-  answerComment: ""
+  answerComment: "",
+  requireAllSolutionGroups: false,
+  solutionOrderMatters: false
 });
 
 export function registerCollaborativeSetServer(io: AnyServer): void {

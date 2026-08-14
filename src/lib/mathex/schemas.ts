@@ -16,7 +16,13 @@ export interface RoomServerToClientEvents {
   running: (durationMs: number) => void;
   answerResult: (correct: boolean) => void;
   stopRunning: () => void;
-  newQuestion: (question: string, solutionTypes: SolutionType[], questionNumber: number) => void;
+  newQuestion: (
+    question: string,
+    answerGroups: SolutionType[][],
+    requireAllSolutionGroups: boolean,
+    solutionOrderMatters: boolean,
+    questionNumber: number
+  ) => void;
   confetti: () => void;
   questionCount: (data: number) => void;
   joined: (name: string) => void;
@@ -25,7 +31,7 @@ export interface RoomServerToClientEvents {
 
 export interface RoomClientToServerEvents {
   join: (name: string, playerId: string) => void;
-  answer: (value: string | number) => void;
+  answer: (value: string | number | (string | number)[]) => void;
   visibilityChange: (hidden: boolean) => void;
 }
 
@@ -103,15 +109,18 @@ export interface RoomManageSocketData {}
 export const SolutionItem = z.union([
   z.object({
     type: z.literal("number"),
-    value: z.number()
+    value: z.number(),
+    group: z.number().int().min(0).max(99).default(0)
   }),
   z.object({
     type: z.literal("text"),
-    value: z.string()
+    value: z.string(),
+    group: z.number().int().min(0).max(99).default(0)
   }),
   z.object({
     type: z.literal("expression"),
-    value: z.string()
+    value: z.string(),
+    group: z.number().int().min(0).max(99).default(0)
   })
 ]);
 
@@ -125,7 +134,9 @@ export const Question = z.preprocess(
         contents: q.data.contents || "",
         solutions: q.data.solutions || [],
         allowEquivalent: q.data.allowEquivalent ?? true,
-        answerComment: q.data.answerComment || ""
+        answerComment: q.data.answerComment || "",
+        requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
+        solutionOrderMatters: q.data.solutionOrderMatters ?? false
       };
     }
     return val;
@@ -134,7 +145,9 @@ export const Question = z.preprocess(
     contents: z.string(),
     solutions: z.array(SolutionItem),
     allowEquivalent: z.boolean(),
-    answerComment: z.string().max(2000).default("")
+    answerComment: z.string().max(2000).default(""),
+    requireAllSolutionGroups: z.boolean().default(false),
+    solutionOrderMatters: z.boolean().default(false)
   })
 );
 

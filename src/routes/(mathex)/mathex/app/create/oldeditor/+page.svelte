@@ -53,10 +53,10 @@
   // --- Migrate old-format solutions ---
   function migrateSolutions(sol: any[]): z.infer<typeof SolutionItem>[] {
     return sol.map((s) => {
-      if (typeof s === "object" && s !== null && "type" in s && "value" in s) return s;
-      if (typeof s === "number") return { type: "number", value: s };
-      if (typeof s === "string") return { type: "text", value: s };
-      return { type: "text", value: String(s) };
+      if (typeof s === "object" && s !== null && "type" in s && "value" in s) return { group: 0, ...s };
+      if (typeof s === "number") return { type: "number", value: s, group: 0 };
+      if (typeof s === "string") return { type: "text", value: s, group: 0 };
+      return { type: "text", value: String(s), group: 0 };
     });
   }
 
@@ -67,18 +67,29 @@
         contents: q.data.contents || "",
         solutions: q.data.solutions ? migrateSolutions(q.data.solutions) : [],
         allowEquivalent: q.data.allowEquivalent ?? true,
-        answerComment: q.data.answerComment || ""
+        answerComment: q.data.answerComment || "",
+        requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
+        solutionOrderMatters: q.data.solutionOrderMatters ?? false
       };
     }
     // New format: { contents, solutions, allowEquivalent }
     if (q.data) {
-      return { ...q.data, allowEquivalent: q.data.allowEquivalent ?? true, answerComment: q.data.answerComment || "" };
+      return {
+        ...q.data,
+        solutions: q.data.solutions ? migrateSolutions(q.data.solutions) : [],
+        allowEquivalent: q.data.allowEquivalent ?? true,
+        answerComment: q.data.answerComment || "",
+        requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
+        solutionOrderMatters: q.data.solutionOrderMatters ?? false
+      };
     }
     return {
       contents: q.contents || "",
       solutions: q.solutions ? migrateSolutions(q.solutions) : [],
       allowEquivalent: q.allowEquivalent ?? true,
-      answerComment: q.answerComment || ""
+      answerComment: q.answerComment || "",
+      requireAllSolutionGroups: q.requireAllSolutionGroups ?? false,
+      solutionOrderMatters: q.solutionOrderMatters ?? false
     };
   }
 
@@ -161,7 +172,17 @@
       toast.error("Maximum 100 questions per set");
       return;
     }
-    questions = [...questions, { contents: "", solutions: [], allowEquivalent: true, answerComment: "" }];
+    questions = [
+      ...questions,
+      {
+        contents: "",
+        solutions: [],
+        allowEquivalent: true,
+        answerComment: "",
+        requireAllSolutionGroups: false,
+        solutionOrderMatters: false
+      }
+    ];
     currentQuestionIdx = questions.length - 1;
   }
 

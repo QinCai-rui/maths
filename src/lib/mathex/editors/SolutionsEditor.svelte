@@ -15,14 +15,16 @@
   interface SolutionItem {
     type: SolutionType;
     value: string | number;
+    group: number;
   }
 
   interface Props {
     solutions: SolutionItem[];
     disabled?: boolean;
+    grouped?: boolean;
   }
 
-  let { solutions = $bindable(), disabled = false }: Props = $props();
+  let { solutions = $bindable(), disabled = false, grouped = false }: Props = $props();
   let errors: (string | null)[] = $state(solutions.map(() => null));
 
   function validateAll() {
@@ -57,7 +59,7 @@
     } else {
       newValue = String(s.value);
     }
-    solutions[i] = { type: newType, value: newValue };
+    solutions[i] = { ...s, type: newType, value: newValue };
     errors[i] = null;
     if (newType === "expression") {
       validateAll();
@@ -65,12 +67,29 @@
   }
 
   function addSolution() {
-    solutions = [...solutions, { type: "number", value: 0 }];
+    solutions = [...solutions, { type: "number", value: 0, group: solutions.at(-1)?.group ?? 0 }];
     errors = [...errors, null];
+  }
+
+  function addGroup() {
+    const group = Math.max(-1, ...solutions.map((solution) => solution.group ?? 0)) + 1;
+    solutions = [...solutions, { type: "number", value: 0, group }];
+    errors = [...errors, null];
+  }
+
+  function solutionGroups() {
+    return [...new Set(solutions.map((solution) => solution.group ?? 0))].sort((a, b) => a - b);
+  }
+
+  function changeGroup(index: number, group: string | null) {
+    if (group === null) return;
+    solutions[index] = { ...solutions[index], group: Number(group) };
   }
 
   function removeSolution(i: number) {
     solutions = solutions.toSpliced(i, 1);
+    const groupMap = new Map(solutionGroups().map((group, index) => [group, index]));
+    solutions = solutions.map((solution) => ({ ...solution, group: groupMap.get(solution.group) ?? 0 }));
     errors = errors.toSpliced(i, 1);
     validateAll();
   }
@@ -79,7 +98,9 @@
 <div class="mt-4 grid gap-1.5">
   <Label class="text-sm font-medium">Solutions</Label>
   <p class="text-xs text-muted-foreground">
-    Add solutions of any type. Each solution is checked against the player's answer.
+    {grouped
+      ? "Every answer group is required. Any solution within a group is accepted."
+      : "Any one listed solution is accepted."}
   </p>
   <div class="flex flex-col gap-2">
     {#each solutions as _, i}
@@ -100,6 +121,21 @@
               <Select.Item value="expression">Expression</Select.Item>
             </Select.Content>
           </Select.Root>
+          {#if grouped}
+            <Select.Root
+              type="single"
+              value={String(solutions[i].group ?? 0)}
+              onValueChange={(value) => changeGroup(i, value)}
+              {disabled}
+            >
+              <Select.Trigger class="w-[92px] shrink-0 h-9 text-xs">Answer {solutions[i].group + 1}</Select.Trigger>
+              <Select.Content>
+                {#each solutionGroups() as group}
+                  <Select.Item value={String(group)}>Answer {group + 1}</Select.Item>
+                {/each}
+              </Select.Content>
+            </Select.Root>
+          {/if}
           <div class="flex-1">
             {#if solutions[i].type === "expression"}
               <MathField
@@ -145,6 +181,11 @@
     <Button onclick={addSolution} variant="outline" size="sm" class="gap-1" {disabled}>
       <Plus class="h-3 w-3" /> Add solution
     </Button>
+    {#if grouped}
+      <Button onclick={addGroup} variant="outline" size="sm" class="gap-1" {disabled}>
+        <Plus class="h-3 w-3" /> Add required answer
+      </Button>
+    {/if}
   </div>
   {#if solutions.length === 0}
     <p class="text-xs text-muted-foreground italic">No solutions added yet. At least one is required.</p>

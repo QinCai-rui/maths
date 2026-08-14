@@ -81,6 +81,7 @@
   socket.on("lobby", () => (gameState = "waiting_start"));
 
   let answer: number | string | null = $state(null);
+  let answers: (number | string | null)[] = $state([]);
 
   let running: number | false = $state(false);
   let runningDuration = $state(16000);
@@ -89,11 +90,15 @@
   let currentQuestion: {
     number: number;
     content: string;
-    solutionTypes: z.infer<typeof Question>["solutions"][number]["type"][];
+    answerGroups: z.infer<typeof Question>["solutions"][number]["type"][][];
+    requireAllSolutionGroups: boolean;
+    solutionOrderMatters: boolean;
   } = $state({
     number: 0,
     content: "<p>Loading...</p>",
-    solutionTypes: ["text"]
+    answerGroups: [["text"]],
+    requireAllSolutionGroups: false,
+    solutionOrderMatters: false
   });
   let startingTime: number | null = $state(null);
   let timePassed = $state(0);
@@ -116,13 +121,16 @@
     confetti = true;
     setTimeout(() => (confetti = false), 6000);
   });
-  socket.on("newQuestion", (content, solutionTypes, questionNumber) => {
+  socket.on("newQuestion", (content, answerGroups, requireAllSolutionGroups, solutionOrderMatters, questionNumber) => {
     answer = null;
+    answers = answerGroups.map(() => null);
     answerFeedback = null;
     currentQuestion = {
       number: questionNumber,
       content: DOMPurify.sanitize(content),
-      solutionTypes
+      answerGroups,
+      requireAllSolutionGroups,
+      solutionOrderMatters
     };
     running = false;
   });
@@ -272,15 +280,30 @@
           <div class="mb-7 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">
             <Flag class="h-3.5 w-3.5" /> Problem {currentQuestion.number}
           </div>
-           <div class="question-content prose prose-slate max-w-none dark:prose-invert">
+          <div class="question-content prose prose-slate max-w-none dark:prose-invert">
             {@html renderMath(currentQuestion.content)}
           </div>
           <div class="mt-6">
-            {#if currentQuestion.solutionTypes.length === 1 && currentQuestion.solutionTypes[0] === "number"}
+            {#if currentQuestion.requireAllSolutionGroups}
+              <div class="grid gap-4">
+                {#each currentQuestion.answerGroups as answerGroup, index}
+                  <div class="grid gap-1.5">
+                    <Label>Answer {index + 1}</Label>
+                    {#if answerGroup.length === 1 && answerGroup[0] === "number"}
+                      <NumberAnswer bind:answer={answers[index]} />
+                    {:else if answerGroup.length === 1 && answerGroup[0] === "text"}
+                      <TextAnswer bind:answer={answers[index]} />
+                    {:else}
+                      <ExpressionAnswer bind:answer={answers[index]} />
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "number"}
               <NumberAnswer bind:answer />
-            {:else if currentQuestion.solutionTypes.length === 1 && currentQuestion.solutionTypes[0] === "text"}
+            {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "text"}
               <TextAnswer bind:answer />
-            {:else if currentQuestion.solutionTypes.length === 1 && currentQuestion.solutionTypes[0] === "expression"}
+            {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "expression"}
               <ExpressionAnswer bind:answer />
             {:else}
               <ExpressionAnswer bind:answer />
@@ -290,18 +313,25 @@
             class="mt-4"
             onsubmit={(e) => {
               e.preventDefault();
-              if (answer === null || answer === "") {
+              const submittedAnswer = currentQuestion.requireAllSolutionGroups ? answers : answer;
+              if (
+                (Array.isArray(submittedAnswer) && submittedAnswer.some((value) => value === null || value === "")) ||
+                submittedAnswer === null ||
+                submittedAnswer === ""
+              ) {
                 toast.error("Enter an answer first");
                 return;
               }
-              socket.emit("answer", answer);
+              socket.emit("answer", submittedAnswer);
             }}
           >
             <Button
               type="submit"
               class="w-full shadow-lg shadow-primary/20"
               size="lg"
-              disabled={answer === null || answer === ""}>Lock in answer</Button
+              disabled={currentQuestion.requireAllSolutionGroups
+                ? answers.some((value) => value === null || value === "")
+                : answer === null || answer === ""}>Lock in answer</Button
             >
           </form>
         </div>

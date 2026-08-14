@@ -17,7 +17,9 @@ function migrateQuestion(value: any): z.infer<typeof Question> {
     contents: source.contents || "",
     solutions: Array.isArray(source.solutions) ? migrateSolutions(source.solutions) : [],
     allowEquivalent: source.allowEquivalent ?? true,
-    answerComment: source.answerComment || ""
+    answerComment: source.answerComment || "",
+    requireAllSolutionGroups: source.requireAllSolutionGroups ?? false,
+    solutionOrderMatters: source.solutionOrderMatters ?? false
   };
 }
 
@@ -65,6 +67,12 @@ export function questionSetDifferences(
     }
     if (localQuestion.answerComment !== sharedQuestion.answerComment) {
       differences.push(`Question ${index + 1}: marker comments`);
+    }
+    if (localQuestion.requireAllSolutionGroups !== sharedQuestion.requireAllSolutionGroups) {
+      differences.push(`Question ${index + 1}: required-answer setting`);
+    }
+    if (localQuestion.solutionOrderMatters !== sharedQuestion.solutionOrderMatters) {
+      differences.push(`Question ${index + 1}: answer-order setting`);
     }
   }
   return differences;

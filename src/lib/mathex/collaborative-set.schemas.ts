@@ -5,16 +5,22 @@ export const CollaboratorName = z.string().trim().min(1).max(20);
 export const CollaborativeQuestionId = z.string().uuid();
 
 export const DraftSolution = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("number"), value: z.union([z.number(), z.literal("")]) }),
-  z.object({ type: z.literal("text"), value: z.string() }),
-  z.object({ type: z.literal("expression"), value: z.string() })
+  z.object({
+    type: z.literal("number"),
+    value: z.union([z.number(), z.literal("")]),
+    group: z.number().int().min(0).max(99).default(0)
+  }),
+  z.object({ type: z.literal("text"), value: z.string(), group: z.number().int().min(0).max(99).default(0) }),
+  z.object({ type: z.literal("expression"), value: z.string(), group: z.number().int().min(0).max(99).default(0) })
 ]);
 
 export const DraftQuestion = z.object({
   contents: z.string(),
   solutions: z.array(DraftSolution),
   allowEquivalent: z.boolean(),
-  answerComment: z.string().max(2000).default("")
+  answerComment: z.string().max(2000).default(""),
+  requireAllSolutionGroups: z.boolean().default(false),
+  solutionOrderMatters: z.boolean().default(false)
 });
 
 export const CollaborativeQuestion = DraftQuestion.extend({ id: CollaborativeQuestionId });

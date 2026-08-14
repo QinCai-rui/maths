@@ -56,7 +56,9 @@
     contents: "",
     solutions: [],
     allowEquivalent: true,
-    answerComment: ""
+    answerComment: "",
+    requireAllSolutionGroups: false,
+    solutionOrderMatters: false
   });
   const defaultPdfOptions = () => ({
     questionTextSize: 11,
@@ -122,7 +124,9 @@
       contents: question.contents,
       solutions: question.solutions,
       allowEquivalent: question.allowEquivalent,
-      answerComment: question.answerComment
+      answerComment: question.answerComment,
+      requireAllSolutionGroups: question.requireAllSolutionGroups,
+      solutionOrderMatters: question.solutionOrderMatters
     };
   }
 
@@ -136,14 +140,17 @@
       contents: typeof source.contents === "string" ? source.contents : "",
       solutions: Array.isArray(source.solutions)
         ? source.solutions.map((solution: any) => {
-            if (solution && typeof solution === "object" && "type" in solution && "value" in solution) return solution;
+            if (solution && typeof solution === "object" && "type" in solution && "value" in solution)
+              return { group: 0, ...solution };
             return typeof solution === "number"
-              ? { type: "number", value: solution }
-              : { type: "text", value: String(solution) };
+              ? { type: "number", value: solution, group: 0 }
+              : { type: "text", value: String(solution), group: 0 };
           })
         : [],
       allowEquivalent: source.allowEquivalent ?? true,
-      answerComment: typeof source.answerComment === "string" ? source.answerComment : ""
+      answerComment: typeof source.answerComment === "string" ? source.answerComment : "",
+      requireAllSolutionGroups: source.requireAllSolutionGroups ?? false,
+      solutionOrderMatters: source.solutionOrderMatters ?? false
     };
   }
 
@@ -250,7 +257,8 @@
     }
 
     const isExternalMathControl = (target: EventTarget | null) =>
-      target instanceof Element && !!target.closest(".ML__keyboard, .ML__virtual-keyboard-toggle");
+      target instanceof Element &&
+      !!target.closest(".ML__keyboard, .ML__virtual-keyboard-toggle, [data-slot='select-content']");
     const releaseOnOutsidePointer = (event: PointerEvent) => {
       if (!currentQuestionId || !activeQuestionCard || !ownedLocks[currentQuestionId]) return;
       if (isExternalMathControl(event.target)) return;
