@@ -389,14 +389,58 @@ export async function downloadQuestionSet(set: Set) {
 
 async function answerCell(question: Item, fontSize: number) {
   const stack: PdfNode[] = [];
-  for (let index = 0; index < question.solutions.length; index++) {
-    const solution = question.solutions[index];
-    if (index) stack.push({ text: "OR", italics: true, margin: [0, 2, 0, 2] });
-    if (solution.type === "expression")
-      stack.push({ svg: await texToSvg(String(solution.value)), fit: [120, fontSize * 1.15] });
-    else stack.push({ text: String(solution.value) });
+  const groups = solutionGroups(question);
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+    const group = groups[groupIndex];
+    if (groupIndex) stack.push({ text: "AND", italics: true, margin: [0, 2, 0, 2] });
+    if (groups.length > 1 && group.length > 1) stack.push({ text: "(" });
+    for (let index = 0; index < group.length; index++) {
+      const solution = group[index];
+      if (index) stack.push({ text: "OR", italics: true, margin: [0, 2, 0, 2] });
+      if (solution.type === "expression")
+        stack.push({ svg: await texToSvg(String(solution.value)), fit: [120, fontSize * 1.15] });
+      else stack.push({ text: String(solution.value) });
+    }
+    if (groups.length > 1 && group.length > 1) stack.push({ text: ")" });
+  }
+  if (question.requireAllSolutionGroups && question.solutionOrderMatters) {
+    stack.push({
+      text: "Answer groups must be in order.",
+      italics: true,
+      fontSize: fontSize * 0.8,
+      margin: [0, 4, 0, 0]
+    });
   }
   return stack;
+}
+
+function solutionGroups(question: Item) {
+  if (!question.requireAllSolutionGroups) return [question.solutions];
+  const groups = new Map<number, Item["solutions"]>();
+  for (const solution of question.solutions) {
+    const group = solution.group ?? 0;
+    groups.set(group, [...(groups.get(group) || []), solution]);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a - b).map(([, solutions]) => solutions);
+}
+
+function previewAnswerLogic(question: Item) {
+  const groups = solutionGroups(question);
+  const html = groups
+    .map((group) => {
+      const alternatives = group
+        .map((solution) =>
+          solution.type === "expression"
+            ? renderMath(`$$${String(solution.value)}$$`)
+            : String(solution.value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        )
+        .join("<br><em>OR</em><br>");
+      return groups.length > 1 && group.length > 1 ? `(${alternatives})` : alternatives;
+    })
+    .join("<br><strong>AND</strong><br>");
+  return question.requireAllSolutionGroups && question.solutionOrderMatters
+    ? `${html}<br><small><em>Answer groups must be in order.</em></small>`
+    : html;
 }
 
 export async function downloadAnswerSet(set: Set) {
@@ -466,7 +510,7 @@ export function previewQuestionSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; } .slip-content math { font-size: 1em !important; vertical-align: middle; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
+    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; overflow-wrap: anywhere; word-break: break-word; white-space: normal; } .slip-content p, .slip-content li { overflow-wrap: anywhere; word-break: break-word; } .slip-content math { font-size: 1em !important; vertical-align: middle; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
     true
   );
 }
@@ -474,13 +518,7 @@ export function previewQuestionSet(set: Set) {
 export function previewAnswerSet(set: Set) {
   const rows = set.questions
     .map((question, index) => {
-      const answers = question.solutions
-        .map((solution) =>
-          solution.type === "expression"
-            ? renderMath(`$$${String(solution.value)}$$`)
-            : String(solution.value).replace(/[<>&]/g, "")
-        )
-        .join("<br><em>OR</em><br>");
+      const answers = previewAnswerLogic(question);
       return `<tr><td>${index + 1}</td><td>${answers}</td><td>${question.answerComment.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</td></tr>`;
     })
     .join("");
