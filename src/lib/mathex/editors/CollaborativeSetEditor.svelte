@@ -64,7 +64,7 @@
     answerComment: "",
     requireAllSolutionGroups: false,
     solutionOrderMatters: false,
-    skippable: false
+    skippable: true
   });
   const defaultPdfOptions = () => ({
     questionTextSize: 11,
@@ -267,7 +267,7 @@
       answerComment: typeof source.answerComment === "string" ? source.answerComment : "",
       requireAllSolutionGroups: source.requireAllSolutionGroups ?? false,
       solutionOrderMatters: source.solutionOrderMatters ?? false,
-      skippable: source.skippable ?? false
+      skippable: source.skippable ?? true
     };
   }
 
@@ -1152,7 +1152,7 @@
               {#if sessionToken && connected && sessionStatus === "active" && !currentLock && !hasOwnLock}
                 <button
                   type="button"
-                  class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[1.5px] transition-[backdrop-filter] duration-200 hover:backdrop-blur-[0.5px]"
+                  class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[1.5px] transition-[backdrop-filter] duration-200 hover:backdrop-blur-[0px]"
                   onclick={() => focusQuestion(currentQuestion!.id)}
                   disabled={acquiringQuestionId === currentQuestion.id}
                   aria-label="Acquire question lock to edit"

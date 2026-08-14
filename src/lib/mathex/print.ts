@@ -442,14 +442,14 @@ function solutionGroups(question: Item) {
 
 function markerCommentText(question: Item): string {
   const parts: string[] = [];
-  if (question.skippable) parts.push("Skippable");
+  if (!question.skippable) parts.push("Not skippable");
   if (question.answerComment) parts.push(question.answerComment);
   return parts.join("\n");
 }
 
 function markerCommentHtml(question: Item): string {
   const parts: string[] = [];
-  if (question.skippable) parts.push("<strong>Skippable</strong>");
+  if (!question.skippable) parts.push("<strong>Not skippable</strong>");
   if (question.answerComment) {
     parts.push(
       question.answerComment.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")

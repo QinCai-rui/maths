@@ -25,9 +25,9 @@
     const isAutoSkippable = trimmed === SKIPPABLE_MARKER;
     const isAutoNotSkippable = trimmed === NOT_SKIPPABLE_MARKER;
 
-    if (question.skippable && (isAutoNotSkippable || trimmed === "")) {
-      question.answerComment = SKIPPABLE_MARKER;
-    } else if (!question.skippable && isAutoSkippable) {
+    if (!question.skippable && (isAutoSkippable || trimmed === "")) {
+      question.answerComment = NOT_SKIPPABLE_MARKER;
+    } else if (question.skippable && isAutoNotSkippable) {
       question.answerComment = "";
     }
     previousSkippable = question.skippable;
@@ -77,8 +77,13 @@
   <Label for="allowEquiv" class="text-sm font-medium leading-none cursor-pointer">Allow equivalent expressions</Label>
 </div>
 <div class="flex items-center space-x-2 mt-3">
-  <Checkbox id="skippable" bind:checked={question.skippable} {disabled} />
-  <Label for="skippable" class="text-sm font-medium leading-none cursor-pointer">Skippable question</Label>
+  <Checkbox
+    id="unskippable"
+    checked={!question.skippable}
+    onCheckedChange={(checked) => (question.skippable = !checked)}
+    {disabled}
+  />
+  <Label for="unskippable" class="text-sm font-medium leading-none cursor-pointer">Unskippable question</Label>
 </div>
 <div class="mt-4 grid gap-1.5">
   <Label for="answer-comment">Marker comments</Label>

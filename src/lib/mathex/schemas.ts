@@ -141,7 +141,7 @@ export const Question = z.preprocess(
         answerComment: q.data.answerComment || "",
         requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
         solutionOrderMatters: q.data.solutionOrderMatters ?? false,
-        skippable: q.data.skippable ?? false
+        skippable: q.data.skippable ?? true
       };
     }
     return val;
@@ -153,7 +153,7 @@ export const Question = z.preprocess(
     answerComment: z.string().max(2000).default(""),
     requireAllSolutionGroups: z.boolean().default(false),
     solutionOrderMatters: z.boolean().default(false),
-    skippable: z.boolean().default(false)
+    skippable: z.boolean().default(true)
   })
 );
 

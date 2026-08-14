@@ -102,7 +102,7 @@
     answerGroups: [["text"]],
     requireAllSolutionGroups: false,
     solutionOrderMatters: false,
-    skippable: false
+    skippable: true
   });
   let startingTime: number | null = $state(null);
   let timePassed = $state(0);
@@ -127,20 +127,23 @@
   });
   let skipConfirmOpen = $state(false);
 
-  socket.on("newQuestion", (content, answerGroups, requireAllSolutionGroups, solutionOrderMatters, questionNumber, skippable) => {
-    answer = null;
-    answers = answerGroups.map(() => null);
-    answerFeedback = null;
-    currentQuestion = {
-      number: questionNumber,
-      content: DOMPurify.sanitize(content),
-      answerGroups,
-      requireAllSolutionGroups,
-      solutionOrderMatters,
-      skippable
-    };
-    running = false;
-  });
+  socket.on(
+    "newQuestion",
+    (content, answerGroups, requireAllSolutionGroups, solutionOrderMatters, questionNumber, skippable) => {
+      answer = null;
+      answers = answerGroups.map(() => null);
+      answerFeedback = null;
+      currentQuestion = {
+        number: questionNumber,
+        content: DOMPurify.sanitize(content),
+        answerGroups,
+        requireAllSolutionGroups,
+        solutionOrderMatters,
+        skippable
+      };
+      running = false;
+    }
+  );
   socket.on("running", (durationMs: number) => {
     answerFeedback = null;
     running = Date.now();
@@ -369,12 +372,7 @@
             >
           </form>
           {#if currentQuestion.skippable}
-            <Button
-              variant="outline"
-              class="mt-2 w-full gap-2"
-              size="lg"
-              onclick={confirmSkip}
-            >
+            <Button variant="outline" class="mt-2 w-full gap-2" size="lg" onclick={confirmSkip}>
               <CircleMinus class="h-4 w-4" /> Skip question
             </Button>
           {/if}

@@ -69,7 +69,7 @@ const emptyQuestion = (): DraftQuestionValue => ({
   answerComment: "",
   requireAllSolutionGroups: false,
   solutionOrderMatters: false,
-  skippable: false
+  skippable: true
 });
 
 export function registerCollaborativeSetServer(io: AnyServer): void {

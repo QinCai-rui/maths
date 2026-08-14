@@ -23,7 +23,7 @@ export const DraftQuestion = z.object({
   answerComment: z.string().max(2000).default(""),
   requireAllSolutionGroups: z.boolean().default(false),
   solutionOrderMatters: z.boolean().default(false),
-  skippable: z.boolean().default(false)
+  skippable: z.boolean().default(true)
 });
 
 export const CollaborativeQuestion = DraftQuestion.extend({ id: CollaborativeQuestionId });

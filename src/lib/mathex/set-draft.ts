@@ -20,7 +20,7 @@ function migrateQuestion(value: any): z.infer<typeof Question> {
     answerComment: source.answerComment || "",
     requireAllSolutionGroups: source.requireAllSolutionGroups ?? false,
     solutionOrderMatters: source.solutionOrderMatters ?? false,
-    skippable: source.skippable ?? false
+    skippable: source.skippable ?? true
   };
 }
 
