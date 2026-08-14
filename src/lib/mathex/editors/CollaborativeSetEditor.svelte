@@ -12,8 +12,7 @@
     CollaborativeSetClientToServerEvents,
     CollaborativeSetServerToClientEvents,
     CollaborativeSetSnapshot,
-    CollaborativeHistoryEntry,
-    CollaborativeHistoryTarget,
+    ApplyClientHistoryTarget,
     CollaboratorPresence,
     DraftQuestionValue,
     QuestionLock
@@ -43,7 +42,6 @@
     WifiOff,
     Undo2,
     Redo2,
-    History,
     X
   } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
@@ -112,21 +110,26 @@
   let lockHeartbeat: ReturnType<typeof setInterval> | null = null;
   let activeQuestionCard = $state.raw<HTMLElement | null>(null);
   let closingSocket = false;
-  let editorId = $state("");
-  let history = $state<CollaborativeHistoryEntry[]>([]);
-  let historyOpen = $state(false);
   let pendingDeleteQuestion = $state<CollaborativeQuestionValue | null>(null);
-  let localHistoryTimer: ReturnType<typeof setTimeout> | null = null;
+  let undoHistory = $state<
+    {
+      before: CollaborativeSetSnapshot;
+      after: CollaborativeSetSnapshot;
+      target: ApplyClientHistoryTarget;
+      summary: string;
+      status: "applied" | "undone";
+    }[]
+  >([]);
+  let historyTimer: ReturnType<typeof setTimeout> | null = null;
   let localBaseline: CollaborativeSetSnapshot | null = null;
+  let liveHistoryBaseline: CollaborativeSetSnapshot | null = null;
+  let liveHistoryPending = false;
+  let pendingLiveStructure = false;
   let applyingLocalHistory = false;
 
   let isHost = $derived(hostSession);
-  let canUndo = $derived(
-    history.some((entry) => entry.editorId === (sessionToken ? editorId : "local") && entry.status === "applied")
-  );
-  let canRedo = $derived(
-    history.some((entry) => entry.editorId === (sessionToken ? editorId : "local") && entry.status === "undone")
-  );
+  let canUndo = $derived(undoHistory.some((entry) => entry.status === "applied"));
+  let canRedo = $derived(undoHistory.some((entry) => entry.status === "undone"));
   let sessionUrl = $derived(
     sessionToken && typeof window !== "undefined"
       ? `${window.location.origin}/mathex/app/create/editor/${sessionToken}`
@@ -174,7 +177,7 @@
     if (added) {
       const index = after.questions.findIndex(({ id }) => id === added.id);
       return {
-        target: { type: "structure", action: "add", questionId: added.id } as CollaborativeHistoryTarget,
+        target: { type: "structure", action: "add", questionId: added.id } as ApplyClientHistoryTarget,
         summary: `Added question ${index + 1}`
       };
     }
@@ -182,14 +185,14 @@
     if (deleted) {
       const index = before.questions.findIndex(({ id }) => id === deleted.id);
       return {
-        target: { type: "structure", action: "delete", questionId: deleted.id } as CollaborativeHistoryTarget,
+        target: { type: "structure", action: "delete", questionId: deleted.id } as ApplyClientHistoryTarget,
         summary: `Deleted question ${index + 1}`
       };
     }
     if (!sameValue(beforeIds, afterIds)) {
       const questionId = afterIds.find((id, index) => beforeIds[index] !== id) || afterIds[0];
       return {
-        target: { type: "structure", action: "move", questionId } as CollaborativeHistoryTarget,
+        target: { type: "structure", action: "move", questionId } as ApplyClientHistoryTarget,
         summary: "Reordered questions"
       };
     }
@@ -197,30 +200,28 @@
     if (changedQuestion) {
       const index = after.questions.findIndex(({ id }) => id === changedQuestion.id);
       return {
-        target: { type: "question", questionId: changedQuestion.id } as CollaborativeHistoryTarget,
+        target: { type: "question", questionId: changedQuestion.id } as ApplyClientHistoryTarget,
         summary: `Edited question ${index + 1}`
       };
     }
-    return { target: { type: "details" } as CollaborativeHistoryTarget, summary: "Edited set details" };
+    return { target: { type: "details" } as ApplyClientHistoryTarget, summary: "Edited set details" };
   }
 
-  function flushLocalHistory() {
-    if (sessionToken || applyingLocalHistory || !localBaseline) return;
-    if (localHistoryTimer) clearTimeout(localHistoryTimer);
-    localHistoryTimer = null;
+  function flushHistory() {
+    const baseline = sessionToken ? liveHistoryBaseline : localBaseline;
+    if (applyingLocalHistory || !baseline) return;
+    if (historyTimer) clearTimeout(historyTimer);
+    historyTimer = null;
     const after = editorSnapshot();
-    if (sameValue(localBaseline, after)) return;
-    const before = localBaseline;
+    if (sameValue(baseline, after)) {
+      liveHistoryPending = false;
+      return;
+    }
+    const before = baseline;
     const change = localChange(before, after);
-    history = [
-      ...history.map((entry) =>
-        entry.editorId === "local" && entry.status === "undone" ? { ...entry, status: "invalidated" as const } : entry
-      ),
+    undoHistory = [
+      ...undoHistory.filter((entry) => entry.status !== "undone"),
       {
-        id: crypto.randomUUID(),
-        editorId: "local",
-        displayName: "You",
-        timestamp: Date.now(),
         summary: change.summary,
         before,
         after,
@@ -228,13 +229,17 @@
         status: "applied" as const
       }
     ].slice(-100);
-    localBaseline = structuredClone(after);
+    if (sessionToken) {
+      liveHistoryBaseline = structuredClone(after);
+      liveHistoryPending = false;
+    } else localBaseline = structuredClone(after);
   }
 
-  function scheduleLocalHistory() {
-    if (sessionToken || applyingLocalHistory || !localBaseline) return;
-    if (localHistoryTimer) clearTimeout(localHistoryTimer);
-    localHistoryTimer = setTimeout(flushLocalHistory, 1_000);
+  function scheduleHistory() {
+    if (applyingLocalHistory || (sessionToken ? !liveHistoryBaseline : !localBaseline)) return;
+    if (sessionToken) liveHistoryPending = true;
+    if (historyTimer) clearTimeout(historyTimer);
+    historyTimer = setTimeout(flushHistory, 1_000);
   }
 
   function applyLocalSnapshot(snapshot: CollaborativeSetSnapshot) {
@@ -309,6 +314,10 @@
       currentQuestionId = questions[0]?.id || null;
     }
     lastServerSettings = JSON.stringify({ setName, instructions, pdfOptions });
+    if (pendingLiveStructure) {
+      pendingLiveStructure = false;
+      scheduleHistory();
+    } else if (!liveHistoryPending) liveHistoryBaseline = structuredClone(editorSnapshot());
   }
 
   function joinSession(reconnecting = false) {
@@ -323,7 +332,6 @@
       {
         sessionToken,
         displayName: name,
-        editorId,
         hostToken: localStorage.getItem(`mathex-collab-host:${sessionToken}`) || undefined
       },
       (result) => {
@@ -342,20 +350,12 @@
         );
         joined = true;
         ready = true;
-        socket?.emit("getHistory", (historyResult) => {
-          if (historyResult.ok) history = historyResult.history;
-        });
         if (reconnecting) toast.success("Reconnected to the live editor");
       }
     );
   }
 
   onMount(() => {
-    if (sessionToken) {
-      const editorKey = `mathex-collab-editor:${sessionToken}`;
-      editorId = sessionStorage.getItem(editorKey) || crypto.randomUUID();
-      sessionStorage.setItem(editorKey, editorId);
-    }
     socket = io("/set-collaboration", {
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -377,7 +377,6 @@
     });
     socket.on("state", applyServerState);
     socket.on("presence", (next) => (collaborators = next));
-    socket.on("historyChanged", (next) => (history = next));
     socket.on("lockChanged", (questionId, lock) => {
       locks = lock
         ? [...locks.filter((item) => item.questionId !== questionId), lock]
@@ -389,6 +388,7 @@
       if (index < 0) return;
       questions[index] = question;
       lastQuestionSent.set(question.id, JSON.stringify(plainQuestion(question)));
+      if (!liveHistoryPending) liveHistoryBaseline = structuredClone(editorSnapshot());
     });
     socket.on("sessionDeleted", () => {
       deleted = true;
@@ -424,7 +424,7 @@
     return () => {
       closingSocket = true;
       if (lockHeartbeat) clearInterval(lockHeartbeat);
-      if (localHistoryTimer) clearTimeout(localHistoryTimer);
+      if (historyTimer) clearTimeout(historyTimer);
       window.removeEventListener("pointerdown", releaseOnOutsidePointer, true);
       for (const questionId of Object.keys(ownedLocks)) {
         if (ownedLocks[questionId]) {
@@ -443,12 +443,13 @@
       localSaved = false;
       if (localTimer) clearTimeout(localTimer);
       localTimer = setTimeout(saveLocalDraft, 500);
-      scheduleLocalHistory();
+      scheduleHistory();
       return;
     }
     if (!joined || !isHost) return;
     const settings = JSON.stringify({ setName, instructions, pdfOptions });
     if (settings === lastServerSettings) return;
+    scheduleHistory();
     if (settingsTimer) clearTimeout(settingsTimer);
     settingsTimer = setTimeout(() => {
       lastServerSettings = settings;
@@ -463,6 +464,7 @@
     const questionId = currentQuestion.id;
     const serialized = JSON.stringify(plainQuestion(currentQuestion));
     if (serialized === lastQuestionSent.get(questionId)) return;
+    scheduleHistory();
     const timer = questionTimers.get(questionId);
     if (timer) clearTimeout(timer);
     questionTimers.set(
@@ -496,6 +498,11 @@
 
   function handleOperation(result: { ok: true } | { ok: false; error: string }) {
     if (!result.ok) toast.error(result.error);
+  }
+
+  function handleStructuralOperation(result: { ok: true } | { ok: false; error: string }) {
+    if (!result.ok) pendingLiveStructure = false;
+    handleOperation(result);
   }
 
   function lockFor(questionId: string) {
@@ -542,7 +549,8 @@
   function addQuestion() {
     if (questions.length >= 100) return toast.error("A set can contain at most 100 questions");
     if (sessionToken) {
-      socket?.emit("addQuestion", { afterQuestionId: currentQuestionId }, handleOperation);
+      pendingLiveStructure = true;
+      socket?.emit("addQuestion", { afterQuestionId: currentQuestionId }, handleStructuralOperation);
       return;
     }
     const question = withId(emptyQuestion());
@@ -553,7 +561,8 @@
 
   function duplicateQuestion(question: CollaborativeQuestionValue) {
     if (sessionToken) {
-      socket?.emit("duplicateQuestion", { questionId: question.id }, handleOperation);
+      pendingLiveStructure = true;
+      socket?.emit("duplicateQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
     }
     const copy = { ...structuredClone(question), id: crypto.randomUUID() };
@@ -567,7 +576,8 @@
     const toIndex = index + direction;
     if (toIndex < 0 || toIndex >= questions.length) return;
     if (sessionToken) {
-      socket?.emit("moveQuestion", { questionId: question.id, toIndex }, handleOperation);
+      pendingLiveStructure = true;
+      socket?.emit("moveQuestion", { questionId: question.id, toIndex }, handleStructuralOperation);
       return;
     }
     questions.splice(index, 1);
@@ -583,7 +593,8 @@
     if (!question) return;
     pendingDeleteQuestion = null;
     if (sessionToken) {
-      socket?.emit("deleteQuestion", { questionId: question.id }, handleOperation);
+      pendingLiveStructure = true;
+      socket?.emit("deleteQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
     }
     const index = questions.findIndex(({ id }) => id === question.id);
@@ -593,99 +604,57 @@
   }
 
   function undo() {
-    if (sessionToken) {
-      if (currentQuestionId && ownedLocks[currentQuestionId]) releaseQuestion(currentQuestionId);
-      socket?.emit("undo", (result) => {
-        if (!result.ok) toast.error(result.error);
-      });
+    flushHistory();
+    const entry = [...undoHistory].reverse().find((candidate) => candidate.status === "applied");
+    if (!entry) return;
+    if (!sessionToken) {
+      applyLocalSnapshot(entry.before);
+      undoHistory = undoHistory.map((candidate) =>
+        candidate === entry ? { ...candidate, status: "undone" as const } : candidate
+      );
       return;
     }
-    flushLocalHistory();
-    const entry = [...history]
-      .reverse()
-      .find((candidate) => candidate.editorId === "local" && candidate.status === "applied");
-    if (!entry) return;
-    applyLocalSnapshot(entry.before);
-    history = history.map((candidate) =>
-      candidate.id === entry.id ? { ...candidate, status: "undone" as const } : candidate
+    if (entry.target.type === "question" && ownedLocks[entry.target.questionId])
+      releaseQuestion(entry.target.questionId);
+    socket?.emit(
+      "applyClientHistory",
+      { target: entry.target, expected: entry.after, desired: entry.before },
+      (result) => {
+        if (!result.ok) return toast.error(result.error);
+        undoHistory = undoHistory.map((candidate) =>
+          candidate === entry ? { ...candidate, status: "undone" as const } : candidate
+        );
+        liveHistoryBaseline = structuredClone(entry.before);
+        liveHistoryPending = false;
+      }
     );
   }
 
   function redo() {
-    if (sessionToken) {
-      if (currentQuestionId && ownedLocks[currentQuestionId]) releaseQuestion(currentQuestionId);
-      socket?.emit("redo", (result) => {
-        if (!result.ok) toast.error(result.error);
-      });
-      return;
-    }
-    flushLocalHistory();
-    const entry = history.find((candidate) => candidate.editorId === "local" && candidate.status === "undone");
+    flushHistory();
+    const entry = undoHistory.find((candidate) => candidate.status === "undone");
     if (!entry) return;
-    applyLocalSnapshot(entry.after);
-    history = history.map((candidate) =>
-      candidate.id === entry.id ? { ...candidate, status: "applied" as const } : candidate
-    );
-  }
-
-  function openHistory() {
-    if (!sessionToken) flushLocalHistory();
-    else {
-      socket?.emit("getHistory", (result) => {
-        if (result.ok) history = result.history;
-        else toast.error(result.error);
-      });
-    }
-    historyOpen = true;
-  }
-
-  function historyQuestion(entry: CollaborativeHistoryEntry) {
-    if (entry.target.type === "details") return null;
-    const questionId = entry.target.questionId;
-    return (
-      entry.after.questions.find(({ id }) => id === questionId) ||
-      entry.before.questions.find(({ id }) => id === questionId) ||
-      null
-    );
-  }
-
-  function restoreHistoryQuestion(entry: CollaborativeHistoryEntry) {
-    const question = historyQuestion(entry);
-    if (!question) return;
-    if (sessionToken) {
-      socket?.emit("restoreQuestion", { historyEntryId: entry.id, questionId: question.id }, handleOperation);
-      return;
-    }
-    flushLocalHistory();
-    const currentIndex = questions.findIndex(({ id }) => id === question.id);
-    if (currentIndex >= 0) questions[currentIndex] = structuredClone(question);
-    else {
-      const historicalIndex = Math.max(
-        entry.after.questions.findIndex(({ id }) => id === question.id),
-        entry.before.questions.findIndex(({ id }) => id === question.id)
+    if (!sessionToken) {
+      applyLocalSnapshot(entry.after);
+      undoHistory = undoHistory.map((candidate) =>
+        candidate === entry ? { ...candidate, status: "applied" as const } : candidate
       );
-      questions.splice(Math.min(Math.max(historicalIndex, 0), questions.length), 0, structuredClone(question));
-    }
-    currentQuestionId = question.id;
-    flushLocalHistory();
-    toast.success("Question restored from history");
-  }
-
-  function restoreHistoryDetails(entry: CollaborativeHistoryEntry) {
-    if (sessionToken) {
-      socket?.emit("restoreDetails", { historyEntryId: entry.id }, handleOperation);
       return;
     }
-    flushLocalHistory();
-    setName = entry.after.name;
-    instructions = entry.after.instructions;
-    pdfOptions = structuredClone(entry.after.pdfOptions);
-    flushLocalHistory();
-    toast.success("Set details restored from history");
-  }
-
-  function formatHistoryTime(timestamp: number) {
-    return new Date(timestamp).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+    if (entry.target.type === "question" && ownedLocks[entry.target.questionId])
+      releaseQuestion(entry.target.questionId);
+    socket?.emit(
+      "applyClientHistory",
+      { target: entry.target, expected: entry.before, desired: entry.after },
+      (result) => {
+        if (!result.ok) return toast.error(result.error);
+        undoHistory = undoHistory.map((candidate) =>
+          candidate === entry ? { ...candidate, status: "applied" as const } : candidate
+        );
+        liveHistoryBaseline = structuredClone(entry.after);
+        liveHistoryPending = false;
+      }
+    );
   }
 
   function createSession() {
@@ -952,7 +921,6 @@
         >
           <Redo2 /> Redo
         </button>
-        <button class="toolbar-button" onclick={openHistory}><History /> History</button>
         <span class="ml-auto text-xs text-muted-foreground">{questions.length}/100 questions</span>
       </div>
     </header>
@@ -1265,74 +1233,11 @@
         Delete question {questions.findIndex(({ id }) => id === pendingDeleteQuestion?.id) + 1}?
       </h2>
       <p class="mt-2 text-sm text-muted-foreground">
-        “{questionPreview(pendingDeleteQuestion)}” will be removed from this set. You can recover it from history.
+        “{questionPreview(pendingDeleteQuestion)}” will be removed from this set.
       </p>
       <div class="mt-6 flex justify-end gap-2">
         <Button variant="outline" onclick={() => (pendingDeleteQuestion = null)}>Cancel</Button>
         <Button variant="destructive" onclick={confirmDeleteQuestion}>Delete question</Button>
-      </div>
-    </div>
-  </div>
-{/if}
-
-{#if historyOpen}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
-    role="presentation"
-    onclick={(event) => event.target === event.currentTarget && (historyOpen = false)}
-  >
-    <div
-      class="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl"
-    >
-      <div class="flex items-start justify-between border-b p-5">
-        <div>
-          <h2 class="text-xl font-semibold">Version history</h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            The latest 100 pause-grouped changes. Restore questions or set details independently.
-          </p>
-        </div>
-        <button class="rounded-lg p-2 hover:bg-accent" onclick={() => (historyOpen = false)} aria-label="Close history"
-          ><X class="size-4" /></button
-        >
-      </div>
-      <div class="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
-        {#each [...history].reverse() as entry (entry.id)}
-          {@const historicalQuestion = historyQuestion(entry)}
-          <article class="mb-2 rounded-xl border p-4 {entry.status === 'undone' ? 'opacity-60' : ''}">
-            <div class="flex flex-wrap items-start gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <p class="text-sm font-semibold">{entry.summary}</p>
-                  {#if entry.status !== "applied"}<span
-                      class="rounded-full bg-muted px-2 py-0.5 text-[0.65rem] uppercase text-muted-foreground"
-                      >{entry.status}</span
-                    >{/if}
-                </div>
-                <p class="mt-1 text-xs text-muted-foreground">
-                  {formatHistoryTime(entry.timestamp)} · {entry.displayName}
-                </p>
-                {#if historicalQuestion}<p class="mt-2 truncate text-xs text-muted-foreground">
-                    {questionPreview(historicalQuestion)}
-                  </p>{/if}
-              </div>
-              {#if !sessionToken || isHost}
-                {#if entry.target.type === "details"}
-                  <Button variant="outline" size="sm" onclick={() => restoreHistoryDetails(entry)}
-                    >Restore set details</Button
-                  >
-                {:else if historicalQuestion}
-                  <Button variant="outline" size="sm" onclick={() => restoreHistoryQuestion(entry)}
-                    >Restore question</Button
-                  >
-                {/if}
-              {/if}
-            </div>
-          </article>
-        {:else}
-          <div class="py-16 text-center text-sm text-muted-foreground">
-            No history entries yet. Changes appear after a short pause.
-          </div>
-        {/each}
       </div>
     </div>
   </div>
