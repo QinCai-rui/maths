@@ -490,7 +490,7 @@ function matchesSolution(
   question: z.infer<typeof Question>
 ) {
   if (solution.type === "number") return Number(guess) === solution.value;
-  if (solution.type === "text") return String(guess).trim() === solution.value;
+  if (solution.type === "text") return String(guess).trim().toLowerCase() === solution.value.trim().toLowerCase();
   if (!question.allowEquivalent) return String(guess).trim() === solution.value;
   try {
     return math.symbolicEqual(math.parse(solution.value), math.parse(String(guess)));
