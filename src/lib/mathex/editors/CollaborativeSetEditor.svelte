@@ -58,7 +58,8 @@
     allowEquivalent: true,
     answerComment: "",
     requireAllSolutionGroups: false,
-    solutionOrderMatters: false
+    solutionOrderMatters: false,
+    skippable: false
   });
   const defaultPdfOptions = () => ({
     questionTextSize: 11,
@@ -86,6 +87,7 @@
   let joined = $state(false);
   let joining = $state(false);
   let connected = $state(false);
+  let hostSession = $state(false);
   let deleted = $state(false);
   let sessionStatus = $state<"active" | "ended">("active");
   let displayName = $state("");
@@ -106,10 +108,7 @@
   let activeQuestionCard = $state.raw<HTMLElement | null>(null);
   let closingSocket = false;
 
-  let isHost = $derived(
-    !!socket?.id &&
-      collaborators.some((collaborator) => collaborator.connectionId === socket?.id && collaborator.isHost)
-  );
+  let isHost = $derived(hostSession);
   let sessionUrl = $derived(
     sessionToken && typeof window !== "undefined"
       ? `${window.location.origin}/mathex/app/create/editor/${sessionToken}`
@@ -127,7 +126,8 @@
       allowEquivalent: question.allowEquivalent,
       answerComment: question.answerComment,
       requireAllSolutionGroups: question.requireAllSolutionGroups,
-      solutionOrderMatters: question.solutionOrderMatters
+      solutionOrderMatters: question.solutionOrderMatters,
+      skippable: question.skippable
     };
   }
 
@@ -151,7 +151,8 @@
       allowEquivalent: source.allowEquivalent ?? true,
       answerComment: typeof source.answerComment === "string" ? source.answerComment : "",
       requireAllSolutionGroups: source.requireAllSolutionGroups ?? false,
-      solutionOrderMatters: source.solutionOrderMatters ?? false
+      solutionOrderMatters: source.solutionOrderMatters ?? false,
+      skippable: source.skippable ?? false
     };
   }
 
@@ -220,6 +221,9 @@
         applyServerState(result.state.set);
         collaborators = result.state.collaborators;
         locks = result.state.locks;
+        hostSession = result.state.collaborators.some(
+          (collaborator) => collaborator.connectionId === socket?.id && collaborator.isHost
+        );
         joined = true;
         ready = true;
         if (reconnecting) toast.success("Reconnected to the live editor");

@@ -143,7 +143,8 @@ export const createWSServer = (base: ServerInstance) => {
           answerGroups(firstQuestion),
           firstQuestion.requireAllSolutionGroups,
           firstQuestion.solutionOrderMatters,
-          1
+          1,
+          firstQuestion.skippable
         );
       }
       saveRoom(room);
@@ -194,7 +195,8 @@ export const createWSServer = (base: ServerInstance) => {
       isRunning: false,
       runningUntil: null,
       awaySince: null,
-      visibilityFlags: 0
+      visibilityFlags: 0,
+      skips: 0
     };
     socket.on("join", async (name, playerId) => {
       const playerName = name.trim();
@@ -239,7 +241,8 @@ export const createWSServer = (base: ServerInstance) => {
           answerGroups(question),
           question.requireAllSolutionGroups,
           question.solutionOrderMatters,
-          socket.data.currentQuestion
+          socket.data.currentQuestion,
+          question.skippable
         );
         if (socket.data.runningUntil && socket.data.runningUntil > Date.now()) {
           socket.emit("running", socket.data.runningUntil - Date.now());
@@ -313,7 +316,8 @@ export const createWSServer = (base: ServerInstance) => {
                 answerGroups(nextQuestion),
                 nextQuestion.requireAllSolutionGroups,
                 nextQuestion.solutionOrderMatters,
-                socket.data.currentQuestion
+                socket.data.currentQuestion,
+                nextQuestion.skippable
               );
             }
             io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
@@ -336,6 +340,57 @@ export const createWSServer = (base: ServerInstance) => {
           saveRoom(room);
         }, 900);
       }, room.runningTimeMs);
+    });
+    socket.on("skip", () => {
+      if (!socket.data.name || room.state !== "started" || socket.data.isRunning) return;
+      if (socket.data.currentQuestion > room.questions.length) return;
+
+      const currentQuestion = room.questions[socket.data.currentQuestion - 1];
+      if (!currentQuestion.skippable) return;
+
+      socket.data.skips++;
+
+      const skipLog: LogEntry = {
+        timestamp: Date.now(),
+        playerName: socket.data.name,
+        type: "skipped",
+        questionNumber: socket.data.currentQuestion
+      };
+      room.logs.push(skipLog);
+      saveRoom(room);
+      roomManageNamespace.emit("log", skipLog);
+
+      if (socket.data.currentQuestion >= room.questions.length) {
+        socket.data.finishingTime = Date.now();
+        socket.emit("gameFinish");
+        socket.nsp.emit("leaderboard", buildLeaderboard(room));
+        roomManageNamespace.emit("alert", "info", `${socket.data.name} has finished (skipped last question)`);
+        const finishLog: LogEntry = {
+          timestamp: Date.now(),
+          playerName: socket.data.name,
+          type: "finished",
+          questionNumber: socket.data.currentQuestion
+        };
+        room.logs.push(finishLog);
+        saveRoom(room);
+        roomManageNamespace.emit("log", finishLog);
+        roomManageNamespace.emit("leaderboard", buildLeaderboard(room));
+      } else {
+        socket.data.currentQuestion++;
+        saveRoom(room);
+        socket.emit("alert", "info", "Question skipped");
+        const nextQuestion = room.questions[socket.data.currentQuestion - 1];
+        socket.emit(
+          "newQuestion",
+          nextQuestion.contents,
+          answerGroups(nextQuestion),
+          nextQuestion.requireAllSolutionGroups,
+          nextQuestion.solutionOrderMatters,
+          socket.data.currentQuestion,
+          nextQuestion.skippable
+        );
+      }
+      io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
     });
     socket.on("visibilityChange", async (hidden) => {
       if (!room.visibilityTracking || room.state !== "started" || !socket.data.name) return;
@@ -402,7 +457,8 @@ export const createWSServer = (base: ServerInstance) => {
         totalMs,
         questionsCompleted: d.currentQuestion - (d.finishingTime ? 0 : 1),
         totalQuestions: room.questions.length,
-        visibilityFlags: d.visibilityFlags
+        visibilityFlags: d.visibilityFlags,
+        skips: d.skips
       });
     }
     entries.sort((a, b) => {

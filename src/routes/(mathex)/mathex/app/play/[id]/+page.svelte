@@ -16,6 +16,7 @@
   import { Header } from "$lib/components/ui/header";
   import { Label } from "$lib/components/ui/label";
   import { Progress } from "$lib/components/ui/progress";
+  import * as AlertDialog from "$lib/components/ui/alert-dialog";
 
   import NumberAnswer from "$lib/mathex/answers/NumberAnswer.svelte";
   import TextAnswer from "$lib/mathex/answers/TextAnswer.svelte";
@@ -26,6 +27,7 @@
   import CircleX from "@lucide/svelte/icons/circle-x";
   import Flag from "@lucide/svelte/icons/flag";
   import Timer from "@lucide/svelte/icons/timer";
+  import CircleMinus from "@lucide/svelte/icons/circle-minus";
 
   import { Confetti } from "svelte-confetti";
   let confetti = $state(false);
@@ -93,12 +95,14 @@
     answerGroups: z.infer<typeof Question>["solutions"][number]["type"][][];
     requireAllSolutionGroups: boolean;
     solutionOrderMatters: boolean;
+    skippable: boolean;
   } = $state({
     number: 0,
     content: "<p>Loading...</p>",
     answerGroups: [["text"]],
     requireAllSolutionGroups: false,
-    solutionOrderMatters: false
+    solutionOrderMatters: false,
+    skippable: false
   });
   let startingTime: number | null = $state(null);
   let timePassed = $state(0);
@@ -121,7 +125,9 @@
     confetti = true;
     setTimeout(() => (confetti = false), 6000);
   });
-  socket.on("newQuestion", (content, answerGroups, requireAllSolutionGroups, solutionOrderMatters, questionNumber) => {
+  let skipConfirmOpen = $state(false);
+
+  socket.on("newQuestion", (content, answerGroups, requireAllSolutionGroups, solutionOrderMatters, questionNumber, skippable) => {
     answer = null;
     answers = answerGroups.map(() => null);
     answerFeedback = null;
@@ -130,7 +136,8 @@
       content: DOMPurify.sanitize(content),
       answerGroups,
       requireAllSolutionGroups,
-      solutionOrderMatters
+      solutionOrderMatters,
+      skippable
     };
     running = false;
   });
@@ -164,6 +171,15 @@
     playerId = createId();
     socket.emit("join", name, playerId);
   }
+
+  function confirmSkip() {
+    skipConfirmOpen = true;
+  }
+
+  function executeSkip() {
+    skipConfirmOpen = false;
+    socket.emit("skip");
+  }
 </script>
 
 {#if confetti}
@@ -171,6 +187,21 @@
     <Confetti x={[-5, 5]} y={[0, 0.1]} delay={[500, 2000]} infinite duration={4000} amount={400} fallDistance="100vh" />
   </div>
 {/if}
+
+<AlertDialog.Root bind:open={skipConfirmOpen}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Skip this question?</AlertDialog.Title>
+      <AlertDialog.Description>
+        You cannot undo this action. The question will be marked as skipped and you will move to the next one.
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Action onclick={executeSkip}>Skip question</AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
 
 <div class="mathex-shell min-h-screen p-4 sm:p-6">
   {#if gameState === "connecting"}
@@ -337,6 +368,16 @@
                 : answer === null || answer === ""}>Lock in answer</Button
             >
           </form>
+          {#if currentQuestion.skippable}
+            <Button
+              variant="outline"
+              class="mt-2 w-full gap-2"
+              size="lg"
+              onclick={confirmSkip}
+            >
+              <CircleMinus class="h-4 w-4" /> Skip question
+            </Button>
+          {/if}
         </div>
       {/if}
     </div>

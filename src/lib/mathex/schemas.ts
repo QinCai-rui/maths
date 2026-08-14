@@ -21,7 +21,8 @@ export interface RoomServerToClientEvents {
     answerGroups: SolutionType[][],
     requireAllSolutionGroups: boolean,
     solutionOrderMatters: boolean,
-    questionNumber: number
+    questionNumber: number,
+    skippable: boolean
   ) => void;
   confetti: () => void;
   questionCount: (data: number) => void;
@@ -32,6 +33,7 @@ export interface RoomServerToClientEvents {
 export interface RoomClientToServerEvents {
   join: (name: string, playerId: string) => void;
   answer: (value: string | number | (string | number)[]) => void;
+  skip: () => void;
   visibilityChange: (hidden: boolean) => void;
 }
 
@@ -48,6 +50,7 @@ export interface RoomSocketData {
   runningUntil: number | null;
   awaySince: number | null;
   visibilityFlags: number;
+  skips: number;
 }
 
 export type LogVerbosity = "all" | "submissions" | "finished";
@@ -55,7 +58,7 @@ export type LogVerbosity = "all" | "submissions" | "finished";
 export interface LogEntry {
   timestamp: number;
   playerName: string;
-  type: "submitted" | "running" | "correct" | "wrong" | "finished" | "visibility";
+  type: "submitted" | "running" | "correct" | "wrong" | "finished" | "visibility" | "skipped";
   questionNumber: number;
   detail?: string;
 }
@@ -67,6 +70,7 @@ export interface LeaderboardEntry {
   questionsCompleted: number;
   totalQuestions: number;
   visibilityFlags: number;
+  skips: number;
 }
 
 export interface RoomCreateClientToServerEvents {
@@ -136,7 +140,8 @@ export const Question = z.preprocess(
         allowEquivalent: q.data.allowEquivalent ?? true,
         answerComment: q.data.answerComment || "",
         requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
-        solutionOrderMatters: q.data.solutionOrderMatters ?? false
+        solutionOrderMatters: q.data.solutionOrderMatters ?? false,
+        skippable: q.data.skippable ?? false
       };
     }
     return val;
@@ -147,7 +152,8 @@ export const Question = z.preprocess(
     allowEquivalent: z.boolean(),
     answerComment: z.string().max(2000).default(""),
     requireAllSolutionGroups: z.boolean().default(false),
-    solutionOrderMatters: z.boolean().default(false)
+    solutionOrderMatters: z.boolean().default(false),
+    skippable: z.boolean().default(false)
   })
 );
 

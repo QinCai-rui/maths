@@ -75,7 +75,7 @@
     if (!showLogs) return [];
     if (verbosity === "all") return logs;
     if (verbosity === "submissions")
-      return logs.filter((l) => l.type === "submitted" || l.type === "correct" || l.type === "wrong");
+      return logs.filter((l) => l.type === "submitted" || l.type === "correct" || l.type === "wrong" || l.type === "skipped");
     if (verbosity === "finished")
       return logs.filter(
         (l) => l.type === "finished" || l.type === "correct" || l.type === "wrong" || l.type === "visibility"
@@ -349,9 +349,11 @@
                     ? 'text-emerald-600 dark:text-emerald-400'
                     : log.type === 'wrong'
                       ? 'text-red-600 dark:text-red-400'
-                      : log.type === 'finished'
-                        ? 'text-yellow-600 dark:text-yellow-400 font-bold'
-                        : 'text-muted-foreground'}"
+                      : log.type === 'skipped'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : log.type === 'finished'
+                          ? 'text-yellow-600 dark:text-yellow-400 font-bold'
+                          : 'text-muted-foreground'}"
                 >
                   <span class="shrink-0 text-muted-foreground/60">{new Date(log.timestamp).toLocaleTimeString()}</span>
                   <span class="shrink-0 font-semibold">{log.playerName}</span>
@@ -362,6 +364,8 @@
                       Q{log.questionNumber} correct
                     {:else if log.type === "wrong"}
                       Q{log.questionNumber} wrong{verbosity === "all" ? ` (${log.detail})` : ""}
+                    {:else if log.type === "skipped"}
+                      skipped Q{log.questionNumber}
                     {:else if log.type === "finished"}
                       finished all questions
                     {:else if log.type === "visibility"}

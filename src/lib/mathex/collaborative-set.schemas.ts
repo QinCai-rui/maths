@@ -20,7 +20,8 @@ export const DraftQuestion = z.object({
   allowEquivalent: z.boolean(),
   answerComment: z.string().max(2000).default(""),
   requireAllSolutionGroups: z.boolean().default(false),
-  solutionOrderMatters: z.boolean().default(false)
+  solutionOrderMatters: z.boolean().default(false),
+  skippable: z.boolean().default(false)
 });
 
 export const CollaborativeQuestion = DraftQuestion.extend({ id: CollaborativeQuestionId });

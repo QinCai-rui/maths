@@ -50,7 +50,8 @@ const emptyQuestion = (): DraftQuestionValue => ({
   allowEquivalent: true,
   answerComment: "",
   requireAllSolutionGroups: false,
-  solutionOrderMatters: false
+  solutionOrderMatters: false,
+  skippable: false
 });
 
 export function registerCollaborativeSetServer(io: AnyServer): void {

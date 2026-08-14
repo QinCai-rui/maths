@@ -14,6 +14,31 @@
   }
 
   let { question = $bindable(), disabled = false }: Props = $props();
+
+  const SKIPPABLE_MARKER = "[Skippable]";
+  const NOT_SKIPPABLE_MARKER = "[Not skippable]";
+
+  let previousSkippable: boolean = $state(question.skippable);
+
+  function syncSkippableMarker() {
+    const trimmed = question.answerComment.trim();
+    const isAutoSkippable = trimmed === SKIPPABLE_MARKER;
+    const isAutoNotSkippable = trimmed === NOT_SKIPPABLE_MARKER;
+
+    if (question.skippable && (isAutoNotSkippable || trimmed === "")) {
+      question.answerComment = SKIPPABLE_MARKER;
+    } else if (!question.skippable && isAutoSkippable) {
+      question.answerComment = "";
+    }
+    previousSkippable = question.skippable;
+  }
+
+  $effect(() => {
+    const current = question.skippable;
+    if (current !== previousSkippable) {
+      syncSkippableMarker();
+    }
+  });
 </script>
 
 <div class="grid w-full gap-1.5">
@@ -50,6 +75,10 @@
 <div class="flex items-center space-x-2 mt-3">
   <Checkbox id="allowEquiv" bind:checked={question.allowEquivalent} {disabled} />
   <Label for="allowEquiv" class="text-sm font-medium leading-none cursor-pointer">Allow equivalent expressions</Label>
+</div>
+<div class="flex items-center space-x-2 mt-3">
+  <Checkbox id="skippable" bind:checked={question.skippable} {disabled} />
+  <Label for="skippable" class="text-sm font-medium leading-none cursor-pointer">Skippable question</Label>
 </div>
 <div class="mt-4 grid gap-1.5">
   <Label for="answer-comment">Marker comments</Label>

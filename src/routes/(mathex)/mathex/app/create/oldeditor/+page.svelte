@@ -69,7 +69,8 @@
         allowEquivalent: q.data.allowEquivalent ?? true,
         answerComment: q.data.answerComment || "",
         requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
-        solutionOrderMatters: q.data.solutionOrderMatters ?? false
+        solutionOrderMatters: q.data.solutionOrderMatters ?? false,
+        skippable: q.data.skippable ?? false
       };
     }
     // New format: { contents, solutions, allowEquivalent }
@@ -80,7 +81,8 @@
         allowEquivalent: q.data.allowEquivalent ?? true,
         answerComment: q.data.answerComment || "",
         requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
-        solutionOrderMatters: q.data.solutionOrderMatters ?? false
+        solutionOrderMatters: q.data.solutionOrderMatters ?? false,
+        skippable: q.data.skippable ?? false
       };
     }
     return {
@@ -89,7 +91,8 @@
       allowEquivalent: q.allowEquivalent ?? true,
       answerComment: q.answerComment || "",
       requireAllSolutionGroups: q.requireAllSolutionGroups ?? false,
-      solutionOrderMatters: q.solutionOrderMatters ?? false
+      solutionOrderMatters: q.solutionOrderMatters ?? false,
+      skippable: q.skippable ?? false
     };
   }
 
@@ -180,7 +183,8 @@
         allowEquivalent: true,
         answerComment: "",
         requireAllSolutionGroups: false,
-        solutionOrderMatters: false
+        solutionOrderMatters: false,
+        skippable: false
       }
     ];
     currentQuestionIdx = questions.length - 1;

@@ -440,6 +440,24 @@ function solutionGroups(question: Item) {
   return [...groups.entries()].sort(([a], [b]) => a - b).map(([, solutions]) => solutions);
 }
 
+function markerCommentText(question: Item): string {
+  const parts: string[] = [];
+  if (question.skippable) parts.push("Skippable");
+  if (question.answerComment) parts.push(question.answerComment);
+  return parts.join("\n");
+}
+
+function markerCommentHtml(question: Item): string {
+  const parts: string[] = [];
+  if (question.skippable) parts.push("<strong>Skippable</strong>");
+  if (question.answerComment) {
+    parts.push(
+      question.answerComment.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")
+    );
+  }
+  return parts.join("<br>");
+}
+
 function previewAnswerLogic(question: Item) {
   const groups = solutionGroups(question);
   const html = groups
@@ -475,7 +493,7 @@ export async function downloadAnswerSet(set: Set) {
     rows.push([
       { text: String(index + 1) },
       { stack: await answerCell(set.questions[index], set.pdfOptions.answerTextSize) },
-      { text: set.questions[index].answerComment }
+      { text: markerCommentText(set.questions[index]) }
     ]);
   }
   await pdfMake
@@ -538,7 +556,7 @@ export function previewAnswerSet(set: Set) {
   const rows = set.questions
     .map((question, index) => {
       const answers = previewAnswerLogic(question);
-      return `<tr><td>${index + 1}</td><td>${answers}</td><td>${question.answerComment.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</td></tr>`;
+      return `<tr><td>${index + 1}</td><td>${answers}</td><td>${markerCommentHtml(question)}</td></tr>`;
     })
     .join("");
   return openPrintDocument(

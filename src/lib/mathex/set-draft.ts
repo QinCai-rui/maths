@@ -19,7 +19,8 @@ function migrateQuestion(value: any): z.infer<typeof Question> {
     allowEquivalent: source.allowEquivalent ?? true,
     answerComment: source.answerComment || "",
     requireAllSolutionGroups: source.requireAllSolutionGroups ?? false,
-    solutionOrderMatters: source.solutionOrderMatters ?? false
+    solutionOrderMatters: source.solutionOrderMatters ?? false,
+    skippable: source.skippable ?? false
   };
 }
 
@@ -73,6 +74,9 @@ export function questionSetDifferences(
     }
     if (localQuestion.solutionOrderMatters !== sharedQuestion.solutionOrderMatters) {
       differences.push(`Question ${index + 1}: answer-order setting`);
+    }
+    if (localQuestion.skippable !== sharedQuestion.skippable) {
+      differences.push(`Question ${index + 1}: skippable setting`);
     }
   }
   return differences;
