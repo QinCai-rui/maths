@@ -46,7 +46,7 @@
 </svelte:head>
 
 <Toaster />
-<ModeWatcher />
+<ModeWatcher defaultMode="light" />
 <DisclaimerDialog />
 
 <div class="min-h-screen flex flex-col">
@@ -131,8 +131,15 @@
     <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
         <div class="flex flex-col items-center gap-1 sm:items-start">
-          <p class="text-sm font-medium text-foreground">Made with ♥ by <a href="https://qincai.xyz" class="underline-offset-4 hover:underline">Raymont</a> to celebrate Maths Week.</p>
-          <p class="text-sm text-muted-foreground">Originally made by <a href="https://devarsh.me" class="font-medium underline-offset-4 hover:underline">Devarsh</a> as a side project in Room 22 @ BBI.</p>
+          <p class="text-sm font-medium text-foreground">
+            Made with ♥ by <a href="https://qincai.xyz" class="underline-offset-4 hover:underline">Raymont</a> to celebrate
+            Maths Week.
+          </p>
+          <p class="text-sm text-muted-foreground">
+            Originally made by <a href="https://devarsh.me" class="font-medium underline-offset-4 hover:underline"
+              >Devarsh</a
+            > as a side project in Room 22 @ BBI.
+          </p>
         </div>
         <div class="flex items-center gap-4">
           <a

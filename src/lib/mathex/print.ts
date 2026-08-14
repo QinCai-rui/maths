@@ -45,7 +45,7 @@ async function texToSvg(tex: string) {
     };
   })();
   const document = await mathDocument;
-  const wrapper = document.outerHTML(document.convert(tex, { display: true }));
+  const wrapper = document.outerHTML(document.convert(tex, { display: false }));
   const start = wrapper.indexOf("<svg");
   const end = wrapper.lastIndexOf("</svg>");
   if (start < 0 || end < 0) throw new Error(`Could not render equation: ${tex}`);
@@ -117,7 +117,7 @@ async function paragraphNodes(element: HTMLElement, imageHeight: number): Promis
   return pieces;
 }
 
-async function htmlToPdf(html: string, imageHeight: number): Promise<PdfNode[]> {
+async function htmlToPdf(html: string, imageHeight: number, mathHeight: number): Promise<PdfNode[]> {
   const source = new DOMParser().parseFromString(html || "", "text/html");
   const output: PdfNode[] = [];
   for (const node of source.body.childNodes) {
@@ -161,21 +161,22 @@ async function htmlToPdf(html: string, imageHeight: number): Promise<PdfNode[]> 
     output.push(...(await paragraphNodes(node, imageHeight)));
   }
 
-  return convertMathNodes(output);
+  return convertMathNodes(output, mathHeight);
 }
 
-async function convertMathNodes(nodes: PdfNode[]): Promise<PdfNode[]> {
+async function convertMathNodes(nodes: PdfNode[], mathHeight: number): Promise<PdfNode[]> {
   const converted: PdfNode[] = [];
   for (const item of nodes) {
     for (const property of ["stack", "ol", "ul"] as const) {
-      if (Array.isArray(item[property])) item[property] = await convertMathNodes(item[property] as PdfNode[]);
+      if (Array.isArray(item[property]))
+        item[property] = await convertMathNodes(item[property] as PdfNode[], mathHeight);
     }
     if ("table" in item) {
       const table = item.table as { body?: PdfNode[][] };
       if (table.body) {
         for (const row of table.body) {
           for (const cell of row) {
-            if (Array.isArray(cell.stack)) cell.stack = await convertMathNodes(cell.stack as PdfNode[]);
+            if (Array.isArray(cell.stack)) cell.stack = await convertMathNodes(cell.stack as PdfNode[], mathHeight);
           }
         }
       }
@@ -191,14 +192,16 @@ async function convertMathNodes(nodes: PdfNode[]): Promise<PdfNode[]> {
       continue;
     }
     let offset = 0;
+    const columns: PdfNode[] = [];
     for (const match of matches) {
       const before = plain.slice(offset, match.index);
-      if (before.trim()) converted.push({ text: before, margin: [0, 0, 0, 3] });
-      converted.push({ svg: await texToSvg(match[1]), fit: [440, 42], alignment: "center", margin: [0, 1, 0, 3] });
+      if (before) columns.push({ text: before, width: "auto" });
+      columns.push({ svg: await texToSvg(match[1]), fit: [160, mathHeight * 1.15], width: "auto" });
       offset = (match.index || 0) + match[0].length;
     }
     const after = plain.slice(offset);
-    if (after.trim()) converted.push({ text: after, margin: [0, 0, 0, 3] });
+    if (after) columns.push({ text: after, width: "auto" });
+    converted.push({ columns, columnGap: 1, margin: [0, 0, 0, 3] });
   }
   return converted;
 }
@@ -208,6 +211,8 @@ function estimateHeight(nodes: PdfNode[], fontSize: number) {
   for (const node of nodes) {
     if ("image" in node) height += ((node.fit as number[])?.[1] || 50) + 4;
     else if ("svg" in node) height += ((node.fit as number[])?.[1] || 42) + 4;
+    else if (Array.isArray(node.columns))
+      height += Math.max(...(node.columns as PdfNode[]).map((column) => estimateHeight([column], fontSize)));
     else if (Array.isArray(node.stack)) height += estimateHeight(node.stack as PdfNode[], fontSize);
     else if (Array.isArray(node.ol)) height += estimateHeight(node.ol as PdfNode[], fontSize);
     else if (Array.isArray(node.ul)) height += estimateHeight(node.ul as PdfNode[], fontSize);
@@ -250,7 +255,7 @@ async function fittedSlip(
   slipHeight: number
 ) {
   let currentImageHeight = imageHeight;
-  const nodes = await htmlToPdf(html, currentImageHeight);
+  const nodes = await htmlToPdf(html, currentImageHeight, configuredSize);
   let size = configuredSize;
   while (estimateHeight(nodes, size) > availableHeight && size > 6) size -= 0.5;
   while (estimateHeight(nodes, size) > availableHeight && currentImageHeight > 5) {
@@ -373,12 +378,13 @@ export async function downloadQuestionSet(set: Set) {
     .download(escapeFilename(set.name, "questions"));
 }
 
-async function answerCell(question: Item) {
+async function answerCell(question: Item, fontSize: number) {
   const stack: PdfNode[] = [];
   for (let index = 0; index < question.solutions.length; index++) {
     const solution = question.solutions[index];
     if (index) stack.push({ text: "OR", italics: true, margin: [0, 2, 0, 2] });
-    if (solution.type === "expression") stack.push({ svg: await texToSvg(String(solution.value)), fit: [120, 28] });
+    if (solution.type === "expression")
+      stack.push({ svg: await texToSvg(String(solution.value)), fit: [120, fontSize * 1.15] });
     else stack.push({ text: String(solution.value) });
   }
   return stack;
@@ -396,7 +402,7 @@ export async function downloadAnswerSet(set: Set) {
   for (let index = 0; index < set.questions.length; index++) {
     rows.push([
       { text: String(index + 1) },
-      { stack: await answerCell(set.questions[index]) },
+      { stack: await answerCell(set.questions[index], set.pdfOptions.answerTextSize) },
       { text: set.questions[index].answerComment }
     ]);
   }
@@ -451,7 +457,7 @@ export function previewQuestionSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
+    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; } .slip-content math { font-size: 1em !important; vertical-align: middle; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
     true
   );
 }
@@ -472,6 +478,6 @@ export function previewAnswerSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} answers`,
     `<main class="answer-preview"><h1>${set.name.replace(/[<>&]/g, "") || "Untitled set"}</h1><h2>Answer key</h2><table><thead><tr><th>Question</th><th>Answer</th><th>Marker comments</th></tr></thead><tbody>${rows}</tbody></table></main>`,
-    `@page { size: A4 portrait; margin: 14.82mm; } * { box-sizing: border-box; } body { color: #111; background: #fff; font-family: Arial, sans-serif; font-size: ${set.pdfOptions.answerTextSize}pt; } .answer-preview { width: 100%; } h1 { margin: 0 0 1.06mm; font-size: 20pt; } h2 { margin: 0 0 4.94mm; font-size: 12pt; font-weight: normal; } table { width: 100%; border-collapse: collapse; } thead { display: table-header-group; } tbody { display: table-row-group; } th, td { border: 1px solid #333; padding: 3mm; text-align: left; vertical-align: top; } th { background: #eee; } th:first-child, td:first-child { width: 10.75%; } th:nth-child(2), td:nth-child(2) { width: 28.36%; } tr { break-inside: avoid; page-break-inside: avoid; } @media print { .answer-preview { width: auto; } }`
+    `@page { size: A4 portrait; margin: 14.82mm; } * { box-sizing: border-box; } body { color: #111; background: #fff; font-family: Arial, sans-serif; font-size: ${set.pdfOptions.answerTextSize}pt; } math { font-size: 1em !important; vertical-align: middle; } .answer-preview { width: 100%; } h1 { margin: 0 0 1.06mm; font-size: 20pt; } h2 { margin: 0 0 4.94mm; font-size: 12pt; font-weight: normal; } table { width: 100%; border-collapse: collapse; } thead { display: table-header-group; } tbody { display: table-row-group; } th, td { border: 1px solid #333; padding: 3mm; text-align: left; vertical-align: top; } th { background: #eee; } th:first-child, td:first-child { width: 10.75%; } th:nth-child(2), td:nth-child(2) { width: 28.36%; } tr { break-inside: avoid; page-break-inside: avoid; } @media print { .answer-preview { width: auto; } }`
   );
 }

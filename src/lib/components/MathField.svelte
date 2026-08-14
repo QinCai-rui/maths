@@ -22,6 +22,7 @@
 
   let container: HTMLDivElement;
   let mathfield = $state.raw<import("mathlive").MathfieldElement | null>(null);
+  let themeObserver: MutationObserver | null = null;
 
   const templates = [
     { label: "Fraction", value: "\\frac{#0}{#?}" },
@@ -40,6 +41,12 @@
 
   onMount(() => {
     let active = true;
+    const syncTheme = () => {
+      document.body.setAttribute("theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
+    };
+    syncTheme();
+    themeObserver = new MutationObserver(syncTheme);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     void import("mathlive").then(({ MathfieldElement }) => {
       if (!active) return;
       const field = new MathfieldElement();
@@ -58,6 +65,7 @@
     });
     return () => {
       active = false;
+      themeObserver?.disconnect();
       mathfield?.remove();
     };
   });
@@ -77,8 +85,11 @@
   <div bind:this={container}></div>
   <div class="math-palette" aria-label="Equation symbols">
     {#each templates as template}
-      <button type="button" title={template.label} onclick={() => insertTemplate(template.value)}
-        >{template.label}</button
+      <button
+        type="button"
+        title={template.label}
+        onmousedown={(event) => event.preventDefault()}
+        onclick={() => insertTemplate(template.value)}>{template.label}</button
       >
     {/each}
   </div>

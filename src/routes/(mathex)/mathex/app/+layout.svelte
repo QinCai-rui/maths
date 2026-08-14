@@ -22,7 +22,7 @@
   <title>Mathex - Raymont's Maths</title>
 </svelte:head>
 <Toaster />
-<ModeWatcher />
+<ModeWatcher defaultMode="light" />
 <DisclaimerDialog />
 {#if usesSiteShell}
   <div class="flex min-h-screen flex-col bg-background text-foreground">

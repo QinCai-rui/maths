@@ -97,7 +97,7 @@
       static create(value: string) {
         const element = super.create() as HTMLElement;
         element.dataset.latex = value;
-        element.innerHTML = renderToString(value, { throwOnError: false, output: "htmlAndMathml" });
+        element.innerHTML = renderToString(value, { throwOnError: false, output: "mathml" });
         element.setAttribute("title", "Click to edit equation");
         element.setAttribute("role", "button");
         element.setAttribute("tabindex", "0");
@@ -160,7 +160,10 @@
         event.stopPropagation();
         openMathEditor(null);
       });
-      toolbar.append(mathButton);
+      const group = document.createElement("span");
+      group.className = "ql-formats";
+      group.append(mathButton);
+      toolbar.append(group);
       mathButtonEl = mathButton;
     }
     quillReady = true;
@@ -183,6 +186,7 @@
 
   function handleClickOutside(event: MouseEvent) {
     if (!mathPopoverOpen || !mathButtonEl) return;
+    if ((event.target as HTMLElement).closest(".ML__keyboard, .ML__virtual-keyboard-toggle")) return;
     const popover = document.getElementById("math-popover");
     if (!mathButtonEl.contains(event.target as Node) && popover && !popover.contains(event.target as Node)) {
       mathPopoverOpen = false;
@@ -262,5 +266,14 @@
   .quill-wrapper :global(.mathex-equation:focus) {
     background: color-mix(in oklab, var(--primary) 12%, transparent);
     outline: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
+  }
+  .quill-wrapper :global(.ql-math) {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 28px !important;
+    height: 24px !important;
+    padding: 3px 5px !important;
+    vertical-align: middle;
   }
 </style>

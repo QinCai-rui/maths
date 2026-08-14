@@ -69,6 +69,18 @@
   --sidebar-accent-foreground: oklch(0.141 0.005 285.823);
   --sidebar-border: oklch(0.92 0.004 285.823);
   --sidebar-ring: oklch(0.623 0.214 259.815);
+  --keyboard-background: #e5e7eb;
+  --keyboard-border: #d1d5db;
+  --keyboard-toolbar-text: #374151;
+  --keyboard-toolbar-background-hover: #f3f4f6;
+  --keycap-background: #ffffff;
+  --keycap-background-hover: #f9fafb;
+  --keycap-border: #d1d5db;
+  --keycap-border-bottom: #9ca3af;
+  --keycap-text: #111827;
+  --keycap-secondary-background: #d1d5db;
+  --keycap-secondary-background-hover: #cbd5e1;
+  --keycap-secondary-text: #111827;
   --radius: 0.25rem;
 }
 
@@ -100,6 +112,18 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(0.274 0.006 285.823);
   --sidebar-ring: oklch(0.623 0.214 259.815);
+  --keyboard-background: #18181b;
+  --keyboard-border: #3f3f46;
+  --keyboard-toolbar-text: #e4e4e7;
+  --keyboard-toolbar-background-hover: #27272a;
+  --keycap-background: #27272a;
+  --keycap-background-hover: #3f3f46;
+  --keycap-border: #52525b;
+  --keycap-border-bottom: #71717a;
+  --keycap-text: #fafafa;
+  --keycap-secondary-background: #3f3f46;
+  --keycap-secondary-background-hover: #52525b;
+  --keycap-secondary-text: #fafafa;
 }
 
 @layer base {
