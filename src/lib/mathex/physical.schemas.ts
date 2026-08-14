@@ -19,6 +19,7 @@ export const CreatePhysicalCompetitionInput = z.object({
   markerPin: PhysicalMarkerPin,
   questionCount: PhysicalQuestionCount,
   countdownDurationMs: PhysicalCountdownDuration.optional().default(null),
+  autoFinishWhenComplete: z.boolean().default(false),
   teams: z
     .array(z.object({ name: PhysicalTeamName, group: PhysicalTeamGroup.optional().default("") }))
     .min(1)
@@ -93,6 +94,7 @@ export interface PhysicalCompetition {
   markerPinHash: string;
   questionCount: number;
   countdownDurationMs: number | null;
+  autoFinishWhenComplete: boolean;
   state: PhysicalLifecycle;
   startedAt: number | null;
   runningSince: number | null;

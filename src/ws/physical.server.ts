@@ -91,6 +91,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         markerPinHash: hashMarkerPin(parsed.data.markerPin),
         questionCount: parsed.data.questionCount,
         countdownDurationMs: parsed.data.countdownDurationMs,
+        autoFinishWhenComplete: parsed.data.autoFinishWhenComplete,
         state: "lobby",
         startedAt: null,
         runningSince: null,
@@ -294,6 +295,16 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
           elapsedMs: elapsedMs(competition),
           timestamp: Date.now()
         });
+        if (
+          competition.autoFinishWhenComplete &&
+          [...competition.teams.keys()].every(
+            (teamId) => buildTeamSnapshot(competition, teamId).currentQuestion > competition.questionCount
+          )
+        ) {
+          competition.elapsedBeforeRunMs = elapsedMs(competition);
+          competition.runningSince = null;
+          competition.state = "finished";
+        }
         commit();
         accept(ack);
       });

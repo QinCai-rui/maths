@@ -20,6 +20,7 @@
   let questionCount = $state(20);
   let timerEnabled = $state(true);
   let timerMinutes = $state(30);
+  let autoFinishWhenComplete = $state(false);
   const markerPinCharacters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const createMarkerPin = () => {
     const values = crypto.getRandomValues(new Uint32Array(8));
@@ -64,6 +65,7 @@
         name: name.trim(),
         questionCount,
         countdownDurationMs: timerEnabled ? timerMinutes * 60_000 : null,
+        autoFinishWhenComplete,
         markerPin,
         teams: validTeams.map((team) => ({ name: team.name.trim(), group: team.group.trim() }))
       },
@@ -178,6 +180,17 @@
               </div>
             {/if}
           </div>
+          <label
+            class="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/55 p-4"
+          >
+            <Checkbox bind:checked={autoFinishWhenComplete} />
+            <span>
+              <span class="block font-semibold">Automatically finish when all teams are done</span>
+              <span class="mt-1 block text-sm leading-5 text-muted-foreground"
+                >End marking as soon as every team completes the final question.</span
+              >
+            </span>
+          </label>
         </section>
 
         <section class="mathex-panel rounded-3xl p-5 sm:p-7">
