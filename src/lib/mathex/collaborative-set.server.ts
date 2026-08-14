@@ -1,16 +1,20 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
+import { z } from "zod";
 
 import {
+  CollaborativeHistoryEntrySchema,
   CollaborativeSetSnapshotSchema,
   CollaborativeSetToken,
+  type CollaborativeHistoryEntry,
   type CollaborativeSetSnapshot
 } from "./collaborative-set.schemas";
 
 export interface StoredCollaborativeSet {
   hostToken: string;
   set: CollaborativeSetSnapshot;
+  history: CollaborativeHistoryEntry[];
 }
 
 export class CollaborativeSetStore {
@@ -39,8 +43,13 @@ export class CollaborativeSetStore {
     for (const row of rows) {
       try {
         if (!CollaborativeSetToken.safeParse(row.host_token).success) continue;
-        const set = CollaborativeSetSnapshotSchema.parse(JSON.parse(row.data));
-        if (set.sessionToken === row.session_token) sets.set(row.session_token, { hostToken: row.host_token, set });
+        const data: unknown = JSON.parse(row.data);
+        const envelope = zStoredData.safeParse(data);
+        const set = envelope.success ? envelope.data.set : CollaborativeSetSnapshotSchema.parse(data);
+        const history = envelope.success ? envelope.data.history : [];
+        if (set.sessionToken === row.session_token) {
+          sets.set(row.session_token, { hostToken: row.host_token, set, history });
+        }
       } catch {
         // Ignore a corrupt row without affecting other durable sessions.
       }
@@ -53,10 +62,20 @@ export class CollaborativeSetStore {
       .query(
         "INSERT OR REPLACE INTO mathex_collaborative_sets (session_token, host_token, data, updated_at) VALUES (?, ?, ?, ?)"
       )
-      .run(session.set.sessionToken, session.hostToken, JSON.stringify(session.set), session.set.updatedAt);
+      .run(
+        session.set.sessionToken,
+        session.hostToken,
+        JSON.stringify({ set: session.set, history: session.history }),
+        session.set.updatedAt
+      );
   }
 
   delete(sessionToken: string): void {
     this.database.query("DELETE FROM mathex_collaborative_sets WHERE session_token = ?").run(sessionToken);
   }
 }
+
+const zStoredData = z.object({
+  set: CollaborativeSetSnapshotSchema,
+  history: z.array(CollaborativeHistoryEntrySchema).max(100)
+});

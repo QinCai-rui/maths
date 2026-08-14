@@ -3,6 +3,8 @@ import { z } from "zod";
 export const CollaborativeSetToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 export const CollaboratorName = z.string().trim().min(1).max(20);
 export const CollaborativeQuestionId = z.string().uuid();
+export const CollaborativeEditorId = z.string().uuid();
+export const CollaborativeHistoryEntryId = z.string().uuid();
 
 export const DraftSolution = z.discriminatedUnion("type", [
   z.object({
@@ -52,7 +54,8 @@ export const CreateCollaborativeSetInput = z.object({ set: CollaborativeSetDraft
 export const JoinCollaborativeSetInput = z.object({
   sessionToken: CollaborativeSetToken,
   hostToken: CollaborativeSetToken.optional(),
-  displayName: CollaboratorName
+  displayName: CollaboratorName,
+  editorId: CollaborativeEditorId
 });
 export const QuestionLockInput = z.object({ questionId: CollaborativeQuestionId });
 export const UpdateCollaborativeQuestionInput = z.object({
@@ -74,10 +77,37 @@ export const MoveCollaborativeQuestionInput = z.object({
   toIndex: z.number().int().min(0).max(99)
 });
 export const DeleteCollaborativeQuestionInput = QuestionLockInput;
+export const CollaborativeHistoryTargetSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("question"), questionId: CollaborativeQuestionId }),
+  z.object({ type: z.literal("details") }),
+  z.object({
+    type: z.literal("structure"),
+    action: z.enum(["add", "duplicate", "move", "delete", "restore"]),
+    questionId: CollaborativeQuestionId
+  })
+]);
+export const CollaborativeHistoryEntrySchema = z.object({
+  id: CollaborativeHistoryEntryId,
+  editorId: CollaborativeEditorId,
+  displayName: CollaboratorName,
+  timestamp: z.number().int(),
+  summary: z.string().min(1).max(200),
+  before: CollaborativeSetSnapshotSchema,
+  after: CollaborativeSetSnapshotSchema,
+  target: CollaborativeHistoryTargetSchema,
+  status: z.enum(["applied", "undone", "invalidated"])
+});
+export const RestoreCollaborativeQuestionInput = z.object({
+  historyEntryId: CollaborativeHistoryEntryId,
+  questionId: CollaborativeQuestionId
+});
+export const RestoreCollaborativeDetailsInput = z.object({ historyEntryId: CollaborativeHistoryEntryId });
 
 export type DraftQuestionValue = z.infer<typeof DraftQuestion>;
 export type CollaborativeQuestionValue = z.infer<typeof CollaborativeQuestion>;
 export type CollaborativeSetSnapshot = z.infer<typeof CollaborativeSetSnapshotSchema>;
+export type CollaborativeHistoryTarget = z.infer<typeof CollaborativeHistoryTargetSchema>;
+export type CollaborativeHistoryEntry = z.infer<typeof CollaborativeHistoryEntrySchema>;
 
 export const CollaboratorPresenceSchema = z.object({
   connectionId: z.string().min(1),
@@ -104,6 +134,8 @@ export type CollaborativeOperationResult = { ok: true } | { ok: false; error: st
 export type CollaborativeCreateResult =
   { ok: true; sessionToken: string; hostToken: string; state: CollaborativeSetSnapshot } | { ok: false; error: string };
 export type CollaborativeJoinResult = { ok: true; state: CollaborativeSetJoinState } | { ok: false; error: string };
+export type CollaborativeHistoryResult =
+  { ok: true; history: CollaborativeHistoryEntry[] } | { ok: false; error: string };
 
 type OperationAck = (result: CollaborativeOperationResult) => void;
 
@@ -120,6 +152,11 @@ export interface CollaborativeSetClientToServerEvents {
   duplicateQuestion: (input: unknown, callback?: OperationAck) => void;
   moveQuestion: (input: unknown, callback?: OperationAck) => void;
   deleteQuestion: (input: unknown, callback?: OperationAck) => void;
+  undo: (callback?: OperationAck) => void;
+  redo: (callback?: OperationAck) => void;
+  getHistory: (callback: (result: CollaborativeHistoryResult) => void) => void;
+  restoreQuestion: (input: unknown, callback?: OperationAck) => void;
+  restoreDetails: (input: unknown, callback?: OperationAck) => void;
   endSession: (callback?: OperationAck) => void;
   deleteSession: (callback?: OperationAck) => void;
 }
@@ -129,6 +166,7 @@ export interface CollaborativeSetServerToClientEvents {
   questionUpdated: (question: CollaborativeQuestionValue) => void;
   lockChanged: (questionId: string, lock: QuestionLock | null) => void;
   presence: (collaborators: CollaboratorPresence[]) => void;
+  historyChanged: (history: CollaborativeHistoryEntry[]) => void;
   sessionDeleted: () => void;
 }
 
@@ -136,5 +174,6 @@ export interface CollaborativeSetInterServerEvents {}
 export interface CollaborativeSetSocketData {
   sessionToken?: string;
   displayName?: string;
+  editorId?: string;
   isHost?: boolean;
 }

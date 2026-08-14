@@ -12,6 +12,8 @@
     CollaborativeSetClientToServerEvents,
     CollaborativeSetServerToClientEvents,
     CollaborativeSetSnapshot,
+    CollaborativeHistoryEntry,
+    CollaborativeHistoryTarget,
     CollaboratorPresence,
     DraftQuestionValue,
     QuestionLock
@@ -39,6 +41,9 @@
     UsersRound,
     Wifi,
     WifiOff,
+    Undo2,
+    Redo2,
+    History,
     X
   } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
@@ -107,8 +112,21 @@
   let lockHeartbeat: ReturnType<typeof setInterval> | null = null;
   let activeQuestionCard = $state.raw<HTMLElement | null>(null);
   let closingSocket = false;
+  let editorId = $state("");
+  let history = $state<CollaborativeHistoryEntry[]>([]);
+  let historyOpen = $state(false);
+  let pendingDeleteQuestion = $state<CollaborativeQuestionValue | null>(null);
+  let localHistoryTimer: ReturnType<typeof setTimeout> | null = null;
+  let localBaseline: CollaborativeSetSnapshot | null = null;
+  let applyingLocalHistory = false;
 
   let isHost = $derived(hostSession);
+  let canUndo = $derived(
+    history.some((entry) => entry.editorId === (sessionToken ? editorId : "local") && entry.status === "applied")
+  );
+  let canRedo = $derived(
+    history.some((entry) => entry.editorId === (sessionToken ? editorId : "local") && entry.status === "undone")
+  );
   let sessionUrl = $derived(
     sessionToken && typeof window !== "undefined"
       ? `${window.location.origin}/mathex/app/create/editor/${sessionToken}`
@@ -133,6 +151,103 @@
 
   function plainSet() {
     return { name: setName, instructions, questions: questions.map(plainQuestion), pdfOptions };
+  }
+
+  function editorSnapshot(): CollaborativeSetSnapshot {
+    return {
+      ...structuredClone(plainSet()),
+      sessionToken: sessionToken || "___________________________________________",
+      status: sessionStatus,
+      questions: structuredClone(questions),
+      updatedAt: 0
+    };
+  }
+
+  function sameValue(left: unknown, right: unknown) {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+
+  function localChange(before: CollaborativeSetSnapshot, after: CollaborativeSetSnapshot) {
+    const beforeIds = before.questions.map(({ id }) => id);
+    const afterIds = after.questions.map(({ id }) => id);
+    const added = after.questions.find(({ id }) => !beforeIds.includes(id));
+    if (added) {
+      const index = after.questions.findIndex(({ id }) => id === added.id);
+      return {
+        target: { type: "structure", action: "add", questionId: added.id } as CollaborativeHistoryTarget,
+        summary: `Added question ${index + 1}`
+      };
+    }
+    const deleted = before.questions.find(({ id }) => !afterIds.includes(id));
+    if (deleted) {
+      const index = before.questions.findIndex(({ id }) => id === deleted.id);
+      return {
+        target: { type: "structure", action: "delete", questionId: deleted.id } as CollaborativeHistoryTarget,
+        summary: `Deleted question ${index + 1}`
+      };
+    }
+    if (!sameValue(beforeIds, afterIds)) {
+      const questionId = afterIds.find((id, index) => beforeIds[index] !== id) || afterIds[0];
+      return {
+        target: { type: "structure", action: "move", questionId } as CollaborativeHistoryTarget,
+        summary: "Reordered questions"
+      };
+    }
+    const changedQuestion = after.questions.find((question, index) => !sameValue(question, before.questions[index]));
+    if (changedQuestion) {
+      const index = after.questions.findIndex(({ id }) => id === changedQuestion.id);
+      return {
+        target: { type: "question", questionId: changedQuestion.id } as CollaborativeHistoryTarget,
+        summary: `Edited question ${index + 1}`
+      };
+    }
+    return { target: { type: "details" } as CollaborativeHistoryTarget, summary: "Edited set details" };
+  }
+
+  function flushLocalHistory() {
+    if (sessionToken || applyingLocalHistory || !localBaseline) return;
+    if (localHistoryTimer) clearTimeout(localHistoryTimer);
+    localHistoryTimer = null;
+    const after = editorSnapshot();
+    if (sameValue(localBaseline, after)) return;
+    const before = localBaseline;
+    const change = localChange(before, after);
+    history = [
+      ...history.map((entry) =>
+        entry.editorId === "local" && entry.status === "undone" ? { ...entry, status: "invalidated" as const } : entry
+      ),
+      {
+        id: crypto.randomUUID(),
+        editorId: "local",
+        displayName: "You",
+        timestamp: Date.now(),
+        summary: change.summary,
+        before,
+        after,
+        target: change.target,
+        status: "applied" as const
+      }
+    ].slice(-100);
+    localBaseline = structuredClone(after);
+  }
+
+  function scheduleLocalHistory() {
+    if (sessionToken || applyingLocalHistory || !localBaseline) return;
+    if (localHistoryTimer) clearTimeout(localHistoryTimer);
+    localHistoryTimer = setTimeout(flushLocalHistory, 1_000);
+  }
+
+  function applyLocalSnapshot(snapshot: CollaborativeSetSnapshot) {
+    applyingLocalHistory = true;
+    setName = snapshot.name;
+    instructions = snapshot.instructions;
+    questions = structuredClone(snapshot.questions);
+    pdfOptions = structuredClone(snapshot.pdfOptions);
+    if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
+      currentQuestionId = questions[0]?.id || null;
+    }
+    localBaseline = editorSnapshot();
+    queueMicrotask(() => (applyingLocalHistory = false));
   }
 
   function normalizeQuestion(value: any): DraftQuestionValue {
@@ -208,6 +323,7 @@
       {
         sessionToken,
         displayName: name,
+        editorId,
         hostToken: localStorage.getItem(`mathex-collab-host:${sessionToken}`) || undefined
       },
       (result) => {
@@ -226,12 +342,20 @@
         );
         joined = true;
         ready = true;
+        socket?.emit("getHistory", (historyResult) => {
+          if (historyResult.ok) history = historyResult.history;
+        });
         if (reconnecting) toast.success("Reconnected to the live editor");
       }
     );
   }
 
   onMount(() => {
+    if (sessionToken) {
+      const editorKey = `mathex-collab-editor:${sessionToken}`;
+      editorId = sessionStorage.getItem(editorKey) || crypto.randomUUID();
+      sessionStorage.setItem(editorKey, editorId);
+    }
     socket = io("/set-collaboration", {
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -253,6 +377,7 @@
     });
     socket.on("state", applyServerState);
     socket.on("presence", (next) => (collaborators = next));
+    socket.on("historyChanged", (next) => (history = next));
     socket.on("lockChanged", (questionId, lock) => {
       locks = lock
         ? [...locks.filter((item) => item.questionId !== questionId), lock]
@@ -275,6 +400,7 @@
       if (displayName) joinSession();
     } else {
       loadLocalDraft();
+      localBaseline = editorSnapshot();
       ready = true;
     }
 
@@ -298,6 +424,7 @@
     return () => {
       closingSocket = true;
       if (lockHeartbeat) clearInterval(lockHeartbeat);
+      if (localHistoryTimer) clearTimeout(localHistoryTimer);
       window.removeEventListener("pointerdown", releaseOnOutsidePointer, true);
       for (const questionId of Object.keys(ownedLocks)) {
         if (ownedLocks[questionId]) {
@@ -316,6 +443,7 @@
       localSaved = false;
       if (localTimer) clearTimeout(localTimer);
       localTimer = setTimeout(saveLocalDraft, 500);
+      scheduleLocalHistory();
       return;
     }
     if (!joined || !isHost) return;
@@ -447,6 +575,13 @@
   }
 
   function deleteQuestion(question: CollaborativeQuestionValue) {
+    pendingDeleteQuestion = question;
+  }
+
+  function confirmDeleteQuestion() {
+    const question = pendingDeleteQuestion;
+    if (!question) return;
+    pendingDeleteQuestion = null;
     if (sessionToken) {
       socket?.emit("deleteQuestion", { questionId: question.id }, handleOperation);
       return;
@@ -455,6 +590,102 @@
     questions.splice(index, 1);
     if (currentQuestionId === question.id)
       currentQuestionId = questions[Math.min(index, questions.length - 1)]?.id || null;
+  }
+
+  function undo() {
+    if (sessionToken) {
+      if (currentQuestionId && ownedLocks[currentQuestionId]) releaseQuestion(currentQuestionId);
+      socket?.emit("undo", (result) => {
+        if (!result.ok) toast.error(result.error);
+      });
+      return;
+    }
+    flushLocalHistory();
+    const entry = [...history]
+      .reverse()
+      .find((candidate) => candidate.editorId === "local" && candidate.status === "applied");
+    if (!entry) return;
+    applyLocalSnapshot(entry.before);
+    history = history.map((candidate) =>
+      candidate.id === entry.id ? { ...candidate, status: "undone" as const } : candidate
+    );
+  }
+
+  function redo() {
+    if (sessionToken) {
+      if (currentQuestionId && ownedLocks[currentQuestionId]) releaseQuestion(currentQuestionId);
+      socket?.emit("redo", (result) => {
+        if (!result.ok) toast.error(result.error);
+      });
+      return;
+    }
+    flushLocalHistory();
+    const entry = history.find((candidate) => candidate.editorId === "local" && candidate.status === "undone");
+    if (!entry) return;
+    applyLocalSnapshot(entry.after);
+    history = history.map((candidate) =>
+      candidate.id === entry.id ? { ...candidate, status: "applied" as const } : candidate
+    );
+  }
+
+  function openHistory() {
+    if (!sessionToken) flushLocalHistory();
+    else {
+      socket?.emit("getHistory", (result) => {
+        if (result.ok) history = result.history;
+        else toast.error(result.error);
+      });
+    }
+    historyOpen = true;
+  }
+
+  function historyQuestion(entry: CollaborativeHistoryEntry) {
+    if (entry.target.type === "details") return null;
+    const questionId = entry.target.questionId;
+    return (
+      entry.after.questions.find(({ id }) => id === questionId) ||
+      entry.before.questions.find(({ id }) => id === questionId) ||
+      null
+    );
+  }
+
+  function restoreHistoryQuestion(entry: CollaborativeHistoryEntry) {
+    const question = historyQuestion(entry);
+    if (!question) return;
+    if (sessionToken) {
+      socket?.emit("restoreQuestion", { historyEntryId: entry.id, questionId: question.id }, handleOperation);
+      return;
+    }
+    flushLocalHistory();
+    const currentIndex = questions.findIndex(({ id }) => id === question.id);
+    if (currentIndex >= 0) questions[currentIndex] = structuredClone(question);
+    else {
+      const historicalIndex = Math.max(
+        entry.after.questions.findIndex(({ id }) => id === question.id),
+        entry.before.questions.findIndex(({ id }) => id === question.id)
+      );
+      questions.splice(Math.min(Math.max(historicalIndex, 0), questions.length), 0, structuredClone(question));
+    }
+    currentQuestionId = question.id;
+    flushLocalHistory();
+    toast.success("Question restored from history");
+  }
+
+  function restoreHistoryDetails(entry: CollaborativeHistoryEntry) {
+    if (sessionToken) {
+      socket?.emit("restoreDetails", { historyEntryId: entry.id }, handleOperation);
+      return;
+    }
+    flushLocalHistory();
+    setName = entry.after.name;
+    instructions = entry.after.instructions;
+    pdfOptions = structuredClone(entry.after.pdfOptions);
+    flushLocalHistory();
+    toast.success("Set details restored from history");
+  }
+
+  function formatHistoryTime(timestamp: number) {
+    return new Date(timestamp).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
   }
 
   function createSession() {
@@ -697,13 +928,31 @@
           {/if}
         </div>
       </div>
-      <div class="flex h-10 items-center gap-1 border-t px-3 sm:px-16">
+      <div class="flex h-10 items-center gap-1 overflow-x-auto border-t px-3 sm:px-16">
         {#if !sessionToken || isHost}
           <button class="toolbar-button" onclick={addQuestion}><Plus /> Add question</button>
         {/if}
         <button class="toolbar-button" onclick={() => (detailsOpen = !detailsOpen)}
           ><Settings2 /> Set details <ChevronDown /></button
         >
+        <span class="mx-1 h-5 border-l"></span>
+        <button
+          class="toolbar-button"
+          onclick={undo}
+          disabled={!canUndo || (!!sessionToken && !connected)}
+          title="Undo your latest change"
+        >
+          <Undo2 /> Undo
+        </button>
+        <button
+          class="toolbar-button"
+          onclick={redo}
+          disabled={!canRedo || (!!sessionToken && !connected)}
+          title="Redo your latest undone change"
+        >
+          <Redo2 /> Redo
+        </button>
+        <button class="toolbar-button" onclick={openHistory}><History /> History</button>
         <span class="ml-auto text-xs text-muted-foreground">{questions.length}/100 questions</span>
       </div>
     </header>
@@ -903,7 +1152,7 @@
               {#if sessionToken && connected && sessionStatus === "active" && !currentLock && !hasOwnLock}
                 <button
                   type="button"
-                  class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[1.5px] transition-[backdrop-filter] duration-200 hover:backdrop-blur-[0px]"
+                  class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[1.5px] transition-[backdrop-filter] duration-200 hover:backdrop-blur-[0.5px]"
                   onclick={() => focusQuestion(currentQuestion!.id)}
                   disabled={acquiringQuestionId === currentQuestion.id}
                   aria-label="Acquire question lock to edit"
@@ -1002,6 +1251,93 @@
   </div>
 {/if}
 
+{#if pendingDeleteQuestion}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+    role="presentation"
+    onclick={(event) => event.target === event.currentTarget && (pendingDeleteQuestion = null)}
+  >
+    <div class="w-full max-w-md rounded-2xl border bg-background p-6 shadow-2xl">
+      <div class="mb-4 flex size-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+        <Trash2 />
+      </div>
+      <h2 class="text-xl font-semibold">
+        Delete question {questions.findIndex(({ id }) => id === pendingDeleteQuestion?.id) + 1}?
+      </h2>
+      <p class="mt-2 text-sm text-muted-foreground">
+        “{questionPreview(pendingDeleteQuestion)}” will be removed from this set. You can recover it from history.
+      </p>
+      <div class="mt-6 flex justify-end gap-2">
+        <Button variant="outline" onclick={() => (pendingDeleteQuestion = null)}>Cancel</Button>
+        <Button variant="destructive" onclick={confirmDeleteQuestion}>Delete question</Button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if historyOpen}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+    role="presentation"
+    onclick={(event) => event.target === event.currentTarget && (historyOpen = false)}
+  >
+    <div
+      class="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl"
+    >
+      <div class="flex items-start justify-between border-b p-5">
+        <div>
+          <h2 class="text-xl font-semibold">Version history</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            The latest 100 pause-grouped changes. Restore questions or set details independently.
+          </p>
+        </div>
+        <button class="rounded-lg p-2 hover:bg-accent" onclick={() => (historyOpen = false)} aria-label="Close history"
+          ><X class="size-4" /></button
+        >
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+        {#each [...history].reverse() as entry (entry.id)}
+          {@const historicalQuestion = historyQuestion(entry)}
+          <article class="mb-2 rounded-xl border p-4 {entry.status === 'undone' ? 'opacity-60' : ''}">
+            <div class="flex flex-wrap items-start gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-sm font-semibold">{entry.summary}</p>
+                  {#if entry.status !== "applied"}<span
+                      class="rounded-full bg-muted px-2 py-0.5 text-[0.65rem] uppercase text-muted-foreground"
+                      >{entry.status}</span
+                    >{/if}
+                </div>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  {formatHistoryTime(entry.timestamp)} · {entry.displayName}
+                </p>
+                {#if historicalQuestion}<p class="mt-2 truncate text-xs text-muted-foreground">
+                    {questionPreview(historicalQuestion)}
+                  </p>{/if}
+              </div>
+              {#if !sessionToken || isHost}
+                {#if entry.target.type === "details"}
+                  <Button variant="outline" size="sm" onclick={() => restoreHistoryDetails(entry)}
+                    >Restore set details</Button
+                  >
+                {:else if historicalQuestion}
+                  <Button variant="outline" size="sm" onclick={() => restoreHistoryQuestion(entry)}
+                    >Restore question</Button
+                  >
+                {/if}
+              {/if}
+            </div>
+          </article>
+        {:else}
+          <div class="py-16 text-center text-sm text-muted-foreground">
+            No history entries yet. Changes appear after a short pause.
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if goLiveOpen}
   <div
     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
@@ -1069,6 +1405,10 @@
   }
   .toolbar-button:hover {
     background: var(--accent);
+  }
+  .toolbar-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
   .toolbar-button :global(svg) {
     width: 0.85rem;

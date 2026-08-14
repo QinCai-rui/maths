@@ -170,6 +170,8 @@
   });
 
   // --- Question CRUD ---
+  let pendingRemoveIdx = $state<number | null>(null);
+
   function newQuestion() {
     if (questions.length >= 100) {
       toast.error("Maximum 100 questions per set");
@@ -191,6 +193,13 @@
   }
 
   function removeQuestion(i: number) {
+    pendingRemoveIdx = i;
+  }
+
+  function confirmRemoveQuestion() {
+    if (pendingRemoveIdx === null) return;
+    const i = pendingRemoveIdx;
+    pendingRemoveIdx = null;
     if (currentQuestionIdx === i) {
       if (currentQuestionIdx === 0 && questions.length > 1) currentQuestionIdx = 1;
       else if (questions.length > 1) currentQuestionIdx--;
@@ -399,6 +408,24 @@
     return text.slice(0, 50) || (text.length === 0 ? "Empty" : "…");
   }
 </script>
+
+<AlertDialog.Root open={pendingRemoveIdx !== null} onOpenChange={(open) => !open && (pendingRemoveIdx = null)}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Delete question {pendingRemoveIdx === null ? "" : pendingRemoveIdx + 1}?</AlertDialog.Title>
+      <AlertDialog.Description>
+        “{pendingRemoveIdx === null ? "" : questionPreview(questions[pendingRemoveIdx])}” will be permanently removed
+        from this legacy draft.
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Action class={buttonVariants({ variant: "destructive" })} onclick={confirmRemoveQuestion}>
+        Delete question
+      </AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
 
 <AlertDialog.Root bind:open={shareDialogOpen}>
   <AlertDialog.Content>
