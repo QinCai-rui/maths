@@ -899,7 +899,7 @@
               {#if sessionToken && connected && sessionStatus === "active" && !currentLock && !hasOwnLock}
                 <button
                   type="button"
-                  class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[1.5px] transition-[backdrop-filter] duration-200 hover:backdrop-blur-[1px]"
+                  class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[1.5px] transition-[backdrop-filter] duration-200 hover:backdrop-blur-[0.5px]"
                   onclick={() => focusQuestion(currentQuestion!.id)}
                   disabled={acquiringQuestionId === currentQuestion.id}
                   aria-label="Acquire question lock to edit"
