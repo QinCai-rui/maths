@@ -378,6 +378,7 @@ function buildTeamSnapshot(competition: PhysicalCompetition, teamId: string): Ph
   let incorrect = 0;
   let skipped = 0;
   let correctReachedAtMs = 0;
+  let finishTimeMs: number | null = null;
 
   for (const action of actions) {
     const question = questions[action.questionNumber - 1];
@@ -396,6 +397,7 @@ function buildTeamSnapshot(competition: PhysicalCompetition, teamId: string): Ph
       skipped++;
       currentQuestion = Math.max(currentQuestion, action.questionNumber + 1);
     }
+    if (currentQuestion > competition.questionCount) finishTimeMs = action.elapsedMs;
   }
   return {
     ...team,
@@ -405,6 +407,7 @@ function buildTeamSnapshot(competition: PhysicalCompetition, teamId: string): Ph
     incorrect,
     skipped,
     correctReachedAtMs,
+    finishTimeMs,
     lastResult: actions.at(-1)?.action ?? null,
     lastActionId: actions.at(-1)?.id ?? null,
     canUndo: actions.length > 0,

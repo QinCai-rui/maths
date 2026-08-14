@@ -116,6 +116,7 @@ export interface PhysicalTeamSnapshot extends PhysicalTeam {
   incorrect: number;
   skipped: number;
   correctReachedAtMs: number;
+  finishTimeMs: number | null;
   lastResult: PhysicalMarkerActionType | null;
   lastActionId: string | null;
   canUndo: boolean;

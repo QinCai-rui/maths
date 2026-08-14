@@ -34,12 +34,17 @@
     if (!snapshot || snapshot.countdownRemainingMs === null) return null;
     return snapshot.countdownRemainingMs - (snapshot.state === "running" ? now - receivedAt : 0);
   });
-  const clock = $derived.by(() => {
-    if (remainingMs === null) return null;
-    const sign = remainingMs < 0 ? "−" : "";
-    const totalSeconds = Math.floor(Math.abs(remainingMs) / 1000);
-    return `${sign}${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+  const elapsedMs = $derived.by(() => {
+    if (!snapshot) return 0;
+    return snapshot.elapsedMs + (snapshot.state === "running" ? now - receivedAt : 0);
   });
+  const formatTime = (milliseconds: number) => {
+    const sign = milliseconds < 0 ? "−" : "";
+    const totalSeconds = Math.floor(Math.abs(milliseconds) / 1000);
+    return `${sign}${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+  };
+  const clock = $derived(formatTime(remainingMs ?? elapsedMs));
+  const clockLabel = $derived(remainingMs === null ? "Elapsed time" : "Time remaining");
   const ranked = $derived.by(() => snapshot?.teams || []);
   const groups = $derived.by(() => {
     const names = [...new Set(ranked.map((team) => team.group || "All teams"))];
@@ -63,13 +68,17 @@
             : 'text-amber-600 dark:text-amber-400'}"
           ><Radio class="h-4 w-4" />{connected ? snapshot?.state || "Live" : "Reconnecting"}</span
         >
-        {#if clock !== null}<div
-            class="flex items-center gap-3 rounded-2xl border px-4 py-2 {remainingMs !== null && remainingMs < 0
-              ? 'border-destructive/50 bg-destructive/10 text-destructive'
-              : 'border-border bg-muted/50'}"
-          >
-            <Clock3 class="h-5 w-5" /><span class="text-3xl font-black tabular-nums sm:text-5xl">{clock}</span>
-          </div>{/if}
+        <div
+          class="flex items-center gap-3 rounded-2xl border px-4 py-2 {remainingMs !== null && remainingMs < 0
+            ? 'border-destructive/50 bg-destructive/10 text-destructive'
+            : 'border-border bg-muted/50'}"
+        >
+          <Clock3 class="h-5 w-5" />
+          <div>
+            <p class="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">{clockLabel}</p>
+            <span class="text-3xl font-black tabular-nums sm:text-5xl">{clock}</span>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -83,7 +92,7 @@
             <div class="space-y-2">
               {#each group.teams as team}
                 <article
-                  class="grid grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm sm:grid-cols-[4rem_1fr_9rem_auto] sm:px-5"
+                  class="grid grid-cols-[3.25rem_1fr_auto] items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm sm:grid-cols-[4rem_1fr_7rem_8rem_auto] sm:px-5"
                 >
                   <span class="text-center text-2xl font-black tabular-nums text-muted-foreground sm:text-3xl"
                     >{team.rank}</span
@@ -100,6 +109,16 @@
                       >
                     </p>
                   </div>
+                  <div class="hidden text-center sm:block">
+                    <p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Finish</p>
+                    <p
+                      class="text-xl font-black tabular-nums {team.finishTimeMs === null
+                        ? 'text-muted-foreground'
+                        : 'text-foreground'}"
+                    >
+                      {team.finishTimeMs === null ? "-" : formatTime(team.finishTimeMs)}
+                    </p>
+                  </div>
                   <div class="flex items-center gap-2">
                     <span
                       class="flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2 py-1 text-sm font-bold text-emerald-700 dark:text-emerald-300"
@@ -114,7 +133,7 @@
                       ><CircleMinus class="h-4 w-4" />{team.skipped}</span
                     >
                   </div>
-                  <div class="col-span-3 flex items-center justify-between border-t border-border pt-2 sm:col-span-4">
+                  <div class="col-span-3 flex items-center justify-between border-t border-border pt-2 sm:col-span-5">
                     <span
                       class="text-xs font-bold uppercase tracking-wider {team.lastResult === 'correct'
                         ? 'text-emerald-700 dark:text-emerald-300'
@@ -133,11 +152,13 @@
                             : `Working on Q${team.currentQuestion}`}
                     </span>
                     <span class="text-xs text-muted-foreground sm:hidden"
-                      >Q {Math.min(team.currentQuestion, snapshot.questionCount)}/{snapshot.questionCount}</span
+                      >{team.finishTimeMs === null
+                        ? `Q ${Math.min(team.currentQuestion, snapshot.questionCount)}/${snapshot.questionCount}`
+                        : `Finished ${formatTime(team.finishTimeMs)}`}</span
                     >
                   </div>
                   <div
-                    class="col-span-3 flex h-1.5 gap-0.5 overflow-hidden rounded-full sm:col-span-4"
+                    class="col-span-3 flex h-1.5 gap-0.5 overflow-hidden rounded-full sm:col-span-5"
                     aria-label="{team.name} question progress"
                   >
                     {#each team.questions as question}
