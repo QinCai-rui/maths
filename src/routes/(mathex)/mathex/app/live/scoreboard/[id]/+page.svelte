@@ -102,11 +102,11 @@
                     {#if team.group}<p class="truncate text-xs text-muted-foreground sm:hidden">{team.group}</p>{/if}
                   </div>
                   <div class="hidden text-center sm:block">
-                    <p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Question</p>
+                    <p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current question</p>
                     <p class="text-2xl font-black tabular-nums">
-                      {Math.min(team.currentQuestion, snapshot.questionCount)}<span
-                        class="text-sm text-muted-foreground">/{snapshot.questionCount}</span
-                      >
+                      {team.currentQuestion > snapshot.questionCount
+                        ? "Finished"
+                        : `${team.currentQuestion}/${snapshot.questionCount}`}
                     </p>
                   </div>
                   <div class="hidden text-center sm:block">
