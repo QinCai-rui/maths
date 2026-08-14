@@ -104,6 +104,7 @@
   let localTimer: ReturnType<typeof setTimeout> | null = null;
   let lockHeartbeat: ReturnType<typeof setInterval> | null = null;
   let activeQuestionCard = $state.raw<HTMLElement | null>(null);
+  let closingSocket = false;
 
   let isHost = $derived(
     !!socket?.id &&
@@ -194,7 +195,7 @@
     lastServerSettings = JSON.stringify({ setName, instructions, pdfOptions });
   }
 
-  function joinSession() {
+  function joinSession(reconnecting = false) {
     const name = displayName.trim();
     if (!sessionToken || !socket || name.length < 1 || name.length > 20) {
       toast.error("Enter a name between 1 and 20 characters");
@@ -221,14 +222,31 @@
         locks = result.state.locks;
         joined = true;
         ready = true;
+        if (reconnecting) toast.success("Reconnected to the live editor");
       }
     );
   }
 
   onMount(() => {
-    socket = io("/set-collaboration");
-    socket.on("connect", () => (connected = true));
-    socket.on("disconnect", () => (connected = false));
+    socket = io("/set-collaboration", {
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3_000
+    });
+    socket.on("connect", () => {
+      const shouldRejoin = !!sessionToken && joined && !!displayName && !deleted;
+      connected = true;
+      if (shouldRejoin) joinSession(true);
+    });
+    socket.on("disconnect", () => {
+      connected = false;
+      ownedLocks = {};
+      locks = [];
+      collaborators = [];
+      acquiringQuestionId = null;
+      if (joined && !deleted && !closingSocket) toast.warning("Disconnected from the live editor. Reconnecting...");
+    });
     socket.on("state", applyServerState);
     socket.on("presence", (next) => (collaborators = next));
     socket.on("lockChanged", (questionId, lock) => {
@@ -274,6 +292,7 @@
     }, 10_000);
 
     return () => {
+      closingSocket = true;
       if (lockHeartbeat) clearInterval(lockHeartbeat);
       window.removeEventListener("pointerdown", releaseOnOutsidePointer, true);
       for (const questionId of Object.keys(ownedLocks)) {
@@ -360,6 +379,7 @@
     if (
       !sessionToken ||
       !joined ||
+      !connected ||
       sessionStatus !== "active" ||
       lockedByOther(questionId) ||
       ownedLocks[questionId] ||
@@ -575,7 +595,7 @@
             onkeydown={(event) => event.key === "Enter" && joinSession()}
           />
         </label>
-        <Button class="mt-5 w-full bg-blue-600 hover:bg-blue-700" onclick={joinSession} disabled={joining}
+        <Button class="mt-5 w-full bg-blue-600 hover:bg-blue-700" onclick={() => joinSession()} disabled={joining}
           >{joining ? "Joining..." : "Join editor"}</Button
         >
         <p class="mt-4 text-center text-xs text-muted-foreground">
@@ -608,11 +628,14 @@
           />
           <div class="flex items-center gap-2 px-2 text-[0.68rem] text-muted-foreground">
             {#if sessionToken}
-              <span class="inline-flex items-center gap-1"
-                ><span class="size-1.5 rounded-full {connected ? 'bg-emerald-500' : 'bg-amber-500'}"></span>{connected
-                  ? "Live"
-                  : "Reconnecting"}</span
+              <span
+                class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold {connected
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200'}"
               >
+                {#if connected}<Wifi class="size-3.5" />{:else}<WifiOff class="size-3.5" />{/if}
+                {connected ? "Live" : "Disconnected"}
+              </span>
               <span>{isHost ? "Host" : "Collaborator"}</span>
             {:else}
               <span class="inline-flex items-center gap-1"
@@ -873,7 +896,7 @@
               class="document-page relative"
               onfocusin={() => focusQuestion(currentQuestion!.id)}
             >
-              {#if sessionToken && sessionStatus === "active" && !currentLock && !hasOwnLock}
+              {#if sessionToken && connected && sessionStatus === "active" && !currentLock && !hasOwnLock}
                 <button
                   type="button"
                   class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[0.5px]"

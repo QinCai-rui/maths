@@ -68,12 +68,12 @@
       field.setAttribute("placeholder", placeholder);
       field.disabled = disabled;
       field.readOnly = disabled;
-      field.setValue(initialValue(), { format: initialFormat() });
       field.addEventListener("input", () => {
         value = field.getValue(outputFormat);
         onValueChange?.(value);
       });
       container.append(field);
+      field.setValue(initialValue(), { format: initialFormat() });
       mathfield = field;
     });
     return () => {

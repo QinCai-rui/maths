@@ -393,7 +393,6 @@ async function answerCell(question: Item, fontSize: number) {
   const groups = solutionGroups(question);
   for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
     const group = groups[groupIndex];
-    if (groupIndex) stack.push({ text: "AND", italics: true, margin: [0, 4, 0, 4] });
     const groupStack: PdfNode[] = [];
     if (question.requireAllSolutionGroups) {
       groupStack.push({
@@ -403,19 +402,22 @@ async function answerCell(question: Item, fontSize: number) {
         margin: [0, 0, 0, 2]
       });
     }
-    if (groups.length > 1 && group.length > 1) groupStack.push({ text: "(" });
-    for (let index = 0; index < group.length; index++) {
-      const solution = group[index];
-      if (index) groupStack.push({ text: "OR", italics: true, margin: [0, 2, 0, 2] });
-      if (solution.type === "expression")
-        groupStack.push({
-          svg: await texToSvg(expressionToLatex(String(solution.value))),
-          fit: [120, fontSize * 1.15]
-        });
-      else groupStack.push({ text: String(solution.value) });
+    if (group.every((solution) => solution.type !== "expression")) {
+      groupStack.push({ text: group.map((solution) => String(solution.value)).join(" OR ") });
+    } else {
+      const columns: PdfNode[] = [];
+      for (let index = 0; index < group.length; index++) {
+        const solution = group[index];
+        if (index) columns.push({ text: "OR", italics: true, width: "auto" });
+        if (solution.type === "expression") {
+          columns.push({ svg: await texToSvg(expressionToLatex(String(solution.value))), fit: [120, fontSize * 1.15] });
+        } else {
+          columns.push({ text: String(solution.value), width: "auto" });
+        }
+      }
+      groupStack.push({ columns, columnGap: 4 });
     }
-    if (groups.length > 1 && group.length > 1) groupStack.push({ text: ")" });
-    stack.push({ stack: groupStack });
+    stack.push({ stack: groupStack, margin: [0, 0, 0, groupIndex < groups.length - 1 ? 6 : 0] });
   }
   if (question.requireAllSolutionGroups && question.solutionOrderMatters) {
     stack.push({
@@ -448,13 +450,13 @@ function previewAnswerLogic(question: Item) {
             ? renderMath(`$$${expressionToLatex(String(solution.value))}$$`)
             : String(solution.value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         )
-        .join("<br><em>OR</em><br>");
-      const contents = groups.length > 1 && group.length > 1 ? `(${alternatives})` : alternatives;
+        .join(' <em class="answer-or">OR</em> ');
+      const contents = alternatives;
       return question.requireAllSolutionGroups
         ? `<div class="answer-group"><strong>Required answer ${groups.indexOf(group) + 1}</strong><div>${contents}</div></div>`
         : contents;
     })
-    .join('<div class="answer-operator">AND</div>');
+    .join("");
   return question.requireAllSolutionGroups && question.solutionOrderMatters
     ? `${html}<br><small><em>Answer groups must be in order.</em></small>`
     : html;
@@ -542,6 +544,6 @@ export function previewAnswerSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} answers`,
     `<main class="answer-preview"><h1>${set.name.replace(/[<>&]/g, "") || "Untitled set"}</h1><h2>Answer key</h2><table><thead><tr><th>Question</th><th>Answer</th><th>Marker comments</th></tr></thead><tbody>${rows}</tbody></table></main>`,
-    `@page { size: A4 portrait; margin: 14.82mm; } * { box-sizing: border-box; } body { color: #111; background: #fff; font-family: Arial, sans-serif; font-size: ${set.pdfOptions.answerTextSize}pt; } math { font-size: 1em !important; vertical-align: middle; } .answer-preview { width: 100%; } h1 { margin: 0 0 1.06mm; font-size: 20pt; } h2 { margin: 0 0 4.94mm; font-size: 12pt; font-weight: normal; } table { width: 100%; border-collapse: collapse; } thead { display: table-header-group; } tbody { display: table-row-group; } th, td { border: 1px solid #333; padding: 3mm; text-align: left; vertical-align: top; } th { background: #eee; } th:first-child, td:first-child { width: 10.75%; } th:nth-child(2), td:nth-child(2) { width: 28.36%; } .answer-group + .answer-operator { margin: 2mm 0; font-weight: bold; font-style: italic; } .answer-group strong { display: block; margin-bottom: 1mm; font-size: .85em; } tr { break-inside: avoid; page-break-inside: avoid; } @media print { .answer-preview { width: auto; } }`
+    `@page { size: A4 portrait; margin: 14.82mm; } * { box-sizing: border-box; } body { color: #111; background: #fff; font-family: Arial, sans-serif; font-size: ${set.pdfOptions.answerTextSize}pt; } math { font-size: 1em !important; vertical-align: middle; } .answer-preview { width: 100%; } h1 { margin: 0 0 1.06mm; font-size: 20pt; } h2 { margin: 0 0 4.94mm; font-size: 12pt; font-weight: normal; } table { width: 100%; border-collapse: collapse; } thead { display: table-header-group; } tbody { display: table-row-group; } th, td { border: 1px solid #333; padding: 3mm; text-align: left; vertical-align: top; } th { background: #eee; } th:first-child, td:first-child { width: 10.75%; } th:nth-child(2), td:nth-child(2) { width: 28.36%; } .answer-group { margin-bottom: 3mm; } .answer-group strong { display: block; margin-bottom: 1mm; font-size: .85em; } .answer-or { margin: 0 .5em; } tr { break-inside: avoid; page-break-inside: avoid; } @media print { .answer-preview { width: auto; } }`
   );
 }
