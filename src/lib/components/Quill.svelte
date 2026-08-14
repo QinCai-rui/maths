@@ -15,6 +15,7 @@
   let mathInput = $state("");
   let quillReady = $state(false);
   let editingMathIndex = $state<number | null>(null);
+  let mathScale = $state<"0.75" | "1" | "1.25" | "1.5">("1");
   let mathButtonEl: HTMLButtonElement | undefined;
   let removeEquationClick: (() => void) | undefined;
 
@@ -25,7 +26,8 @@
       const next = equation.nextSibling?.textContent || "";
       const before = previous && !/\s$/.test(previous) ? " " : "";
       const after = next && !/^\s/.test(next) ? " " : "";
-      equation.replaceWith(document.createTextNode(`${before}$$${equation.dataset.latex || ""}$$${after}`));
+      const scale = equation.dataset.scale && equation.dataset.scale !== "1" ? `[scale=${equation.dataset.scale}]` : "";
+      equation.replaceWith(document.createTextNode(`${before}$$${scale}${equation.dataset.latex || ""}$$${after}`));
     }
     return clone.innerHTML;
   }
@@ -45,7 +47,9 @@
       for (const match of matches) {
         fragment.append(document.createTextNode(text.slice(offset, match.index)));
         const equation = document.createElement("span");
-        equation.dataset.mathexEquation = match[1];
+        const parsed = /^\[scale=(0\.75|1|1\.25|1\.5)\]([\s\S]*)$/.exec(match[1]);
+        equation.dataset.mathexEquation = parsed ? parsed[2] : match[1];
+        equation.dataset.mathexScale = parsed?.[1] || "1";
         fragment.append(equation);
         offset = (match.index || 0) + match[0].length;
       }
@@ -59,9 +63,10 @@
     quill.clipboard.dangerouslyPasteHTML(prepareMathHtml(sourceHtml));
   }
 
-  function openMathEditor(index: number | null, latex = "") {
+  function openMathEditor(index: number | null, latex = "", scale: "0.75" | "1" | "1.25" | "1.5" = "1") {
     editingMathIndex = index;
     mathInput = latex;
+    mathScale = scale;
     mathPopoverOpen = true;
   }
 
@@ -69,7 +74,7 @@
     if (!quill || !mathInput.trim()) return;
     const index = editingMathIndex ?? quill.getSelection(true).index;
     if (editingMathIndex !== null) quill.deleteText(editingMathIndex, 1, "user");
-    quill.insertEmbed(index, "mathexMath", mathInput.trim(), "user");
+    quill.insertEmbed(index, "mathexMath", { latex: mathInput.trim(), scale: mathScale }, "user");
     if (editingMathIndex === null) quill.insertText(index + 1, " ", "user");
     quill.setSelection(index + (editingMathIndex === null ? 2 : 1), 0);
     mathPopoverOpen = false;
@@ -118,10 +123,14 @@
       static tagName = "span";
       static className = "mathex-equation";
 
-      static create(value: string) {
+      static create(value: string | { latex: string; scale?: string }) {
         const element = super.create() as HTMLElement;
-        element.dataset.latex = value;
-        element.innerHTML = renderToString(value, { throwOnError: false, output: "mathml" });
+        const latex = typeof value === "string" ? value : value.latex;
+        const scale = typeof value === "string" ? "1" : value.scale || "1";
+        element.dataset.latex = latex;
+        element.dataset.scale = scale;
+        element.style.fontSize = `${scale}em`;
+        element.innerHTML = renderToString(latex, { throwOnError: false, output: "mathml" });
         element.setAttribute("title", "Click to edit equation");
         element.setAttribute("role", "button");
         element.setAttribute("tabindex", "0");
@@ -129,7 +138,7 @@
       }
 
       static value(element: HTMLElement) {
-        return element.dataset.latex || "";
+        return { latex: element.dataset.latex || "", scale: element.dataset.scale || "1" };
       }
     };
     Quill.register(MathexMathBlot, true);
@@ -152,7 +161,9 @@
     });
     const Delta = Quill.import("delta") as any;
     quill.clipboard.addMatcher("span[data-mathex-equation]", (element: HTMLElement) =>
-      new Delta().insert({ mathexMath: element.dataset.mathexEquation || "" })
+      new Delta().insert({
+        mathexMath: { latex: element.dataset.mathexEquation || "", scale: element.dataset.mathexScale || "1" }
+      })
     );
 
     if (html) pasteHtml(html);
@@ -167,7 +178,11 @@
       if (!equation) return;
       event.preventDefault();
       const blot = Quill.find(equation);
-      openMathEditor(quill.getIndex(blot), equation.dataset.latex || "");
+      openMathEditor(
+        quill.getIndex(blot),
+        equation.dataset.latex || "",
+        (equation.dataset.scale as "0.75" | "1" | "1.25" | "1.5") || "1"
+      );
     };
     quill.root.addEventListener("click", equationClick);
     quill.root.addEventListener("keydown", (event: KeyboardEvent) => {
@@ -231,6 +246,15 @@
           Type naturally, use the symbol buttons, or open the on-screen math keyboard.
         </p>
       </div>
+      <label class="mb-3 flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
+        Equation size
+        <select class="h-8 rounded border border-input bg-background px-2 text-foreground" bind:value={mathScale}>
+          <option value="0.75">Small</option>
+          <option value="1">Normal</option>
+          <option value="1.25">Large</option>
+          <option value="1.5">Extra large</option>
+        </select>
+      </label>
       <MathField bind:value={mathInput} />
       <div class="mt-3 flex justify-between gap-2">
         <div>

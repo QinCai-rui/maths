@@ -3,9 +3,16 @@ import DOMPurify from "dompurify";
 
 const mathRegex = /\$\$([^$]+)\$\$/g;
 
-function renderKatex(latex: string): string {
+export function parseStoredMath(value: string) {
+  const match = /^\[scale=(0\.75|1|1\.25|1\.5)\]([\s\S]*)$/.exec(value);
+  return { latex: match ? match[2] : value, scale: match ? Number(match[1]) : 1 };
+}
+
+function renderKatex(value: string): string {
+  const { latex, scale } = parseStoredMath(value);
   try {
-    return renderToString(latex, { output: "mathml", throwOnError: false });
+    const math = renderToString(latex, { output: "mathml", throwOnError: false });
+    return scale === 1 ? math : `<span style="font-size:${scale}em">${math}</span>`;
   } catch {
     return `<code class="text-destructive">${latex}</code>`;
   }
@@ -13,11 +20,11 @@ function renderKatex(latex: string): string {
 
 export function renderMath(html: string): string {
   const clean = DOMPurify.sanitize(html);
-  return clean.replace(mathRegex, (_, latex) => renderKatex(latex));
+  return clean.replace(mathRegex, (_, value) => renderKatex(value));
 }
 
 export function renderMathNoSanitize(html: string): string {
-  return html.replace(mathRegex, (_, latex) => renderKatex(latex));
+  return html.replace(mathRegex, (_, value) => renderKatex(value));
 }
 
 export function stripTags(html: string): string {

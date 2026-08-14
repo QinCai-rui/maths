@@ -150,7 +150,7 @@ export const QuestionSet = z.object({
       slipHeight: z.number().min(1),
       cutMargin: z.number().min(0).max(80)
     })
-    .default({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.4, cutMargin: 50 })
+    .default({ questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 })
 });
 
 export type RoomState = "lobby" | "started" | "finished";

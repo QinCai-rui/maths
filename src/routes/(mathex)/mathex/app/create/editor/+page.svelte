@@ -37,7 +37,7 @@
     questionTextSize: 11,
     answerTextSize: 11,
     imageHeight: 30,
-    slipHeight: 49.4,
+    slipHeight: 49.5,
     cutMargin: 50
   });
   let currentQuestionIdx = $state(0);
@@ -111,7 +111,7 @@
         questionTextSize: source.pdfOptions?.questionTextSize ?? 11,
         answerTextSize: source.pdfOptions?.answerTextSize ?? 11,
         imageHeight: source.pdfOptions?.imageHeight ?? 30,
-        slipHeight: source.pdfOptions?.slipHeight ?? 49.4,
+        slipHeight: source.pdfOptions?.slipHeight ?? 49.5,
         cutMargin: source.pdfOptions?.cutMargin ?? 50
       };
       questions = source.questions.map(migrateQuestion);
@@ -200,7 +200,7 @@
     setName = "";
     instructions = "";
     coverResetKey++;
-    pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.4, cutMargin: 50 };
+    pdfOptions = { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 };
     currentQuestionIdx = 0;
     clearDraft();
     clearDialogOpen = false;
@@ -459,10 +459,10 @@
         </summary>
         <div class="absolute right-0 z-10 mt-1 w-72 rounded-md border bg-popover p-3 shadow-md">
           <div class="mb-3 grid grid-cols-2 gap-2 border-b pb-3 sm:grid-cols-3">
-            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+            <label class="grid min-w-0 gap-1 text-[0.7rem] text-muted-foreground">
               Question text
               <input
-                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                class="h-8 min-w-0 w-full rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="6"
                 max="18"
@@ -471,10 +471,10 @@
               />
               <span>6-18 pt</span>
             </label>
-            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+            <label class="grid min-w-0 gap-1 text-[0.7rem] text-muted-foreground">
               Answer text
               <input
-                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                class="h-8 min-w-0 w-full rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="6"
                 max="16"
@@ -483,10 +483,10 @@
               />
               <span>6-16 pt</span>
             </label>
-            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+            <label class="grid min-w-0 gap-1 text-[0.7rem] text-muted-foreground">
               Image height
               <input
-                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                class="h-8 min-w-0 w-full rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="5"
                 max="35"
@@ -495,10 +495,10 @@
               />
               <span>5-35 mm</span>
             </label>
-            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+            <label class="grid min-w-0 gap-1 text-[0.7rem] text-muted-foreground">
               Slip height
               <input
-                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                class="h-8 min-w-0 w-full rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="1"
                 step="0.5"
@@ -506,10 +506,10 @@
               />
               <span>≥ 1 mm</span>
             </label>
-            <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
+            <label class="grid min-w-0 gap-1 text-[0.7rem] text-muted-foreground">
               Cut-off margin
               <input
-                class="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                class="h-8 min-w-0 w-full rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="0"
                 max="80"

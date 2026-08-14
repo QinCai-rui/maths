@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { Question, QuestionSet } from "./schemas";
-import { renderMath } from "./content";
+import { parseStoredMath, renderMath } from "./content";
 
 type Set = z.infer<typeof QuestionSet>;
 type Item = z.infer<typeof Question>;
@@ -199,9 +199,10 @@ async function convertMathNodes(nodes: PdfNode[], mathHeight: number): Promise<P
       const hasSpaceBefore = /\s$/.test(before);
       const hasSpaceAfter = /^\s/.test(plain.slice(matchEnd));
       if (before) columns.push({ text: before.trimEnd(), width: "auto" });
+      const math = parseStoredMath(match[1]);
       columns.push({
-        svg: await texToSvg(match[1]),
-        fit: [160, mathHeight * 1.15],
+        svg: await texToSvg(math.latex),
+        fit: [160, mathHeight * 1.15 * math.scale],
         width: "auto",
         margin: [hasSpaceBefore ? mathHeight * 0.3 : 0, 0, hasSpaceAfter ? mathHeight * 0.3 : 0, 0]
       });
