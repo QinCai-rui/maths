@@ -123,8 +123,11 @@
   let historyTimer: ReturnType<typeof setTimeout> | null = null;
   let localBaseline: CollaborativeSetSnapshot | null = null;
   let liveHistoryBaseline: CollaborativeSetSnapshot | null = null;
-  let liveHistoryPending = false;
-  let pendingLiveStructure = false;
+  let liveTransaction: {
+    before: CollaborativeSetSnapshot;
+    target: ApplyClientHistoryTarget;
+    summary: string;
+  } | null = null;
   let applyingLocalHistory = false;
 
   let isHost = $derived(hostSession);
@@ -214,13 +217,13 @@
   }
 
   function flushHistory() {
-    const baseline = sessionToken ? liveHistoryBaseline : localBaseline;
+    if (sessionToken) return;
+    const baseline = localBaseline;
     if (applyingLocalHistory || !baseline) return;
     if (historyTimer) clearTimeout(historyTimer);
     historyTimer = null;
     const after = editorSnapshot();
     if (sameValue(baseline, after)) {
-      liveHistoryPending = false;
       return;
     }
     const before = baseline;
@@ -235,20 +238,39 @@
         status: "applied" as const
       }
     ].slice(-100);
-    if (sessionToken) {
-      liveHistoryBaseline = cloneDocument(after);
-      liveHistoryPending = false;
-    } else localBaseline = cloneDocument(after);
+    localBaseline = cloneDocument(after);
   }
 
   function scheduleHistory() {
-    if (applyingLocalHistory || (sessionToken ? !liveHistoryBaseline : !localBaseline)) return;
-    if (sessionToken) liveHistoryPending = true;
+    if (sessionToken || applyingLocalHistory || !localBaseline) return;
     if (historyTimer) clearTimeout(historyTimer);
     historyTimer = setTimeout(flushHistory, 1_000);
   }
 
-  function applyLocalSnapshot(snapshot: CollaborativeSetSnapshot) {
+  function beginLiveTransaction(target: ApplyClientHistoryTarget, summary: string) {
+    if (!sessionToken || liveTransaction) return;
+    liveTransaction = {
+      before: cloneDocument(liveHistoryBaseline || editorSnapshot()),
+      target,
+      summary
+    };
+  }
+
+  function commitLiveTransaction() {
+    const transaction = liveTransaction;
+    if (!transaction) return;
+    liveTransaction = null;
+    const after = editorSnapshot();
+    if (!sameValue(transaction.before, after)) {
+      undoHistory = [
+        ...undoHistory.filter((entry) => entry.status !== "undone"),
+        { ...transaction, after, status: "applied" as const }
+      ].slice(-100);
+    }
+    liveHistoryBaseline = cloneDocument(after);
+  }
+
+  function applySnapshot(snapshot: CollaborativeSetSnapshot) {
     applyingLocalHistory = true;
     setName = snapshot.name;
     instructions = snapshot.instructions;
@@ -257,7 +279,8 @@
     if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
       currentQuestionId = questions[0]?.id || null;
     }
-    localBaseline = editorSnapshot();
+    if (sessionToken) liveHistoryBaseline = editorSnapshot();
+    else localBaseline = editorSnapshot();
     queueMicrotask(() => (applyingLocalHistory = false));
   }
 
@@ -320,10 +343,15 @@
       currentQuestionId = questions[0]?.id || null;
     }
     lastServerSettings = JSON.stringify({ setName, instructions, pdfOptions });
-    if (pendingLiveStructure) {
-      pendingLiveStructure = false;
-      scheduleHistory();
-    } else if (!liveHistoryPending) liveHistoryBaseline = cloneDocument(editorSnapshot());
+    if (liveTransaction?.target.type === "structure") {
+      if (liveTransaction.target.action === "add" || liveTransaction.target.action === "duplicate") {
+        const added = questions.find(
+          ({ id }) => !liveTransaction!.before.questions.some((question) => question.id === id)
+        );
+        if (added) liveTransaction.target.questionId = added.id;
+      }
+      commitLiveTransaction();
+    } else if (!liveTransaction) liveHistoryBaseline = cloneDocument(editorSnapshot());
   }
 
   function joinSession(reconnecting = false) {
@@ -394,7 +422,7 @@
       if (index < 0) return;
       questions[index] = question;
       lastQuestionSent.set(question.id, JSON.stringify(plainQuestion(question)));
-      if (!liveHistoryPending) liveHistoryBaseline = cloneDocument(editorSnapshot());
+      if (!liveTransaction) liveHistoryBaseline = cloneDocument(editorSnapshot());
     });
     socket.on("sessionDeleted", () => {
       deleted = true;
@@ -445,6 +473,7 @@
   $effect(() => {
     const serialized = JSON.stringify({ setName, instructions, questions, pdfOptions });
     if (!ready) return;
+    if (applyingLocalHistory) return;
     if (!sessionToken) {
       localSaved = false;
       if (localTimer) clearTimeout(localTimer);
@@ -455,12 +484,13 @@
     if (!joined || !isHost) return;
     const settings = JSON.stringify({ setName, instructions, pdfOptions });
     if (settings === lastServerSettings) return;
-    scheduleHistory();
+    beginLiveTransaction({ type: "details" }, "Edited set details");
     if (settingsTimer) clearTimeout(settingsTimer);
     settingsTimer = setTimeout(() => {
       lastServerSettings = settings;
       socket?.emit("updateMetadata", { name: setName, instructions }, handleOperation);
       socket?.emit("updatePdfOptions", { pdfOptions }, handleOperation);
+      commitLiveTransaction();
     }, 350);
     serialized;
   });
@@ -470,7 +500,6 @@
     const questionId = currentQuestion.id;
     const serialized = JSON.stringify(plainQuestion(currentQuestion));
     if (serialized === lastQuestionSent.get(questionId)) return;
-    scheduleHistory();
     const timer = questionTimers.get(questionId);
     if (timer) clearTimeout(timer);
     questionTimers.set(
@@ -498,6 +527,9 @@
   function releaseQuestion(questionId: string) {
     if (!ownedLocks[questionId]) return;
     sendQuestion(questionId);
+    if (liveTransaction?.target.type === "question" && liveTransaction.target.questionId === questionId) {
+      commitLiveTransaction();
+    }
     socket?.emit("releaseLock", { questionId });
     ownedLocks = { ...ownedLocks, [questionId]: false };
   }
@@ -507,7 +539,7 @@
   }
 
   function handleStructuralOperation(result: { ok: true } | { ok: false; error: string }) {
-    if (!result.ok) pendingLiveStructure = false;
+    if (!result.ok) liveTransaction = null;
     handleOperation(result);
   }
 
@@ -541,6 +573,8 @@
         return;
       }
       ownedLocks = { ...ownedLocks, [questionId]: true };
+      const index = questions.findIndex(({ id }) => id === questionId);
+      beginLiveTransaction({ type: "question", questionId }, `Edited question ${index + 1}`);
     });
   }
 
@@ -555,7 +589,14 @@
   function addQuestion() {
     if (questions.length >= 100) return toast.error("A set can contain at most 100 questions");
     if (sessionToken) {
-      pendingLiveStructure = true;
+      beginLiveTransaction(
+        {
+          type: "structure",
+          action: "add",
+          questionId: currentQuestionId || questions.at(-1)?.id || "00000000-0000-4000-8000-000000000000"
+        },
+        "Added question"
+      );
       socket?.emit("addQuestion", { afterQuestionId: currentQuestionId }, handleStructuralOperation);
       return;
     }
@@ -567,7 +608,7 @@
 
   function duplicateQuestion(question: CollaborativeQuestionValue) {
     if (sessionToken) {
-      pendingLiveStructure = true;
+      beginLiveTransaction({ type: "structure", action: "duplicate", questionId: question.id }, "Duplicated question");
       socket?.emit("duplicateQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
     }
@@ -582,7 +623,7 @@
     const toIndex = index + direction;
     if (toIndex < 0 || toIndex >= questions.length) return;
     if (sessionToken) {
-      pendingLiveStructure = true;
+      beginLiveTransaction({ type: "structure", action: "move", questionId: question.id }, "Moved question");
       socket?.emit("moveQuestion", { questionId: question.id, toIndex }, handleStructuralOperation);
       return;
     }
@@ -599,7 +640,7 @@
     if (!question) return;
     pendingDeleteQuestion = null;
     if (sessionToken) {
-      pendingLiveStructure = true;
+      beginLiveTransaction({ type: "structure", action: "delete", questionId: question.id }, "Deleted question");
       socket?.emit("deleteQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
     }
@@ -611,54 +652,68 @@
 
   function undo() {
     flushHistory();
+    if (sessionToken && currentQuestionId && ownedLocks[currentQuestionId]) releaseQuestion(currentQuestionId);
     const entry = [...undoHistory].reverse().find((candidate) => candidate.status === "applied");
     if (!entry) return;
     if (!sessionToken) {
-      applyLocalSnapshot(entry.before);
+      applySnapshot(entry.before);
       undoHistory = undoHistory.map((candidate) =>
         candidate === entry ? { ...candidate, status: "undone" as const } : candidate
       );
       return;
     }
-    if (entry.target.type === "question" && ownedLocks[entry.target.questionId])
-      releaseQuestion(entry.target.questionId);
+    const rollback = editorSnapshot();
+    applySnapshot(entry.before);
+    undoHistory = undoHistory.map((candidate) =>
+      candidate === entry ? { ...candidate, status: "undone" as const } : candidate
+    );
     socket?.emit(
       "applyClientHistory",
       { target: entry.target, expected: entry.after, desired: entry.before },
       (result) => {
-        if (!result.ok) return toast.error(result.error);
-        undoHistory = undoHistory.map((candidate) =>
-          candidate === entry ? { ...candidate, status: "undone" as const } : candidate
-        );
+        if (!result.ok) {
+          applySnapshot(rollback);
+          undoHistory = undoHistory.map((candidate) =>
+            candidate === entry ? { ...candidate, status: "applied" as const } : candidate
+          );
+          return toast.error(result.error);
+        }
         liveHistoryBaseline = cloneDocument(entry.before);
-        liveHistoryPending = false;
+        liveTransaction = null;
       }
     );
   }
 
   function redo() {
     flushHistory();
+    if (sessionToken && currentQuestionId && ownedLocks[currentQuestionId]) releaseQuestion(currentQuestionId);
     const entry = undoHistory.find((candidate) => candidate.status === "undone");
     if (!entry) return;
     if (!sessionToken) {
-      applyLocalSnapshot(entry.after);
+      applySnapshot(entry.after);
       undoHistory = undoHistory.map((candidate) =>
         candidate === entry ? { ...candidate, status: "applied" as const } : candidate
       );
       return;
     }
-    if (entry.target.type === "question" && ownedLocks[entry.target.questionId])
-      releaseQuestion(entry.target.questionId);
+    const rollback = editorSnapshot();
+    applySnapshot(entry.after);
+    undoHistory = undoHistory.map((candidate) =>
+      candidate === entry ? { ...candidate, status: "applied" as const } : candidate
+    );
     socket?.emit(
       "applyClientHistory",
       { target: entry.target, expected: entry.before, desired: entry.after },
       (result) => {
-        if (!result.ok) return toast.error(result.error);
-        undoHistory = undoHistory.map((candidate) =>
-          candidate === entry ? { ...candidate, status: "applied" as const } : candidate
-        );
+        if (!result.ok) {
+          applySnapshot(rollback);
+          undoHistory = undoHistory.map((candidate) =>
+            candidate === entry ? { ...candidate, status: "undone" as const } : candidate
+          );
+          return toast.error(result.error);
+        }
         liveHistoryBaseline = cloneDocument(entry.after);
-        liveHistoryPending = false;
+        liveTransaction = null;
       }
     );
   }
