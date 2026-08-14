@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
   import { Header } from "$lib/components/ui/header";
-  import { ArrowUpRight, Calculator, CirclePlay, FileQuestion, ShieldCheck, Timer } from "@lucide/svelte/icons";
+  import { ArrowUpRight, Calculator, CirclePlay, FileQuestion, Radio, ShieldCheck, Timer } from "@lucide/svelte/icons";
 </script>
 
 <div class="mathex-shell relative min-h-full overflow-hidden px-4 py-5 sm:px-8 sm:py-8">
@@ -26,6 +26,12 @@
             <ArrowUpRight class="h-4 w-4" />
           </Button>
         </div>
+        <a
+          href="/mathex/app/live"
+          class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+        >
+          <Radio class="h-4 w-4" /> Running an in-person event? Open the Live Dashboard <ArrowUpRight class="h-4 w-4" />
+        </a>
       </div>
 
       <div class="mathex-panel relative overflow-hidden rounded-3xl p-5 sm:p-7">

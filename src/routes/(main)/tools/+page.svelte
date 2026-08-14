@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Header } from "$lib/components/ui/header";
-  import { Brain, CircleDot, Gamepad2, Pencil, Zap } from "@lucide/svelte/icons";
+  import { Brain, CircleDot, Gamepad2, Pencil, Radio, Zap } from "@lucide/svelte/icons";
 
   interface Game {
     name: string;
@@ -82,7 +82,9 @@
         class="group relative rounded-xl border border-border/60 bg-card p-6 shadow-sm transition-all hover:shadow-md hover:border-primary/20"
       >
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 border-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-800">
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600 border-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-800"
+          >
             <Pencil class="h-5 w-5" />
           </div>
           <h3 class="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
@@ -90,11 +92,37 @@
           </h3>
         </div>
         <p class="mt-3 text-sm text-muted-foreground">Create and edit question sets for a Mathex round.</p>
-        <div class="mt-4 flex items-center text-sm font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+        <div
+          class="mt-4 flex items-center text-sm font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100"
+        >
           Open editor
           <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
+        </div>
+      </a>
+      <a
+        href="/mathex/app/live"
+        class="group relative rounded-xl border border-border/60 bg-card p-6 shadow-sm transition-all hover:border-primary/20 hover:shadow-md"
+      >
+        <div class="flex items-center gap-3">
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-500/10 text-cyan-600 dark:border-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400"
+          >
+            <Radio class="h-5 w-5" />
+          </div>
+          <h3 class="text-lg font-semibold text-foreground transition-colors group-hover:text-primary">
+            Mathex Live Dashboard
+          </h3>
+        </div>
+        <p class="mt-3 text-sm text-muted-foreground">Score and project a physical Mathex competition in real time.</p>
+        <div
+          class="mt-4 flex items-center text-sm font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          Set up dashboard
+          <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
+            ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg
+          >
         </div>
       </a>
     </div>

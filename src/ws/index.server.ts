@@ -30,6 +30,7 @@ import { z } from "zod";
 import { randomBytes, randomInt } from "crypto";
 import { create, all } from "mathjs";
 import { RoomStore } from "../lib/mathex/rooms.server";
+import { registerPhysicalCompetitionServer } from "./physical.server";
 
 const config = {};
 const math = create(all, config);
@@ -43,6 +44,7 @@ export const createWSServer = (base: ServerInstance) => {
     // Question images are embedded as data URLs in the portable question set.
     maxHttpBufferSize: 10 * 1024 * 1024
   });
+  registerPhysicalCompetitionServer(io);
   const roomCreateNamespace: Namespace<
     RoomCreateClientToServerEvents,
     RoomCreateServerToClientEvents,

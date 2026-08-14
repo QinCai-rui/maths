@@ -14,7 +14,7 @@
 
   let { children }: Props = $props();
 
-  const siteShellRoutes = ["/mathex/app", "/mathex/app/create", "/mathex/app/play"];
+  const siteShellRoutes = ["/mathex/app", "/mathex/app/create", "/mathex/app/play", "/mathex/app/live"];
   const usesSiteShell = $derived(siteShellRoutes.includes(page.url.pathname));
 </script>
 
