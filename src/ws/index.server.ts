@@ -21,9 +21,9 @@ import {
   type Room,
   type LogEntry,
   type LeaderboardEntry,
+  type SolutionType,
   RoomName,
-  Question,
-  SolutionType
+  Question
 } from "../lib/mathex/schemas";
 
 import { z } from "zod";

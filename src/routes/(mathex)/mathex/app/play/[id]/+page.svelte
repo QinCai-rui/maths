@@ -322,7 +322,10 @@
                 toast.error("Enter an answer first");
                 return;
               }
-              socket.emit("answer", submittedAnswer);
+              socket.emit(
+                "answer",
+                Array.isArray(submittedAnswer) ? (submittedAnswer as (string | number)[]) : submittedAnswer
+              );
             }}
           >
             <Button
