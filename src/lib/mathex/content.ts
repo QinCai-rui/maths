@@ -4,7 +4,7 @@ import DOMPurify from "dompurify";
 const mathRegex = /\$\$([^$]+)\$\$/g;
 
 export function parseStoredMath(value: string) {
-  const match = /^\[scale=(0\.75|1|1\.25|1\.5)\]([\s\S]*)$/.exec(value);
+  const match = /^\[scale=(0\.5|0\.75|1|1\.25|1\.5|1\.75|2\.5)\]([\s\S]*)$/.exec(value);
   return { latex: match ? match[2] : value, scale: match ? Number(match[1]) : 1 };
 }
 

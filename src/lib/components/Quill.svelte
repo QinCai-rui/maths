@@ -8,6 +8,8 @@
     resetKey?: number;
   }
 
+  type MathScale = "0.5" | "0.75" | "1" | "1.25" | "1.5" | "1.75" | "2.5";
+
   let { html = $bindable(""), resetKey = 0 }: Props = $props();
   let node: HTMLDivElement;
   let quill: any = null;
@@ -15,7 +17,7 @@
   let mathInput = $state("");
   let quillReady = $state(false);
   let editingMathIndex = $state<number | null>(null);
-  let mathScale = $state<"0.75" | "1" | "1.25" | "1.5">("1");
+  let mathScale = $state<MathScale>("1");
   let mathButtonEl: HTMLButtonElement | undefined;
   let removeEquationClick: (() => void) | undefined;
 
@@ -47,7 +49,7 @@
       for (const match of matches) {
         fragment.append(document.createTextNode(text.slice(offset, match.index)));
         const equation = document.createElement("span");
-        const parsed = /^\[scale=(0\.75|1|1\.25|1\.5)\]([\s\S]*)$/.exec(match[1]);
+        const parsed = /^\[scale=(0\.5|0\.75|1|1\.25|1\.5|1\.75|2\.5)\]([\s\S]*)$/.exec(match[1]);
         equation.dataset.mathexEquation = parsed ? parsed[2] : match[1];
         equation.dataset.mathexScale = parsed?.[1] || "1";
         fragment.append(equation);
@@ -63,7 +65,7 @@
     quill.clipboard.dangerouslyPasteHTML(prepareMathHtml(sourceHtml));
   }
 
-  function openMathEditor(index: number | null, latex = "", scale: "0.75" | "1" | "1.25" | "1.5" = "1") {
+  function openMathEditor(index: number | null, latex = "", scale: MathScale = "1") {
     editingMathIndex = index;
     mathInput = latex;
     mathScale = scale;
@@ -181,7 +183,7 @@
       openMathEditor(
         quill.getIndex(blot),
         equation.dataset.latex || "",
-        (equation.dataset.scale as "0.75" | "1" | "1.25" | "1.5") || "1"
+        (equation.dataset.scale as MathScale) || "1"
       );
     };
     quill.root.addEventListener("click", equationClick);
@@ -249,10 +251,10 @@
       <label class="mb-3 flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
         Equation size
         <select class="h-8 rounded border border-input bg-background px-2 text-foreground" bind:value={mathScale}>
-          <option value="0.75">Small</option>
+          <option value="0.5">Small</option>
           <option value="1">Normal</option>
-          <option value="1.25">Large</option>
-          <option value="1.5">Extra large</option>
+          <option value="1.75">Large</option>
+          <option value="2.5">Extra large</option>
         </select>
       </label>
       <MathField bind:value={mathInput} />
