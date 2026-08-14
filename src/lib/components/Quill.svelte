@@ -317,12 +317,16 @@
     font-family: inherit;
   }
   .quill-wrapper :global(.ql-container) {
+    height: auto;
+    min-width: 0;
     border-radius: 0 0 0.375rem 0.375rem;
     font-family: inherit;
     font-size: inherit;
   }
   .quill-wrapper :global(.ql-editor) {
+    height: auto;
     min-height: 2.5rem;
+    overflow-wrap: anywhere;
     padding: 0.75rem 1rem;
   }
   .quill-wrapper :global(.ql-editor.ql-blank::before) {

@@ -80,6 +80,7 @@
   let collaborators = $state<CollaboratorPresence[]>([]);
   let locks = $state<QuestionLock[]>([]);
   let ownedLocks = $state<Record<string, boolean>>({});
+  let acquiringQuestionId = $state<string | null>(null);
   let joined = $state(false);
   let joining = $state(false);
   let connected = $state(false);
@@ -171,9 +172,12 @@
   }
 
   function applyServerState(state: CollaborativeSetSnapshot) {
+    const localQuestions = new Map(questions.map((question) => [question.id, question]));
     setName = state.name;
     instructions = state.instructions;
-    questions = state.questions;
+    questions = state.questions.map((question) =>
+      ownedLocks[question.id] ? localQuestions.get(question.id) || question : question
+    );
     pdfOptions = state.pdfOptions;
     sessionStatus = state.status;
     if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
@@ -253,7 +257,10 @@
     return () => {
       if (lockHeartbeat) clearInterval(lockHeartbeat);
       for (const questionId of Object.keys(ownedLocks)) {
-        if (ownedLocks[questionId]) socket?.emit("releaseLock", { questionId });
+        if (ownedLocks[questionId]) {
+          sendQuestion(questionId);
+          socket?.emit("releaseLock", { questionId });
+        }
       }
       socket?.disconnect();
     };
@@ -290,11 +297,31 @@
     questionTimers.set(
       questionId,
       setTimeout(() => {
-        lastQuestionSent.set(questionId, serialized);
-        socket?.emit("updateQuestion", { questionId, question: plainQuestion(currentQuestion!) }, handleOperation);
+        sendQuestion(questionId);
       }, 120)
     );
   });
+
+  function sendQuestion(questionId: string) {
+    const question = questions.find(({ id }) => id === questionId);
+    if (!question || !ownedLocks[questionId]) return;
+    const serialized = JSON.stringify(plainQuestion(question));
+    if (serialized === lastQuestionSent.get(questionId)) return;
+    const timer = questionTimers.get(questionId);
+    if (timer) clearTimeout(timer);
+    questionTimers.delete(questionId);
+    lastQuestionSent.set(questionId, serialized);
+    socket?.emit("updateQuestion", { questionId, question: plainQuestion(question) }, (result) => {
+      if (!result.ok) lastQuestionSent.delete(questionId);
+    });
+  }
+
+  function releaseQuestion(questionId: string) {
+    if (!ownedLocks[questionId]) return;
+    sendQuestion(questionId);
+    socket?.emit("releaseLock", { questionId });
+    ownedLocks = { ...ownedLocks, [questionId]: false };
+  }
 
   function handleOperation(result: { ok: true } | { ok: false; error: string }) {
     if (!result.ok) toast.error(result.error);
@@ -310,11 +337,20 @@
   }
 
   function focusQuestion(questionId: string) {
-    if (!sessionToken || !joined || sessionStatus !== "active" || lockedByOther(questionId) || ownedLocks[questionId])
+    if (
+      !sessionToken ||
+      !joined ||
+      sessionStatus !== "active" ||
+      lockedByOther(questionId) ||
+      ownedLocks[questionId] ||
+      acquiringQuestionId === questionId
+    )
       return;
     const question = questions.find(({ id }) => id === questionId);
     if (question) lastQuestionSent.set(questionId, JSON.stringify(plainQuestion(question)));
+    acquiringQuestionId = questionId;
     socket?.emit("acquireLock", { questionId }, (result) => {
+      acquiringQuestionId = null;
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -328,15 +364,13 @@
     if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
     setTimeout(() => {
       if (card.contains(document.activeElement) || !ownedLocks[questionId]) return;
-      socket?.emit("releaseLock", { questionId });
-      ownedLocks = { ...ownedLocks, [questionId]: false };
+      releaseQuestion(questionId);
     });
   }
 
   function selectQuestion(questionId: string) {
     if (currentQuestionId && ownedLocks[currentQuestionId]) {
-      socket?.emit("releaseLock", { questionId: currentQuestionId });
-      ownedLocks = { ...ownedLocks, [currentQuestionId]: false };
+      releaseQuestion(currentQuestionId);
     }
     currentQuestionId = questionId;
     mobileOutlineOpen = false;
@@ -727,14 +761,14 @@
                   ><X class="size-4" /></button
                 >
               </div>
-              <div class="grid gap-5 lg:grid-cols-[1fr_16rem]">
-                <div class="grid gap-2">
+              <div class="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
+                <div class="grid min-w-0 gap-2">
                   <span class="text-xs font-semibold">Cover instructions</span><Quill
                     bind:html={instructions}
                     disabled={!!sessionToken && !isHost}
                   />
                 </div>
-                <div class="grid grid-cols-2 gap-3 content-start">
+                <div class="grid min-w-0 grid-cols-2 content-start gap-3">
                   <label class="setting-field"
                     >Question text <input
                       type="number"
@@ -795,7 +829,8 @@
 
           {#if currentQuestion}
             {@const currentLock = lockFor(currentQuestion.id)}
-            {@const readOnly = sessionStatus !== "active" || lockedByOther(currentQuestion.id)}
+            {@const hasOwnLock = !sessionToken || ownedLocks[currentQuestion.id]}
+            {@const readOnly = sessionStatus !== "active" || !hasOwnLock}
             <div class="mb-3 flex items-center gap-3 px-1">
               <div>
                 <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-600">
@@ -814,7 +849,7 @@
                 </div>
               {/if}
             </div>
-            {#if readOnly && currentLock}
+            {#if lockedByOther(currentQuestion.id) && currentLock}
               <div
                 class="mb-3 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100"
               >
@@ -823,10 +858,25 @@
               </div>
             {/if}
             <section
-              class="document-page"
+              class="document-page relative"
               onfocusin={() => focusQuestion(currentQuestion!.id)}
               onfocusout={(event) => blurQuestion(event, currentQuestion!.id)}
             >
+              {#if sessionToken && sessionStatus === "active" && !currentLock && !hasOwnLock}
+                <button
+                  type="button"
+                  class="absolute inset-0 z-20 flex cursor-text items-start justify-center rounded-[inherit] bg-background/15 pt-5 backdrop-blur-[0.5px]"
+                  onclick={() => focusQuestion(currentQuestion!.id)}
+                  disabled={acquiringQuestionId === currentQuestion.id}
+                  aria-label="Acquire question lock to edit"
+                >
+                  <span class="rounded-full border bg-background px-3 py-1.5 text-xs font-medium shadow-sm">
+                    {acquiringQuestionId === currentQuestion.id
+                      ? "Getting edit access..."
+                      : "Click to edit this question"}
+                  </span>
+                </button>
+              {/if}
               {#key currentQuestion.id}
                 <QuestionEditor question={currentQuestion} disabled={readOnly} />
               {/key}
@@ -1019,12 +1069,17 @@
   }
   .setting-field {
     display: grid;
+    min-width: 0;
     gap: 0.35rem;
     color: var(--muted-foreground);
     font-size: 0.68rem;
     font-weight: 600;
   }
   .setting-field input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     height: 2.25rem;
     border: 1px solid var(--border);
     border-radius: 0.45rem;

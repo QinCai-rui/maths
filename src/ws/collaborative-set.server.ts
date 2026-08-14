@@ -279,7 +279,7 @@ export function registerCollaborativeSetServer(io: AnyServer): void {
       session.set.updatedAt = Date.now();
       lock.expiresAt = Date.now() + LOCK_TTL_MS;
       store.save(session);
-      namespace.to(roomName(session.set.sessionToken)).emit("questionUpdated", question);
+      socket.to(roomName(session.set.sessionToken)).emit("questionUpdated", question);
       namespace.to(roomName(session.set.sessionToken)).emit("lockChanged", lock.questionId, lock);
       accept(ack);
     });
@@ -291,7 +291,9 @@ export function registerCollaborativeSetServer(io: AnyServer): void {
       if (!session) return;
       session.set.name = parsed.data.name;
       session.set.instructions = parsed.data.instructions;
-      saveAndEmit(session);
+      session.set.updatedAt = Date.now();
+      store.save(session);
+      socket.to(roomName(session.set.sessionToken)).emit("state", session.set);
       accept(ack);
     });
 
@@ -301,7 +303,9 @@ export function registerCollaborativeSetServer(io: AnyServer): void {
       const session = hostSession(socket, ack);
       if (!session) return;
       session.set.pdfOptions = parsed.data.pdfOptions;
-      saveAndEmit(session);
+      session.set.updatedAt = Date.now();
+      store.save(session);
+      socket.to(roomName(session.set.sessionToken)).emit("state", session.set);
       accept(ack);
     });
 
