@@ -504,7 +504,7 @@
                 step="0.5"
                 bind:value={pdfOptions.slipHeight}
               />
-              <span>Any height, in mm</span>
+              <span>≥ 1 mm</span>
             </label>
             <label class="grid gap-1 text-[0.7rem] text-muted-foreground">
               Cut-off margin
@@ -516,7 +516,7 @@
                 step="1"
                 bind:value={pdfOptions.cutMargin}
               />
-              <span>right, 0-80 mm</span>
+              <span>0-80 mm</span>
             </label>
           </div>
           <p class="mb-2 text-xs leading-4 text-muted-foreground">
