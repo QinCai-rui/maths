@@ -5,7 +5,9 @@
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Question, QuestionSet, SolutionItem } from "$lib/mathex/schemas";
   import { stripTags } from "$lib/mathex/content";
+  import type { SetShareClientToServerEvents, SetShareServerToClientEvents } from "$lib/mathex/set-share.schemas";
   import { downloadAnswerSet, downloadQuestionSet, previewAnswerSet, previewQuestionSet } from "$lib/mathex/print";
+  import { copyText } from "$lib/utils";
   import { toast } from "svelte-sonner";
 
   import QuestionEditor from "$lib/mathex/editors/QuestionEditor.svelte";
@@ -19,9 +21,13 @@
   import Download from "@lucide/svelte/icons/download";
   import FileText from "@lucide/svelte/icons/file-text";
   import Trash2 from "@lucide/svelte/icons/trash-2";
+  import Share2 from "@lucide/svelte/icons/share-2";
+  import Link2 from "@lucide/svelte/icons/link-2";
+  import { io, type Socket } from "socket.io-client";
 
   const DRAFT_KEY = "mathex-draft";
   const ROOM_SET_KEY = "mathex-room-set";
+  const shareSocket: Socket<SetShareServerToClientEvents, SetShareClientToServerEvents> = io("/set-share");
 
   let questions: z.infer<typeof Question>[] = $state([]);
   let setName = $state("");
@@ -38,6 +44,11 @@
   let currentQuestion = $derived(questions[currentQuestionIdx]);
   let isDirty = $state(false);
   let loaded = $state(false);
+  let shareDialogOpen = $state(false);
+  let shareExpiryMs = $state<3_600_000 | 21_600_000 | 43_200_000 | 86_400_000>(86_400_000);
+  let shareUrl = $state("");
+  let shareExpiresAt = $state<number | null>(null);
+  let sharing = $state(false);
 
   // --- Migrate old-format solutions ---
   function migrateSolutions(sol: any[]): z.infer<typeof SolutionItem>[] {
@@ -259,6 +270,44 @@
     URL.revokeObjectURL(url);
   }
 
+  function openShareDialog() {
+    shareUrl = "";
+    shareExpiresAt = null;
+    shareDialogOpen = true;
+  }
+
+  function createShareLink() {
+    const set = QuestionSet.safeParse({ name: setName, instructions, questions, pdfOptions });
+    if (!set.success) {
+      const issue = set.error.issues[0];
+      toast.error(`Cannot share ${issue.path.join(".") || "set"}: ${issue.message}`);
+      return;
+    }
+    if (set.data.questions.length === 0) {
+      toast.error("Add at least one question before sharing");
+      return;
+    }
+    sharing = true;
+    shareSocket.emit("createShare", { set: set.data, expiresInMs: shareExpiryMs }, (result) => {
+      sharing = false;
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      shareExpiresAt = result.expiresAt;
+      shareUrl = `${window.location.origin}/mathex/app/create/editor/share/${result.token}`;
+    });
+  }
+
+  async function copyShareLink() {
+    try {
+      await copyText(shareUrl);
+      toast.success("Share link copied");
+    } catch {
+      toast.error("Could not copy share link");
+    }
+  }
+
   async function exportQuestions() {
     if (!questions.length) return toast.error("Nothing to export");
     try {
@@ -318,6 +367,46 @@
   }
 </script>
 
+<AlertDialog.Root bind:open={shareDialogOpen}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Share this question set</AlertDialog.Title>
+      <AlertDialog.Description>
+        The link contains an immutable snapshot. Anyone with it can save the set to their browser until it expires.
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    {#if shareUrl}
+      <div class="rounded-lg border border-border bg-muted/30 p-3">
+        <p class="break-all font-mono text-xs">{shareUrl}</p>
+        <p class="mt-2 text-xs text-muted-foreground">
+          Expires {shareExpiresAt ? new Date(shareExpiresAt).toLocaleString() : "soon"}
+        </p>
+      </div>
+    {:else}
+      <label class="grid gap-2 text-sm font-medium">
+        Link expiry
+        <select class="h-10 rounded-md border border-input bg-background px-3 text-sm" bind:value={shareExpiryMs}>
+          <option value={3_600_000}>1 hour</option>
+          <option value={21_600_000}>6 hours</option>
+          <option value={43_200_000}>12 hours</option>
+          <option value={86_400_000}>24 hours</option>
+        </select>
+      </label>
+    {/if}
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>Close</AlertDialog.Cancel>
+      {#if shareUrl}
+        <AlertDialog.Action onclick={copyShareLink}><Copy /> Copy link</AlertDialog.Action>
+      {:else}
+        <AlertDialog.Action onclick={createShareLink} disabled={sharing || questions.length === 0}>
+          <Link2 />
+          {sharing ? "Creating..." : "Create link"}
+        </AlertDialog.Action>
+      {/if}
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
+
 <AlertDialog.Root bind:open={clearDialogOpen}>
   <AlertDialog.Content>
     <AlertDialog.Header>
@@ -350,6 +439,9 @@
       </Button>
       <Button variant="outline" size="sm" class="gap-1" onclick={importFile}>
         <Upload class="h-3.5 w-3.5" /> Import
+      </Button>
+      <Button variant="outline" size="sm" class="gap-1" onclick={openShareDialog} disabled={questions.length === 0}>
+        <Share2 class="h-3.5 w-3.5" /> Share
       </Button>
       <details class="relative">
         <summary

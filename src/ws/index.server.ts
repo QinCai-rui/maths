@@ -31,6 +31,7 @@ import { randomBytes, randomInt } from "crypto";
 import { create, all } from "mathjs";
 import { RoomStore } from "../lib/mathex/rooms.server";
 import { registerPhysicalCompetitionServer } from "./physical.server";
+import { registerSetShareServer } from "./set-share.server";
 
 const config = {};
 const math = create(all, config);
@@ -45,6 +46,7 @@ export const createWSServer = (base: ServerInstance) => {
     maxHttpBufferSize: 10 * 1024 * 1024
   });
   registerPhysicalCompetitionServer(io);
+  registerSetShareServer(io);
   const roomCreateNamespace: Namespace<
     RoomCreateClientToServerEvents,
     RoomCreateServerToClientEvents,

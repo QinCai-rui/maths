@@ -46,6 +46,7 @@
     "katex": "^0.16.47",
     "mathjax-full": "^3.2.2",
     "mathjs": "^14.9.1",
+    "mathlive": "^0.110.0",
     "minidenticons": "^4.2.1",
     "pdfmake": "^0.3.11",
     "quill": "^2.0.3",
