@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
+  import { goto, pushState } from "$app/navigation";
+  import { page } from "$app/state";
   import { Button } from "$lib/components/ui/button";
   import Quill from "$lib/components/Quill.svelte";
   import { Header } from "$lib/components/ui/header";
@@ -346,9 +347,7 @@
     });
     pdfOptions = state.pdfOptions;
     sessionStatus = state.status;
-    if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
-      currentQuestionId = questions[0]?.id || null;
-    }
+    currentQuestionId = questionIdFromUrl();
     lastServerSettings = JSON.stringify({ setName, instructions, pdfOptions });
     if (liveTransaction?.target.type === "structure") {
       if (liveTransaction.target.action === "add" || liveTransaction.target.action === "duplicate") {
@@ -388,6 +387,18 @@
   async function loadAllQuestions(): Promise<boolean> {
     if (!sessionToken) return true;
     return (await Promise.all(questions.map(({ id }) => loadQuestion(id)))).every(Boolean);
+  }
+
+  function questionIdFromUrl(): string | null {
+    const questionId = sessionToken ? page.url.hash.slice(1) : null;
+    return questionId && questions.some(({ id }) => id === questionId) ? questionId : questions[0]?.id || null;
+  }
+
+  function updateQuestionUrl(questionId: string) {
+    if (!sessionToken || page.url.hash.slice(1) === questionId) return;
+    const url = new URL(page.url);
+    url.hash = questionId;
+    pushState(url, page.state);
   }
 
   function joinSession(reconnecting = false) {
@@ -534,6 +545,12 @@
   });
 
   $effect(() => {
+    if (!sessionToken || !joined) return;
+    const questionId = questionIdFromUrl();
+    if (questionId && questionId !== currentQuestionId) selectQuestion(questionId, false);
+  });
+
+  $effect(() => {
     if (!sessionToken || !joined || !currentQuestion || !ownedLocks[currentQuestion.id]) return;
     const questionId = currentQuestion.id;
     const serialized = JSON.stringify(plainQuestion(currentQuestion));
@@ -617,11 +634,12 @@
     });
   }
 
-  function selectQuestion(questionId: string) {
+  function selectQuestion(questionId: string, updateUrl = true) {
     if (currentQuestionId && ownedLocks[currentQuestionId]) {
       releaseQuestion(currentQuestionId);
     }
     currentQuestionId = questionId;
+    if (updateUrl) updateQuestionUrl(questionId);
     void loadQuestion(questionId);
     mobileOutlineOpen = false;
   }
