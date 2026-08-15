@@ -80,19 +80,16 @@ type InlineToken =
   | { type: "text"; value: string; style: Record<string, unknown> }
   | { type: "math"; value: string; style: Record<string, unknown> };
 
-const MATH_LINE_WIDTH = 440;
-
 function inlineTokens(node: Node, inheritedStyle: Record<string, unknown> = {}): InlineToken[] {
   if (node.nodeType === Node.TEXT_NODE) {
     const value = node.textContent || "";
     if (!value) return [];
     const tokens: InlineToken[] = [];
     let offset = 0;
-    for (const match of value.matchAll(/\$\$([\s\S]*?)\$\$/g)) {
+    for (const match of value.matchAll(/\$\$([\s\S]+?)\$\$/g)) {
       const index = match.index || 0;
       if (index > offset) tokens.push({ type: "text", value: value.slice(offset, index), style: inheritedStyle });
-      if (match[1]) tokens.push({ type: "math", value: match[1], style: inheritedStyle });
-      else tokens.push({ type: "text", value: match[0], style: inheritedStyle });
+      tokens.push({ type: "math", value: match[1], style: inheritedStyle });
       offset = index + match[0].length;
     }
     if (offset < value.length) tokens.push({ type: "text", value: value.slice(offset), style: inheritedStyle });
@@ -114,94 +111,43 @@ function inlineTokens(node: Node, inheritedStyle: Record<string, unknown> = {}):
   return [...node.childNodes].flatMap((child) => inlineTokens(child, style));
 }
 
-function textWidth(value: string, style: Record<string, unknown>, fontSize: number) {
-  const size = Number(style.fontSize || fontSize);
-  // A conservative average glyph width keeps column-based equation lines within the slip.
-  return value.length * size * (style.bold ? 0.56 : 0.52);
-}
-
-function mathWidth(svg: string, height: number) {
-  const viewBox = /viewBox="[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)"/.exec(svg);
-  if (!viewBox) return height;
-  return Math.min(160, height * (Number(viewBox[1]) / Number(viewBox[2])));
-}
-
-function textUnits(token: InlineToken & { type: "text" }, fontSize: number) {
-  const units: Array<{ node: PdfNode; width: number; breakLine?: boolean }> = [];
-  for (const part of token.value.split(/(\n|\s+)/)) {
-    if (!part) continue;
-    if (part === "\n") {
-      units.push({ node: { text: "" }, width: 0, breakLine: true });
-      continue;
-    }
-    if (/^\s+$/.test(part)) {
-      units.push({
-        node: { text: part, ...token.style, width: "auto" },
-        width: textWidth(part, token.style, fontSize)
-      });
-      continue;
-    }
-    const maxCharacters = Math.max(1, Math.floor(MATH_LINE_WIDTH / (fontSize * (token.style.bold ? 0.56 : 0.52))));
-    for (let start = 0; start < part.length; start += maxCharacters) {
-      const value = part.slice(start, start + maxCharacters);
-      units.push({
-        node: { text: value, ...token.style, width: "auto" },
-        width: textWidth(value, token.style, fontSize)
-      });
-    }
-  }
-  return units;
-}
-
-async function inlineContent(tokens: InlineToken[], mathHeight: number): Promise<PdfNode[]> {
-  if (!tokens.some((token) => token.type === "math")) {
-    const text = tokens.map((token) => ({ text: token.value, ...token.style }));
-    return [{ text: text.length ? text : " ", margin: [0, 0, 0, 3] }];
-  }
-
-  const lines: PdfNode[][] = [[]];
-  let lineWidth = 0;
-  const newLine = () => {
-    lines.push([]);
-    lineWidth = 0;
-  };
-  const addUnit = (node: PdfNode, width: number) => {
-    const line = lines[lines.length - 1];
-    const hasContent = line.some((part) => String(part.text || "").trim() || "svg" in part);
-    if (hasContent && lineWidth + width > MATH_LINE_WIDTH) newLine();
-    lines[lines.length - 1].push(node);
-    lineWidth += width;
+async function inlineContent(tokens: InlineToken[], mathHeight: number, contentWidth: number): Promise<PdfNode[]> {
+  const output: PdfNode[] = [];
+  let text: PdfNode[] = [];
+  const flushText = () => {
+    if (text.length) output.push({ text, margin: [0, 0, 0, 3] });
+    text = [];
   };
 
   for (const token of tokens) {
     if (token.type === "text") {
-      for (const unit of textUnits(token, mathHeight)) {
-        if (unit.breakLine) newLine();
-        else addUnit(unit.node, unit.width);
-      }
+      text.push({ text: token.value, ...token.style });
       continue;
     }
+    flushText();
     const math = parseStoredMath(token.value);
-    const height = mathHeight * 1.15 * math.scale;
-    const svg = await texToSvg(math.latex);
-    addUnit(
-      { svg, fit: [160, height], width: "auto", _mathexScale: math.scale, ...token.style },
-      mathWidth(svg, height)
-    );
+    output.push({
+      svg: await texToSvg(math.latex),
+      fit: [contentWidth, mathHeight * 1.15 * math.scale],
+      alignment: "left",
+      _mathexScale: math.scale,
+      margin: [0, 1, 0, 2]
+    });
   }
-
-  return lines.map((columns, index) => ({
-    columns: columns.length ? columns : [{ text: " " }],
-    columnGap: 0,
-    margin: [0, 0, 0, index === lines.length - 1 ? 3 : 0]
-  }));
+  flushText();
+  return output.length ? output : [{ text: " ", margin: [0, 0, 0, 3] }];
 }
 
-async function paragraphNodes(element: HTMLElement, imageHeight: number, mathHeight: number): Promise<PdfNode[]> {
+async function paragraphNodes(
+  element: HTMLElement,
+  imageHeight: number,
+  mathHeight: number,
+  contentWidth: number
+): Promise<PdfNode[]> {
   const pieces: PdfNode[] = [];
   let textBuffer: InlineToken[] = [];
   const flushText = async () => {
-    if (textBuffer.length) pieces.push(...(await inlineContent(textBuffer, mathHeight)));
+    if (textBuffer.length) pieces.push(...(await inlineContent(textBuffer, mathHeight, contentWidth)));
     textBuffer = [];
   };
   for (const child of element.childNodes) {
@@ -209,7 +155,7 @@ async function paragraphNodes(element: HTMLElement, imageHeight: number, mathHei
       await flushText();
       pieces.push({
         image: await pdfImage(child.src),
-        fit: [440, imageHeight * PT_PER_MM],
+        fit: [contentWidth, imageHeight * PT_PER_MM],
         alignment: "left",
         margin: [0, 4, 0, 5]
       });
@@ -222,19 +168,24 @@ async function paragraphNodes(element: HTMLElement, imageHeight: number, mathHei
   return pieces;
 }
 
-async function htmlToPdf(html: string, imageHeight: number, mathHeight: number): Promise<PdfNode[]> {
+async function htmlToPdf(
+  html: string,
+  imageHeight: number,
+  mathHeight: number,
+  contentWidth: number
+): Promise<PdfNode[]> {
   const source = new DOMParser().parseFromString(html || "", "text/html");
   const output: PdfNode[] = [];
   for (const node of source.body.childNodes) {
     if (node.nodeType === Node.TEXT_NODE) {
-      if (node.textContent?.trim()) output.push(...(await inlineContent(inlineTokens(node), mathHeight)));
+      if (node.textContent?.trim()) output.push(...(await inlineContent(inlineTokens(node), mathHeight, contentWidth)));
       continue;
     }
     if (!(node instanceof HTMLElement)) continue;
     if (node instanceof HTMLImageElement) {
       output.push({
         image: await pdfImage(node.src),
-        fit: [440, imageHeight * PT_PER_MM],
+        fit: [contentWidth, imageHeight * PT_PER_MM],
         alignment: "left",
         margin: [0, 4, 0, 5]
       });
@@ -243,7 +194,7 @@ async function htmlToPdf(html: string, imageHeight: number, mathHeight: number):
     if (node.matches("ol, ul")) {
       const items = await Promise.all(
         [...node.children].map(async (item) => ({
-          stack: await paragraphNodes(item as HTMLElement, imageHeight, mathHeight)
+          stack: await paragraphNodes(item as HTMLElement, imageHeight, mathHeight, contentWidth)
         }))
       );
       output.push({ [node.tagName === "OL" ? "ol" : "ul"]: items, margin: [8, 0, 0, 3] });
@@ -256,7 +207,7 @@ async function htmlToPdf(html: string, imageHeight: number, mathHeight: number):
           body: [
             [
               { text: "", fillColor: "#777777" },
-              { stack: await paragraphNodes(node, imageHeight, mathHeight), margin: [5, 0, 0, 0] }
+              { stack: await paragraphNodes(node, imageHeight, mathHeight, contentWidth), margin: [5, 0, 0, 0] }
             ]
           ]
         },
@@ -265,44 +216,55 @@ async function htmlToPdf(html: string, imageHeight: number, mathHeight: number):
       });
       continue;
     }
-    output.push(...(await paragraphNodes(node, imageHeight, mathHeight)));
+    output.push(...(await paragraphNodes(node, imageHeight, mathHeight, contentWidth)));
   }
 
   return output;
 }
 
-function estimateHeight(nodes: PdfNode[], fontSize: number) {
+function estimateHeight(nodes: PdfNode[], fontSize: number, contentWidth: number) {
   let height = 0;
   for (const node of nodes) {
-    if ("image" in node) height += ((node.fit as number[])?.[1] || 50) + 4;
+    const nodeFontSize = Number(node.fontSize || fontSize);
+    const margin = (node.margin as number[] | undefined) || [0, 0, 0, 0];
+    let nodeHeight: number;
+    if ("image" in node) nodeHeight = (node.fit as number[])?.[1] || 50;
     else if ("svg" in node) {
       const scale = Number(node._mathexScale);
-      height += (Number.isFinite(scale) ? fontSize * 1.15 * scale : (node.fit as number[])?.[1] || 42) + 4;
-    } else if (Array.isArray(node.columns))
-      height += Math.max(...(node.columns as PdfNode[]).map((column) => estimateHeight([column], fontSize)));
-    else if (Array.isArray(node.stack)) height += estimateHeight(node.stack as PdfNode[], fontSize);
-    else if (Array.isArray(node.ol)) height += estimateHeight(node.ol as PdfNode[], fontSize);
-    else if (Array.isArray(node.ul)) height += estimateHeight(node.ul as PdfNode[], fontSize);
-    else if ("table" in node) {
+      nodeHeight = Number.isFinite(scale) ? fontSize * 1.15 * scale : (node.fit as number[])?.[1] || 42;
+    } else if (Array.isArray(node.columns)) {
+      nodeHeight = Math.max(
+        ...(node.columns as PdfNode[]).map((column) => estimateHeight([column], nodeFontSize, contentWidth))
+      );
+    } else if (Array.isArray(node.stack)) {
+      nodeHeight = estimateHeight(node.stack as PdfNode[], nodeFontSize, contentWidth);
+    } else if (Array.isArray(node.ol)) {
+      nodeHeight = estimateHeight(node.ol as PdfNode[], nodeFontSize, contentWidth - 25) + nodeFontSize * 0.3;
+    } else if (Array.isArray(node.ul)) {
+      nodeHeight = estimateHeight(node.ul as PdfNode[], nodeFontSize, contentWidth - 25) + nodeFontSize * 0.3;
+    } else if ("table" in node) {
       const rows = (node.table as { body?: PdfNode[][] }).body || [];
-      height += rows.reduce(
-        (total, row) => total + Math.max(...row.map((cell) => estimateHeight([cell], fontSize)), fontSize * 1.25),
+      nodeHeight = rows.reduce(
+        (total, row) =>
+          total +
+          Math.max(...row.map((cell) => estimateHeight([cell], nodeFontSize, contentWidth - 7)), nodeFontSize * 1.25),
         0
       );
     } else {
       const text = Array.isArray(node.text)
         ? (node.text as Array<Record<string, unknown>>).map((part) => String(part.text || "")).join("")
         : String(node.text || "");
-      // Estimate wrapping from visible text, not serialization of PDF style metadata.
-      height += Math.max(fontSize * 1.1, Math.ceil(text.length / 105) * fontSize * 1.1 + 3);
+      const charactersPerLine = Math.max(1, Math.floor(contentWidth / (nodeFontSize * 0.6)));
+      nodeHeight = Math.max(nodeFontSize * 1.25, Math.ceil(text.length / charactersPerLine) * nodeFontSize * 1.25);
     }
+    height += nodeHeight + margin[1] + margin[3];
   }
   return height;
 }
 
 function resizeImages(nodes: PdfNode[], height: number) {
   for (const node of nodes) {
-    if ("image" in node) node.fit = [440, height * PT_PER_MM];
+    if ("image" in node) node.fit = [(node.fit as number[])?.[0] || 440, height * PT_PER_MM];
     for (const property of ["stack", "ol", "ul"] as const) {
       if (Array.isArray(node[property])) resizeImages(node[property] as PdfNode[], height);
     }
@@ -316,7 +278,8 @@ function resizeImages(nodes: PdfNode[], height: number) {
 function resizeMath(nodes: PdfNode[], fontSize: number) {
   for (const node of nodes) {
     const scale = Number(node._mathexScale);
-    if ("svg" in node && Number.isFinite(scale)) node.fit = [160, fontSize * 1.15 * scale];
+    if ("svg" in node && Number.isFinite(scale))
+      node.fit = [(node.fit as number[])?.[0] || 160, fontSize * 1.15 * scale];
     for (const property of ["stack", "ol", "ul", "columns"] as const) {
       if (Array.isArray(node[property])) resizeMath(node[property] as PdfNode[], fontSize);
     }
@@ -333,17 +296,19 @@ async function fittedSlip(
   configuredSize: number,
   imageHeight: number,
   availableHeight: number,
-  slipHeight: number
+  slipHeight: number,
+  contentWidth: number,
+  prefix: PdfNode[] = []
 ) {
   let currentImageHeight = imageHeight;
-  const nodes = await htmlToPdf(html, currentImageHeight, configuredSize);
+  const nodes = [...prefix, ...(await htmlToPdf(html, currentImageHeight, configuredSize, contentWidth))];
   let size = configuredSize;
-  while (estimateHeight(nodes, size) > availableHeight && size > 6) size -= 0.5;
-  while (estimateHeight(nodes, size) > availableHeight && currentImageHeight > 5) {
+  while (estimateHeight(nodes, size, contentWidth) > availableHeight && size > 6) size -= 0.5;
+  while (estimateHeight(nodes, size, contentWidth) > availableHeight && currentImageHeight > 5) {
     currentImageHeight--;
     resizeImages(nodes, currentImageHeight);
   }
-  if (estimateHeight(nodes, size) > availableHeight) {
+  if (estimateHeight(nodes, size, contentWidth) > availableHeight) {
     throw new Error(`${label} does not fit the ${slipHeight} mm slip. Reduce its content or configured sizes.`);
   }
   resizeMath(nodes, size);
@@ -354,21 +319,23 @@ export async function downloadQuestionSet(set: Set) {
   const pdfMake = await loadPdfMake();
   const slipHeight = set.pdfOptions.slipHeight * PT_PER_MM;
   const cutMargin = set.pdfOptions.cutMargin * PT_PER_MM;
-  const contentWidth = PAGE_WIDTH - cutMargin - 28;
+  if (set.pdfOptions.slipHeight > 297) throw new Error("Slip height cannot exceed an A4 page.");
+  const slipCellWidth = PAGE_WIDTH - cutMargin - 28;
+  const contentWidth = slipCellWidth - 32;
+  if (contentWidth <= 0) throw new Error("Cut margin leaves no room for question content.");
   const slipsPerPage = Math.max(1, Math.floor(297 / set.pdfOptions.slipHeight));
-  const slips: Array<{ stack: PdfNode[]; size: number; label?: string }> = [];
+  const slips: Array<{ stack: PdfNode[]; size: number }> = [];
   const cover = await fittedSlip(
     set.instructions,
     "The cover",
     set.pdfOptions.questionTextSize,
     set.pdfOptions.imageHeight,
     slipHeight - 30,
-    set.pdfOptions.slipHeight
+    set.pdfOptions.slipHeight,
+    contentWidth,
+    [{ text: set.name || "Untitled set", bold: true, fontSize: 18, margin: [0, 0, 0, 5] }]
   );
-  slips.push({
-    stack: [{ text: set.name || "Untitled set", bold: true, fontSize: 18, margin: [0, 0, 0, 5] }, ...cover.nodes],
-    size: cover.size
-  });
+  slips.push({ stack: cover.nodes, size: cover.size });
   for (let index = 0; index < set.questions.length; index++) {
     const fitted = await fittedSlip(
       set.questions[index].contents,
@@ -376,9 +343,11 @@ export async function downloadQuestionSet(set: Set) {
       set.pdfOptions.questionTextSize,
       set.pdfOptions.imageHeight,
       slipHeight - 20,
-      set.pdfOptions.slipHeight
+      set.pdfOptions.slipHeight,
+      contentWidth,
+      [{ text: `Question ${index + 1}`, bold: true, fontSize: 8, characterSpacing: 0.5, margin: [0, 0, 0, 2] }]
     );
-    slips.push({ stack: fitted.nodes, size: fitted.size, label: `Question ${index + 1}` });
+    slips.push({ stack: fitted.nodes, size: fitted.size });
   }
 
   const guides: PdfNode[] = [];
@@ -416,37 +385,36 @@ export async function downloadQuestionSet(set: Set) {
   const content: PdfNode[] = [];
   for (let pageStart = 0; pageStart < slips.length; pageStart += slipsPerPage) {
     const pageSlips = slips.slice(pageStart, pageStart + slipsPerPage);
-    content.push({
-      table: {
-        widths: [28, contentWidth, cutMargin],
-        heights: pageSlips.map(() => slipHeight),
-        dontBreakRows: true,
-        body: pageSlips.map((slip) => [
-          { text: "" },
-          {
-            stack: [
-              ...(slip.label
-                ? [{ text: slip.label, bold: true, fontSize: 8, characterSpacing: 0.5, margin: [0, 0, 0, 2] }]
-                : []),
-              ...slip.stack
-            ],
-            fontSize: slip.size,
-            lineHeight: 1.1,
-            margin: [18, 5, 14, 4]
-          },
-          { text: "" }
-        ])
-      },
-      layout: {
-        hLineWidth: () => 0,
-        vLineWidth: () => 0,
-        paddingLeft: () => 0,
-        paddingRight: () => 0,
-        paddingTop: () => 0,
-        paddingBottom: () => 0
-      },
-      pageBreak: pageStart + slipsPerPage < slips.length ? "after" : undefined
-    });
+    content.push({ text: "", fontSize: 0.1, pageBreak: pageStart > 0 ? "before" : undefined });
+    for (let row = 0; row < pageSlips.length; row++) {
+      const slip = pageSlips[row];
+      content.push({
+        absolutePosition: { x: 28, y: row * slipHeight },
+        table: {
+          widths: [slipCellWidth],
+          heights: [slipHeight],
+          dontBreakRows: true,
+          body: [
+            [
+              {
+                stack: slip.stack,
+                fontSize: slip.size,
+                lineHeight: 1.1,
+                margin: [18, 5, 14, 4]
+              }
+            ]
+          ]
+        },
+        layout: {
+          hLineWidth: () => 0,
+          vLineWidth: () => 0,
+          paddingLeft: () => 0,
+          paddingRight: () => 0,
+          paddingTop: () => 0,
+          paddingBottom: () => 0
+        }
+      });
+    }
   }
 
   await pdfMake
@@ -621,7 +589,7 @@ export function previewQuestionSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { height: calc(${options.slipHeight}mm - 3.17mm); overflow: hidden; line-height: 1.1; overflow-wrap: anywhere; word-break: break-word; white-space: normal; } .slip-content p, .slip-content li { overflow-wrap: anywhere; word-break: break-word; } .slip-content math { font-size: 1em !important; vertical-align: middle; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
+    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { display: flex; flex-direction: column; width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { flex: 1; min-height: 0; overflow: hidden; line-height: 1.1; overflow-wrap: anywhere; word-break: break-word; white-space: normal; } .slip-content p, .slip-content li { overflow-wrap: anywhere; word-break: break-word; } .slip-content math { display: block; width: fit-content; max-width: 100%; margin: .1em 0 .2em; font-size: 1em !important; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { flex: none; font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
     true
   );
 }

@@ -44,7 +44,7 @@
     while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
     for (const textNode of textNodes) {
       const text = textNode.data;
-      const matches = [...text.matchAll(/\$\$([^$]+)\$\$/g)];
+      const matches = [...text.matchAll(/\$\$([\s\S]+?)\$\$/g)];
       if (!matches.length) continue;
       const fragment = document.createDocumentFragment();
       let offset = 0;

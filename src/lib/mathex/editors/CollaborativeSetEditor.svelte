@@ -1191,6 +1191,7 @@
                     >Slip height <input
                       type="number"
                       min="1"
+                      max="297"
                       step="0.5"
                       bind:value={pdfOptions.slipHeight}
                       disabled={!!sessionToken && !isHost}

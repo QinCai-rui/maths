@@ -553,10 +553,11 @@
                 class="h-8 min-w-0 w-full rounded border bg-background px-2 text-sm text-foreground"
                 type="number"
                 min="1"
+                max="297"
                 step="0.5"
                 bind:value={pdfOptions.slipHeight}
               />
-              <span>≥ 1 mm</span>
+              <span>1-297 mm</span>
             </label>
             <label class="grid min-w-0 gap-1 text-[0.7rem] text-muted-foreground">
               Cut-off margin

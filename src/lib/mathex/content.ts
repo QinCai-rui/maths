@@ -1,7 +1,7 @@
 import { renderToString } from "katex";
 import DOMPurify from "dompurify";
 
-const mathRegex = /\$\$([^$]+)\$\$/g;
+const mathRegex = /\$\$([\s\S]+?)\$\$/g;
 
 export function parseStoredMath(value: string) {
   const match = /^\[scale=(0\.5|0\.75|1|1\.25|1\.5|1\.75|2\.5)\]([\s\S]*)$/.exec(value);

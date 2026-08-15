@@ -30,7 +30,7 @@ export const DraftPdfOptions = z.object({
   questionTextSize: z.number().min(6).max(18),
   answerTextSize: z.number().min(6).max(16),
   imageHeight: z.number().min(5).max(35),
-  slipHeight: z.number().min(1),
+  slipHeight: z.number().min(1).max(297),
   cutMargin: z.number().min(0).max(80)
 });
 
