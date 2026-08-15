@@ -76,11 +76,32 @@ async function pdfImage(source: string) {
   return canvas.toDataURL("image/png");
 }
 
-function inlineNodes(node: Node): PdfNode[] {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ? [{ text: node.textContent }] : [];
-  if (!(node instanceof HTMLElement)) return [];
-  const children = [...node.childNodes].flatMap(inlineNodes);
-  const style: Record<string, unknown> = {};
+type InlineToken =
+  | { type: "text"; value: string; style: Record<string, unknown> }
+  | { type: "math"; value: string; style: Record<string, unknown> };
+
+const MATH_LINE_WIDTH = 440;
+
+function inlineTokens(node: Node, inheritedStyle: Record<string, unknown> = {}): InlineToken[] {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const value = node.textContent || "";
+    if (!value) return [];
+    const tokens: InlineToken[] = [];
+    let offset = 0;
+    for (const match of value.matchAll(/\$\$([\s\S]*?)\$\$/g)) {
+      const index = match.index || 0;
+      if (index > offset) tokens.push({ type: "text", value: value.slice(offset, index), style: inheritedStyle });
+      if (match[1]) tokens.push({ type: "math", value: match[1], style: inheritedStyle });
+      else tokens.push({ type: "text", value: match[0], style: inheritedStyle });
+      offset = index + match[0].length;
+    }
+    if (offset < value.length) tokens.push({ type: "text", value: value.slice(offset), style: inheritedStyle });
+    return tokens;
+  }
+  if (!(node instanceof HTMLElement) || node instanceof HTMLImageElement) return [];
+  if (node.matches("br")) return [{ type: "text", value: "\n", style: inheritedStyle }];
+
+  const style = { ...inheritedStyle };
   if (node.matches("strong, b")) style.bold = true;
   if (node.matches("em, i")) style.italics = true;
   if (node.matches("u")) style.decoration = "underline";
@@ -90,20 +111,102 @@ function inlineNodes(node: Node): PdfNode[] {
     style.color = "#1155cc";
     style.decoration = "underline";
   }
-  return children.map((child) => ({ ...child, ...style }));
+  return [...node.childNodes].flatMap((child) => inlineTokens(child, style));
 }
 
-async function paragraphNodes(element: HTMLElement, imageHeight: number): Promise<PdfNode[]> {
+function textWidth(value: string, style: Record<string, unknown>, fontSize: number) {
+  const size = Number(style.fontSize || fontSize);
+  // A conservative average glyph width keeps column-based equation lines within the slip.
+  return value.length * size * (style.bold ? 0.56 : 0.52);
+}
+
+function mathWidth(svg: string, height: number) {
+  const viewBox = /viewBox="[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)"/.exec(svg);
+  if (!viewBox) return height;
+  return Math.min(160, height * (Number(viewBox[1]) / Number(viewBox[2])));
+}
+
+function textUnits(token: InlineToken & { type: "text" }, fontSize: number) {
+  const units: Array<{ node: PdfNode; width: number; breakLine?: boolean }> = [];
+  for (const part of token.value.split(/(\n|\s+)/)) {
+    if (!part) continue;
+    if (part === "\n") {
+      units.push({ node: { text: "" }, width: 0, breakLine: true });
+      continue;
+    }
+    if (/^\s+$/.test(part)) {
+      units.push({
+        node: { text: part, ...token.style, width: "auto" },
+        width: textWidth(part, token.style, fontSize)
+      });
+      continue;
+    }
+    const maxCharacters = Math.max(1, Math.floor(MATH_LINE_WIDTH / (fontSize * (token.style.bold ? 0.56 : 0.52))));
+    for (let start = 0; start < part.length; start += maxCharacters) {
+      const value = part.slice(start, start + maxCharacters);
+      units.push({
+        node: { text: value, ...token.style, width: "auto" },
+        width: textWidth(value, token.style, fontSize)
+      });
+    }
+  }
+  return units;
+}
+
+async function inlineContent(tokens: InlineToken[], mathHeight: number): Promise<PdfNode[]> {
+  if (!tokens.some((token) => token.type === "math")) {
+    const text = tokens.map((token) => ({ text: token.value, ...token.style }));
+    return [{ text: text.length ? text : " ", margin: [0, 0, 0, 3] }];
+  }
+
+  const lines: PdfNode[][] = [[]];
+  let lineWidth = 0;
+  const newLine = () => {
+    lines.push([]);
+    lineWidth = 0;
+  };
+  const addUnit = (node: PdfNode, width: number) => {
+    const line = lines[lines.length - 1];
+    const hasContent = line.some((part) => String(part.text || "").trim() || "svg" in part);
+    if (hasContent && lineWidth + width > MATH_LINE_WIDTH) newLine();
+    lines[lines.length - 1].push(node);
+    lineWidth += width;
+  };
+
+  for (const token of tokens) {
+    if (token.type === "text") {
+      for (const unit of textUnits(token, mathHeight)) {
+        if (unit.breakLine) newLine();
+        else addUnit(unit.node, unit.width);
+      }
+      continue;
+    }
+    const math = parseStoredMath(token.value);
+    const height = mathHeight * 1.15 * math.scale;
+    const svg = await texToSvg(math.latex);
+    addUnit(
+      { svg, fit: [160, height], width: "auto", _mathexScale: math.scale, ...token.style },
+      mathWidth(svg, height)
+    );
+  }
+
+  return lines.map((columns, index) => ({
+    columns: columns.length ? columns : [{ text: " " }],
+    columnGap: 0,
+    margin: [0, 0, 0, index === lines.length - 1 ? 3 : 0]
+  }));
+}
+
+async function paragraphNodes(element: HTMLElement, imageHeight: number, mathHeight: number): Promise<PdfNode[]> {
   const pieces: PdfNode[] = [];
-  let textBuffer: Node[] = [];
-  const flushText = () => {
-    const text = textBuffer.flatMap(inlineNodes);
-    if (text.length) pieces.push({ text, margin: [0, 0, 0, 3] });
+  let textBuffer: InlineToken[] = [];
+  const flushText = async () => {
+    if (textBuffer.length) pieces.push(...(await inlineContent(textBuffer, mathHeight)));
     textBuffer = [];
   };
   for (const child of element.childNodes) {
     if (child instanceof HTMLImageElement) {
-      flushText();
+      await flushText();
       pieces.push({
         image: await pdfImage(child.src),
         fit: [440, imageHeight * PT_PER_MM],
@@ -111,10 +214,11 @@ async function paragraphNodes(element: HTMLElement, imageHeight: number): Promis
         margin: [0, 4, 0, 5]
       });
     } else {
-      textBuffer.push(child);
+      textBuffer.push(...inlineTokens(child));
     }
   }
-  flushText();
+  await flushText();
+  if (!pieces.length) pieces.push({ text: " ", margin: [0, 0, 0, 3] });
   return pieces;
 }
 
@@ -123,7 +227,7 @@ async function htmlToPdf(html: string, imageHeight: number, mathHeight: number):
   const output: PdfNode[] = [];
   for (const node of source.body.childNodes) {
     if (node.nodeType === Node.TEXT_NODE) {
-      if (node.textContent?.trim()) output.push({ text: node.textContent, margin: [0, 0, 0, 3] });
+      if (node.textContent?.trim()) output.push(...(await inlineContent(inlineTokens(node), mathHeight)));
       continue;
     }
     if (!(node instanceof HTMLElement)) continue;
@@ -138,7 +242,9 @@ async function htmlToPdf(html: string, imageHeight: number, mathHeight: number):
     }
     if (node.matches("ol, ul")) {
       const items = await Promise.all(
-        [...node.children].map(async (item) => ({ stack: await paragraphNodes(item as HTMLElement, imageHeight) }))
+        [...node.children].map(async (item) => ({
+          stack: await paragraphNodes(item as HTMLElement, imageHeight, mathHeight)
+        }))
       );
       output.push({ [node.tagName === "OL" ? "ol" : "ul"]: items, margin: [8, 0, 0, 3] });
       continue;
@@ -150,7 +256,7 @@ async function htmlToPdf(html: string, imageHeight: number, mathHeight: number):
           body: [
             [
               { text: "", fillColor: "#777777" },
-              { stack: await paragraphNodes(node, imageHeight), margin: [5, 0, 0, 0] }
+              { stack: await paragraphNodes(node, imageHeight, mathHeight), margin: [5, 0, 0, 0] }
             ]
           ]
         },
@@ -159,69 +265,20 @@ async function htmlToPdf(html: string, imageHeight: number, mathHeight: number):
       });
       continue;
     }
-    output.push(...(await paragraphNodes(node, imageHeight)));
+    output.push(...(await paragraphNodes(node, imageHeight, mathHeight)));
   }
 
-  return convertMathNodes(output, mathHeight);
-}
-
-async function convertMathNodes(nodes: PdfNode[], mathHeight: number): Promise<PdfNode[]> {
-  const converted: PdfNode[] = [];
-  for (const item of nodes) {
-    for (const property of ["stack", "ol", "ul"] as const) {
-      if (Array.isArray(item[property]))
-        item[property] = await convertMathNodes(item[property] as PdfNode[], mathHeight);
-    }
-    if ("table" in item) {
-      const table = item.table as { body?: PdfNode[][] };
-      if (table.body) {
-        for (const row of table.body) {
-          for (const cell of row) {
-            if (Array.isArray(cell.stack)) cell.stack = await convertMathNodes(cell.stack as PdfNode[], mathHeight);
-          }
-        }
-      }
-    }
-    if (!("text" in item) || !Array.isArray(item.text)) {
-      converted.push(item);
-      continue;
-    }
-    const plain = (item.text as Array<Record<string, unknown>>).map((part) => String(part.text || "")).join("");
-    const matches = [...plain.matchAll(/\$\$([\s\S]+?)\$\$/g)];
-    if (!matches.length) {
-      converted.push(item);
-      continue;
-    }
-    let offset = 0;
-    const columns: PdfNode[] = [];
-    for (const match of matches) {
-      const before = plain.slice(offset, match.index);
-      const matchEnd = (match.index || 0) + match[0].length;
-      const hasSpaceBefore = /\s$/.test(before);
-      const hasSpaceAfter = /^\s/.test(plain.slice(matchEnd));
-      if (before) columns.push({ text: before.trimEnd(), width: "auto" });
-      const math = parseStoredMath(match[1]);
-      columns.push({
-        svg: await texToSvg(math.latex),
-        fit: [160, mathHeight * 1.15 * math.scale],
-        width: "auto",
-        margin: [hasSpaceBefore ? mathHeight * 0.3 : 0, 0, hasSpaceAfter ? mathHeight * 0.3 : 0, 0]
-      });
-      offset = matchEnd;
-    }
-    const after = plain.slice(offset);
-    if (after) columns.push({ text: after.trimStart(), width: "auto" });
-    converted.push({ columns, columnGap: 0, margin: [0, 0, 0, 3] });
-  }
-  return converted;
+  return output;
 }
 
 function estimateHeight(nodes: PdfNode[], fontSize: number) {
   let height = 0;
   for (const node of nodes) {
     if ("image" in node) height += ((node.fit as number[])?.[1] || 50) + 4;
-    else if ("svg" in node) height += ((node.fit as number[])?.[1] || 42) + 4;
-    else if (Array.isArray(node.columns))
+    else if ("svg" in node) {
+      const scale = Number(node._mathexScale);
+      height += (Number.isFinite(scale) ? fontSize * 1.15 * scale : (node.fit as number[])?.[1] || 42) + 4;
+    } else if (Array.isArray(node.columns))
       height += Math.max(...(node.columns as PdfNode[]).map((column) => estimateHeight([column], fontSize)));
     else if (Array.isArray(node.stack)) height += estimateHeight(node.stack as PdfNode[], fontSize);
     else if (Array.isArray(node.ol)) height += estimateHeight(node.ol as PdfNode[], fontSize);
@@ -256,6 +313,20 @@ function resizeImages(nodes: PdfNode[], height: number) {
   }
 }
 
+function resizeMath(nodes: PdfNode[], fontSize: number) {
+  for (const node of nodes) {
+    const scale = Number(node._mathexScale);
+    if ("svg" in node && Number.isFinite(scale)) node.fit = [160, fontSize * 1.15 * scale];
+    for (const property of ["stack", "ol", "ul", "columns"] as const) {
+      if (Array.isArray(node[property])) resizeMath(node[property] as PdfNode[], fontSize);
+    }
+    if ("table" in node) {
+      const rows = (node.table as { body?: PdfNode[][] }).body || [];
+      for (const row of rows) for (const cell of row) resizeMath([cell], fontSize);
+    }
+  }
+}
+
 async function fittedSlip(
   html: string,
   label: string,
@@ -275,6 +346,7 @@ async function fittedSlip(
   if (estimateHeight(nodes, size) > availableHeight) {
     throw new Error(`${label} does not fit the ${slipHeight} mm slip. Reduce its content or configured sizes.`);
   }
+  resizeMath(nodes, size);
   return { nodes, size };
 }
 
