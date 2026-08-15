@@ -85,6 +85,7 @@
   let currentQuestion = $derived(questions.find(({ id }) => id === currentQuestionId) || null);
   let currentQuestionIndex = $derived(questions.findIndex(({ id }) => id === currentQuestionId));
   let loadedQuestionIds = $state<Record<string, boolean>>({});
+  let questionHash = $state(typeof window === "undefined" ? "" : window.location.hash.slice(1));
   let currentQuestionLoaded = $derived(!!currentQuestion && (!sessionToken || loadedQuestionIds[currentQuestion.id]));
   let collaborators = $state<CollaboratorPresence[]>([]);
   let locks = $state<QuestionLock[]>([]);
@@ -390,15 +391,16 @@
   }
 
   function questionIdFromUrl(): string | null {
-    const questionId = sessionToken ? page.url.hash.slice(1) : null;
+    const questionId = sessionToken ? questionHash : null;
     return questionId && questions.some(({ id }) => id === questionId) ? questionId : questions[0]?.id || null;
   }
 
   function updateQuestionUrl(questionId: string) {
-    if (!sessionToken || page.url.hash.slice(1) === questionId) return;
-    const url = new URL(page.url);
+    if (!sessionToken || questionHash === questionId) return;
+    const url = new URL(window.location.href);
     url.hash = questionId;
     pushState(url, page.state);
+    questionHash = questionId;
   }
 
   function joinSession(reconnecting = false) {
@@ -438,6 +440,10 @@
   }
 
   onMount(() => {
+    const syncQuestionHash = () => (questionHash = window.location.hash.slice(1));
+    syncQuestionHash();
+    window.addEventListener("hashchange", syncQuestionHash);
+    window.addEventListener("popstate", syncQuestionHash);
     socket = io("/set-collaboration", {
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -508,6 +514,8 @@
       closingSocket = true;
       if (lockHeartbeat) clearInterval(lockHeartbeat);
       if (historyTimer) clearTimeout(historyTimer);
+      window.removeEventListener("hashchange", syncQuestionHash);
+      window.removeEventListener("popstate", syncQuestionHash);
       window.removeEventListener("pointerdown", releaseOnOutsidePointer, true);
       for (const questionId of Object.keys(ownedLocks)) {
         if (ownedLocks[questionId]) {
@@ -889,7 +897,7 @@
   }
 
   function questionPreview(question: CollaborativeQuestionValue) {
-    if (sessionToken && !loadedQuestionIds[question.id]) return "Question not loaded";
+    if (sessionToken && !loadedQuestionIds[question.id]) return "Click to load question";
     return stripTags(question.contents).trim().slice(0, 44) || "Untitled question";
   }
 </script>
