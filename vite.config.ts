@@ -21,7 +21,8 @@ const webSocketServer = {
   name: "webSocketServer",
   configureServer(server: ViteDevServer) {
     if (!server.httpServer) return;
-    createWSServer(server.httpServer);
+    const realtime = createWSServer(server.httpServer);
+    server.httpServer.once("close", realtime.flush);
   }
 };
 

@@ -45,11 +45,11 @@ export const createWSServer = (base: ServerInstance) => {
   const io = new Server(base, {
     serveClient: false,
     // Question images are embedded as data URLs in the portable question set.
-    maxHttpBufferSize: 10 * 1024 * 1024
+    maxHttpBufferSize: envInteger("MATHEX_MAX_HTTP_BUFFER_BYTES", 10 * 1024 * 1024, 1_048_576, 52_428_800)
   });
   registerPhysicalCompetitionServer(io);
   registerSetShareServer(io);
-  registerCollaborativeSetServer(io);
+  const collaborativeSets = registerCollaborativeSetServer(io);
   const roomCreateNamespace: Namespace<
     RoomCreateClientToServerEvents,
     RoomCreateServerToClientEvents,
@@ -471,8 +471,13 @@ export const createWSServer = (base: ServerInstance) => {
     return entries;
   }
 
-  return io;
+  return { io, flush: collaborativeSets.flush };
 };
+
+function envInteger(name: string, fallback: number, minimum: number, maximum: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= minimum && value <= maximum ? value : fallback;
+}
 
 function answerGroups(question: z.infer<typeof Question>): SolutionType[][] {
   if (!question.requireAllSolutionGroups) return [[...new Set(question.solutions.map((solution) => solution.type))]];

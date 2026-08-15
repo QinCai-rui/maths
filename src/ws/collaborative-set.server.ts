@@ -46,7 +46,7 @@ type CollaborationSocket = Socket<
 type Ack = ((result: CollaborativeOperationResult) => void) | undefined;
 
 const NAMESPACE = "/set-collaboration";
-const LOCK_TTL_MS = 30_000;
+const LOCK_TTL_MS = envInteger("MATHEX_COLLAB_LOCK_TTL_MS", 30_000, 5_000, 300_000);
 const emptyQuestion = (): DraftQuestionValue => ({
   contents: "",
   solutions: [],
@@ -57,7 +57,7 @@ const emptyQuestion = (): DraftQuestionValue => ({
   skippable: true
 });
 
-export function registerCollaborativeSetServer(io: AnyServer): void {
+export function registerCollaborativeSetServer(io: AnyServer): { flush: () => void } {
   const store = new CollaborativeSetStore();
   const sessions = store.load();
   const locks = new Map<string, Map<string, QuestionLock>>();
@@ -188,7 +188,7 @@ export function registerCollaborativeSetServer(io: AnyServer): void {
       });
       const session: StoredCollaborativeSet = { hostToken, set };
       sessions.set(sessionToken, session);
-      store.save(session);
+      store.saveNow(session);
       callback({ ok: true, sessionToken, hostToken, state: set });
     });
 
@@ -456,6 +456,8 @@ export function registerCollaborativeSetServer(io: AnyServer): void {
       if (token) emitPresence(token);
     });
   });
+
+  return { flush: () => store.flush() };
 }
 
 function insertionIndex(set: CollaborativeSetSnapshot, afterQuestionId?: string | null): number {
@@ -529,4 +531,9 @@ function safeTokenEqual(candidate: string | undefined, expected: string): boolea
   const left = Buffer.from(candidate);
   const right = Buffer.from(expected);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function envInteger(name: string, fallback: number, minimum: number, maximum: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= minimum && value <= maximum ? value : fallback;
 }

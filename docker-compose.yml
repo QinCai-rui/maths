@@ -3,7 +3,7 @@ services:
     # use `docker compose up` to pull/use prebuilt image
     image: ghcr.io/qincai-rui/maths:latest
 
-    # use `GIT_COMMIT="$(git rev-parse --short=7 HEAD)" docker compose up --build` 
+    # use `GIT_COMMIT="$(git rev-parse --short=7 HEAD)" docker compose up --build`
     # to include git hash on local builds
     build:
       context: .
@@ -12,9 +12,13 @@ services:
     ports:
       - "5185:5185"
     environment:
-      - PORT=5185
-      - HOST=0.0.0.0
-      - MATHEX_DB_PATH=/data/mathex.sqlite
+      - PORT=${PORT:-5185}
+      - HOST=${HOST:-0.0.0.0}
+      - MATHEX_DB_PATH=${MATHEX_DB_PATH:-/data/mathex.sqlite}
+      - MATHEX_COLLAB_PERSIST_DELAY_MS=${MATHEX_COLLAB_PERSIST_DELAY_MS:-30000}
+      - MATHEX_COLLAB_LOCK_TTL_MS=${MATHEX_COLLAB_LOCK_TTL_MS:-30000}
+      - MATHEX_MAX_HTTP_BUFFER_BYTES=${MATHEX_MAX_HTTP_BUFFER_BYTES:-10485760}
     volumes:
       - ./data:/data
     restart: unless-stopped
+    stop_grace_period: 15s
