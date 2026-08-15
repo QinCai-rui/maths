@@ -117,8 +117,7 @@ export type CollaborativeSetJoinState = z.infer<typeof CollaborativeSetJoinState
 
 export type CollaborativeOperationResult = { ok: true } | { ok: false; error: string };
 export type CollaborativeQuestionResult =
-  | { ok: true; question: CollaborativeQuestionValue }
-  | { ok: false; error: string };
+  { ok: true; question: CollaborativeQuestionValue } | { ok: false; error: string };
 export type CollaborativeCreateResult =
   { ok: true; sessionToken: string; hostToken: string; state: CollaborativeSetSnapshot } | { ok: false; error: string };
 export type CollaborativeJoinResult = { ok: true; state: CollaborativeSetJoinState } | { ok: false; error: string };

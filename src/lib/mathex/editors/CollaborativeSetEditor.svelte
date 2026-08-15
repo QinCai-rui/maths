@@ -84,7 +84,6 @@
   let currentQuestion = $derived(questions.find(({ id }) => id === currentQuestionId) || null);
   let currentQuestionIndex = $derived(questions.findIndex(({ id }) => id === currentQuestionId));
   let loadedQuestionIds = $state<Record<string, boolean>>({});
-  let loadingQuestionIds = $state<Record<string, boolean>>({});
   let currentQuestionLoaded = $derived(!!currentQuestion && (!sessionToken || loadedQuestionIds[currentQuestion.id]));
   let collaborators = $state<CollaboratorPresence[]>([]);
   let locks = $state<QuestionLock[]>([]);
@@ -363,15 +362,13 @@
   }
 
   function loadQuestion(questionId: string): Promise<boolean> {
-    if (!sessionToken || loadedQuestionIds[questionId]) return Promise.resolve(true);
+    if (!questionId || !sessionToken || !socket) return Promise.resolve(false);
+    if (loadedQuestionIds[questionId]) return Promise.resolve(true);
     const existing = questionLoads.get(questionId);
     if (existing) return existing;
-    loadingQuestionIds = { ...loadingQuestionIds, [questionId]: true };
     const load = new Promise<boolean>((resolve) => {
       socket?.emit("getQuestion", { questionId }, (result) => {
         questionLoads.delete(questionId);
-        const { [questionId]: _, ...remaining } = loadingQuestionIds;
-        loadingQuestionIds = remaining;
         if (!result.ok) {
           toast.error(result.error);
           resolve(false);
@@ -389,6 +386,7 @@
   }
 
   async function loadAllQuestions(): Promise<boolean> {
+    if (!sessionToken) return true;
     return (await Promise.all(questions.map(({ id }) => loadQuestion(id)))).every(Boolean);
   }
 
@@ -415,7 +413,7 @@
         displayName = name;
         localStorage.setItem(`mathex-collab-name:${sessionToken}`, name);
         applyServerState(result.state.set);
-        void loadQuestion(currentQuestionId || "");
+        if (currentQuestionId) void loadQuestion(currentQuestionId);
         collaborators = result.state.collaborators;
         locks = result.state.locks;
         hostSession = result.state.collaborators.some(
@@ -1247,7 +1245,9 @@
                   <QuestionEditor question={currentQuestion} disabled={readOnly} />
                 {/key}
               {:else}
-                <div class="flex min-h-72 items-center justify-center text-sm text-muted-foreground">Loading question...</div>
+                <div class="flex min-h-72 items-center justify-center text-sm text-muted-foreground">
+                  Loading question...
+                </div>
               {/if}
             </section>
             <div class="mt-4 flex items-center justify-between">
