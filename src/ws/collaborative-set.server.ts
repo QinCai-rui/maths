@@ -19,6 +19,7 @@ import {
   type CollaboratorPresence,
   type ApplyClientHistoryTarget,
   type CollaborativeOperationResult,
+  type CollaborativeQuestionResult,
   type CollaborativeQuestionValue,
   type CollaborativeSetClientToServerEvents,
   type CollaborativeSetInterServerEvents,
@@ -66,7 +67,16 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
   const roomName = (token: string) => `set:${token}`;
   const reject = (ack: Ack, error: string): void => ack?.({ ok: false, error });
   const accept = (ack: Ack): void => ack?.({ ok: true });
+  const questionResult = (question: CollaborativeQuestionValue | undefined): CollaborativeQuestionResult =>
+    question ? { ok: true, question } : { ok: false, error: "Question not found" };
   const errorFor = (error: { issues: { message: string }[] }, fallback: string) => error.issues[0]?.message || fallback;
+
+  function summarizedSet(set: CollaborativeSetSnapshot): CollaborativeSetSnapshot {
+    return {
+      ...set,
+      questions: set.questions.map(({ id }) => ({ id, ...emptyQuestion() }))
+    };
+  }
 
   function currentLocks(token: string): QuestionLock[] {
     expireLocks(token);
@@ -148,7 +158,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
   function saveAndEmit(session: StoredCollaborativeSet): void {
     session.set.updatedAt = Date.now();
     store.save(session);
-    namespace.to(roomName(session.set.sessionToken)).emit("state", session.set);
+    namespace.to(roomName(session.set.sessionToken)).emit("state", summarizedSet(session.set));
   }
 
   function questionIndex(set: CollaborativeSetSnapshot, questionId: string): number {
@@ -189,7 +199,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       const session: StoredCollaborativeSet = { hostToken, set };
       sessions.set(sessionToken, session);
       store.saveNow(session);
-      callback({ ok: true, sessionToken, hostToken, state: set });
+      callback({ ok: true, sessionToken, hostToken, state: summarizedSet(set) });
     });
 
     socket.on("joinSession", async (rawInput, callback) => {
@@ -211,12 +221,20 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       callback({
         ok: true,
         state: {
-          set: session.set,
+          set: summarizedSet(session.set),
           collaborators: presence(parsed.data.sessionToken),
           locks: currentLocks(parsed.data.sessionToken)
         }
       });
       emitPresence(parsed.data.sessionToken);
+    });
+
+    socket.on("getQuestion", (rawInput, callback) => {
+      const parsed = QuestionLockInput.safeParse(rawInput);
+      if (!parsed.success) return callback({ ok: false, error: "Invalid question ID" });
+      const session = joinedSession(socket, undefined);
+      if (!session) return callback({ ok: false, error: "Join the collaborative set first" });
+      callback(questionResult(session.set.questions[questionIndex(session.set, parsed.data.questionId)]));
     });
 
     socket.on("acquireLock", (rawInput, ack) => {
@@ -299,7 +317,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       session.set.instructions = parsed.data.instructions;
       session.set.updatedAt = Date.now();
       store.save(session);
-      socket.to(roomName(session.set.sessionToken)).emit("state", session.set);
+      socket.to(roomName(session.set.sessionToken)).emit("state", summarizedSet(session.set));
       accept(ack);
     });
 
@@ -311,7 +329,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       session.set.pdfOptions = parsed.data.pdfOptions;
       session.set.updatedAt = Date.now();
       store.save(session);
-      socket.to(roomName(session.set.sessionToken)).emit("state", session.set);
+      socket.to(roomName(session.set.sessionToken)).emit("state", summarizedSet(session.set));
       accept(ack);
     });
 

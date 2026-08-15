@@ -116,6 +116,9 @@ export type QuestionLock = z.infer<typeof QuestionLockSchema>;
 export type CollaborativeSetJoinState = z.infer<typeof CollaborativeSetJoinStateSchema>;
 
 export type CollaborativeOperationResult = { ok: true } | { ok: false; error: string };
+export type CollaborativeQuestionResult =
+  | { ok: true; question: CollaborativeQuestionValue }
+  | { ok: false; error: string };
 export type CollaborativeCreateResult =
   { ok: true; sessionToken: string; hostToken: string; state: CollaborativeSetSnapshot } | { ok: false; error: string };
 export type CollaborativeJoinResult = { ok: true; state: CollaborativeSetJoinState } | { ok: false; error: string };
@@ -124,6 +127,7 @@ type OperationAck = (result: CollaborativeOperationResult) => void;
 export interface CollaborativeSetClientToServerEvents {
   createSession: (input: unknown, callback: (result: CollaborativeCreateResult) => void) => void;
   joinSession: (input: unknown, callback: (result: CollaborativeJoinResult) => void) => void;
+  getQuestion: (input: unknown, callback: (result: CollaborativeQuestionResult) => void) => void;
   acquireLock: (input: unknown, callback?: OperationAck) => void;
   refreshLock: (input: unknown, callback?: OperationAck) => void;
   releaseLock: (input: unknown, callback?: OperationAck) => void;

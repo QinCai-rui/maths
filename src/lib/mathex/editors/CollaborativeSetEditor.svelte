@@ -83,6 +83,9 @@
   let currentQuestionId = $state<string | null>(null);
   let currentQuestion = $derived(questions.find(({ id }) => id === currentQuestionId) || null);
   let currentQuestionIndex = $derived(questions.findIndex(({ id }) => id === currentQuestionId));
+  let loadedQuestionIds = $state<Record<string, boolean>>({});
+  let loadingQuestionIds = $state<Record<string, boolean>>({});
+  let currentQuestionLoaded = $derived(!!currentQuestion && (!sessionToken || loadedQuestionIds[currentQuestion.id]));
   let collaborators = $state<CollaboratorPresence[]>([]);
   let locks = $state<QuestionLock[]>([]);
   let ownedLocks = $state<Record<string, boolean>>({});
@@ -105,6 +108,7 @@
   let lastServerSettings = "";
   const lastQuestionSent = new Map<string, string>();
   const questionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const questionLoads = new Map<string, Promise<boolean>>();
   let settingsTimer: ReturnType<typeof setTimeout> | null = null;
   let localTimer: ReturnType<typeof setTimeout> | null = null;
   let lockHeartbeat: ReturnType<typeof setInterval> | null = null;
@@ -274,7 +278,10 @@
     applyingLocalHistory = true;
     setName = snapshot.name;
     instructions = snapshot.instructions;
-    questions = cloneDocument(snapshot.questions);
+    const localQuestions = new Map(questions.map((question) => [question.id, question]));
+    questions = cloneDocument(snapshot.questions).map((question) =>
+      sessionToken && loadedQuestionIds[question.id] ? localQuestions.get(question.id) || question : question
+    );
     pdfOptions = cloneDocument(snapshot.pdfOptions);
     if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
       currentQuestionId = questions[0]?.id || null;
@@ -334,9 +341,10 @@
     const localQuestions = new Map(questions.map((question) => [question.id, question]));
     setName = state.name;
     instructions = state.instructions;
-    questions = state.questions.map((question) =>
-      ownedLocks[question.id] ? localQuestions.get(question.id) || question : question
-    );
+    questions = state.questions.map((question) => {
+      if (ownedLocks[question.id] || loadedQuestionIds[question.id]) return localQuestions.get(question.id) || question;
+      return question;
+    });
     pdfOptions = state.pdfOptions;
     sessionStatus = state.status;
     if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
@@ -352,6 +360,36 @@
       }
       commitLiveTransaction();
     } else if (!liveTransaction) liveHistoryBaseline = cloneDocument(editorSnapshot());
+  }
+
+  function loadQuestion(questionId: string): Promise<boolean> {
+    if (!sessionToken || loadedQuestionIds[questionId]) return Promise.resolve(true);
+    const existing = questionLoads.get(questionId);
+    if (existing) return existing;
+    loadingQuestionIds = { ...loadingQuestionIds, [questionId]: true };
+    const load = new Promise<boolean>((resolve) => {
+      socket?.emit("getQuestion", { questionId }, (result) => {
+        questionLoads.delete(questionId);
+        const { [questionId]: _, ...remaining } = loadingQuestionIds;
+        loadingQuestionIds = remaining;
+        if (!result.ok) {
+          toast.error(result.error);
+          resolve(false);
+          return;
+        }
+        const index = questions.findIndex(({ id }) => id === questionId);
+        if (index >= 0) questions[index] = result.question;
+        loadedQuestionIds = { ...loadedQuestionIds, [questionId]: true };
+        lastQuestionSent.set(questionId, JSON.stringify(plainQuestion(result.question)));
+        resolve(true);
+      });
+    });
+    questionLoads.set(questionId, load);
+    return load;
+  }
+
+  async function loadAllQuestions(): Promise<boolean> {
+    return (await Promise.all(questions.map(({ id }) => loadQuestion(id)))).every(Boolean);
   }
 
   function joinSession(reconnecting = false) {
@@ -377,6 +415,7 @@
         displayName = name;
         localStorage.setItem(`mathex-collab-name:${sessionToken}`, name);
         applyServerState(result.state.set);
+        void loadQuestion(currentQuestionId || "");
         collaborators = result.state.collaborators;
         locks = result.state.locks;
         hostSession = result.state.collaborators.some(
@@ -421,6 +460,7 @@
       const index = questions.findIndex(({ id }) => id === question.id);
       if (index < 0) return;
       questions[index] = question;
+      loadedQuestionIds = { ...loadedQuestionIds, [question.id]: true };
       lastQuestionSent.set(question.id, JSON.stringify(plainQuestion(question)));
       if (!liveTransaction) liveHistoryBaseline = cloneDocument(editorSnapshot());
     });
@@ -573,6 +613,7 @@
         return;
       }
       ownedLocks = { ...ownedLocks, [questionId]: true };
+      void loadQuestion(questionId);
       const index = questions.findIndex(({ id }) => id === questionId);
       beginLiveTransaction({ type: "question", questionId }, `Edited question ${index + 1}`);
     });
@@ -583,12 +624,14 @@
       releaseQuestion(currentQuestionId);
     }
     currentQuestionId = questionId;
+    void loadQuestion(questionId);
     mobileOutlineOpen = false;
   }
 
-  function addQuestion() {
+  async function addQuestion() {
     if (questions.length >= 100) return toast.error("A set can contain at most 100 questions");
     if (sessionToken) {
+      if (!(await loadAllQuestions())) return;
       beginLiveTransaction(
         {
           type: "structure",
@@ -606,8 +649,9 @@
     currentQuestionId = question.id;
   }
 
-  function duplicateQuestion(question: CollaborativeQuestionValue) {
+  async function duplicateQuestion(question: CollaborativeQuestionValue) {
     if (sessionToken) {
+      if (!(await loadAllQuestions())) return;
       beginLiveTransaction({ type: "structure", action: "duplicate", questionId: question.id }, "Duplicated question");
       socket?.emit("duplicateQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
@@ -618,11 +662,12 @@
     currentQuestionId = copy.id;
   }
 
-  function moveQuestion(question: CollaborativeQuestionValue, direction: -1 | 1) {
+  async function moveQuestion(question: CollaborativeQuestionValue, direction: -1 | 1) {
     const index = questions.findIndex(({ id }) => id === question.id);
     const toIndex = index + direction;
     if (toIndex < 0 || toIndex >= questions.length) return;
     if (sessionToken) {
+      if (!(await loadAllQuestions())) return;
       beginLiveTransaction({ type: "structure", action: "move", questionId: question.id }, "Moved question");
       socket?.emit("moveQuestion", { questionId: question.id, toIndex }, handleStructuralOperation);
       return;
@@ -635,11 +680,12 @@
     pendingDeleteQuestion = question;
   }
 
-  function confirmDeleteQuestion() {
+  async function confirmDeleteQuestion() {
     const question = pendingDeleteQuestion;
     if (!question) return;
     pendingDeleteQuestion = null;
     if (sessionToken) {
+      if (!(await loadAllQuestions())) return;
       beginLiveTransaction({ type: "structure", action: "delete", questionId: question.id }, "Deleted question");
       socket?.emit("deleteQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
@@ -756,7 +802,8 @@
     input.click();
   }
 
-  function downloadJson() {
+  async function downloadJson() {
+    if (!(await loadAllQuestions())) return;
     const blob = new Blob([JSON.stringify(plainSet(), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -771,7 +818,8 @@
     URL.revokeObjectURL(url);
   }
 
-  function validatedSet() {
+  async function validatedSet() {
+    if (!(await loadAllQuestions())) return null;
     const result = QuestionSet.safeParse(plainSet());
     if (!result.success) {
       toast.error(`Complete the set first: ${result.error.issues[0]?.message || "invalid content"}`);
@@ -781,7 +829,7 @@
   }
 
   async function exportPdf(answers: boolean) {
-    const set = validatedSet();
+    const set = await validatedSet();
     if (!set) return;
     const id = toast.loading(`Creating ${answers ? "answer" : "question"} PDF...`);
     try {
@@ -792,14 +840,14 @@
     }
   }
 
-  function previewPdf(answers: boolean) {
-    const set = validatedSet();
+  async function previewPdf(answers: boolean) {
+    const set = await validatedSet();
     if (!set) return;
     if (!(answers ? previewAnswerSet(set) : previewQuestionSet(set))) toast.error("Allow pop-ups to open the preview");
   }
 
-  function useInRoom() {
-    const set = validatedSet();
+  async function useInRoom() {
+    const set = await validatedSet();
     if (!set) return;
     localStorage.setItem(ROOM_SET_KEY, JSON.stringify(set));
     window.open("/mathex/app/create", "_blank", "noopener");
@@ -825,6 +873,7 @@
   }
 
   function questionPreview(question: CollaborativeQuestionValue) {
+    if (sessionToken && !loadedQuestionIds[question.id]) return "Question not loaded";
     return stripTags(question.contents).trim().slice(0, 44) || "Untitled question";
   }
 </script>
@@ -1193,9 +1242,13 @@
                   </span>
                 </button>
               {/if}
-              {#key currentQuestion.id}
-                <QuestionEditor question={currentQuestion} disabled={readOnly} />
-              {/key}
+              {#if currentQuestionLoaded}
+                {#key currentQuestion.id}
+                  <QuestionEditor question={currentQuestion} disabled={readOnly} />
+                {/key}
+              {:else}
+                <div class="flex min-h-72 items-center justify-center text-sm text-muted-foreground">Loading question...</div>
+              {/if}
             </section>
             <div class="mt-4 flex items-center justify-between">
               <Button
