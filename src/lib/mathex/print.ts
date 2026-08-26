@@ -112,40 +112,30 @@ function inlineTokens(node: Node, inheritedStyle: Record<string, unknown> = {}):
 }
 
 async function inlineContent(tokens: InlineToken[], mathHeight: number, contentWidth: number): Promise<PdfNode[]> {
-  if (!tokens.some((token) => token.type === "math")) {
-    const text = tokens.map((token) => ({ text: token.value, ...token.style }));
-    return [{ text: text.length ? text : " ", margin: [0, 0, 0, 3] }];
-  }
+  const output: PdfNode[] = [];
+  let text: PdfNode[] = [];
+  const flushText = () => {
+    if (text.length) output.push({ text, margin: [0, 0, 0, 3] });
+    text = [];
+  };
 
-  const columns: PdfNode[] = [];
-  for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index];
+  for (const token of tokens) {
     if (token.type === "text") {
-      const previous = tokens[index - 1];
-      const next = tokens[index + 1];
-      let value = token.value;
-      if (previous?.type === "math") value = value.replace(/^\s+/, "");
-      if (next?.type === "math") value = value.replace(/\s+$/, "");
-      if (value) columns.push({ text: value, width: "auto", ...token.style });
+      text.push({ text: token.value, ...token.style });
       continue;
     }
-    const previous = tokens[index - 1];
-    const next = tokens[index + 1];
+    flushText();
     const math = parseStoredMath(token.value);
-    columns.push({
+    output.push({
       svg: await texToSvg(math.latex),
-      fit: [Math.min(160, contentWidth), mathHeight * 1.15 * math.scale],
-      width: "auto",
+      fit: [contentWidth, mathHeight * 1.15 * math.scale],
+      alignment: "left",
       _mathexScale: math.scale,
-      margin: [
-        previous?.type === "text" && /\s$/.test(previous.value) ? mathHeight * 0.3 : 0,
-        0,
-        next?.type === "text" && /^\s/.test(next.value) ? mathHeight * 0.3 : 0,
-        0
-      ]
+      margin: [0, 1, 0, 2]
     });
   }
-  return [{ columns, columnGap: 0, margin: [0, 0, 0, 3] }];
+  flushText();
+  return output.length ? output : [{ text: " ", margin: [0, 0, 0, 3] }];
 }
 
 async function paragraphNodes(
@@ -599,7 +589,7 @@ export function previewQuestionSet(set: Set) {
   return openPrintDocument(
     `${set.name || "Mathex set"} questions`,
     `<main>${slips}</main>`,
-    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { display: flex; flex-direction: column; width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { flex: 1; min-height: 0; overflow: hidden; line-height: 1.1; overflow-wrap: anywhere; word-break: break-word; white-space: normal; } .slip-content p, .slip-content li { overflow-wrap: anywhere; word-break: break-word; } .slip-content math { font-size: 1em !important; vertical-align: middle; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { flex: none; font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
+    `@page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; } body { margin: 0; color: #111; background: #fff; font-family: Arial, sans-serif; } .slip { display: flex; flex-direction: column; width: 210mm; height: ${options.slipHeight}mm; padding: 1.76mm ${options.cutMargin + 4.94}mm 1.41mm 16.35mm; border-bottom: 0.5pt dashed #777; position: relative; overflow: hidden; break-inside: avoid; } .slip::before { content: ""; position: absolute; inset: 0 auto 0 10mm; border-left: 0.5pt solid #aaa; } .slip::after { content: ""; position: absolute; top: 0; bottom: 0; right: ${options.cutMargin}mm; border-left: 0.5pt dashed #777; } .slip-content { flex: 1; min-height: 0; overflow: hidden; line-height: 1.1; overflow-wrap: anywhere; word-break: break-word; white-space: normal; } .slip-content p, .slip-content li { overflow-wrap: anywhere; word-break: break-word; } .slip-content math { display: block; width: fit-content; max-width: 100%; margin: .1em 0 .2em; font-size: 1em !important; } .slip-content img { position: static !important; float: none !important; clear: both; max-width: 100%; max-height: ${options.imageHeight}mm; object-fit: contain; display: block; margin: 1.41mm 0 1.76mm; } .number { flex: none; font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 0.71mm; } .cover h1 { margin: 0 0 1.76mm; font-size: 18pt; } p { margin: 0 0 1.41mm; } blockquote { margin: 1.41mm 0; padding-left: 2.12mm; border-left: 2pt solid #777; }`,
     true
   );
 }
