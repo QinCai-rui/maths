@@ -28,13 +28,13 @@
 
 <div class="space-y-3">
   <div
-    class="hidden grid-cols-[1fr_0.65fr_2rem] gap-3 px-3 text-xs font-bold uppercase tracking-wider text-muted-foreground sm:grid"
+    class="hidden grid-cols-[1fr_0.65fr_2rem] gap-3 px-3 text-xs font-semibold text-muted-foreground sm:grid"
   >
     <span>Team name</span><span>Group</span><span></span>
   </div>
   {#each teams as team, index (team.id)}
     <div
-      class="grid gap-2 rounded-xl border border-border/70 bg-background/55 p-3 sm:grid-cols-[1fr_0.65fr_2rem] sm:items-end sm:gap-3"
+      class="grid gap-2 border border-border bg-background p-3 sm:grid-cols-[1fr_0.65fr_2rem] sm:items-end sm:gap-3"
     >
       <div>
         <Label for="team-{team.id}" class="mb-1.5 sm:sr-only">Team {index + 1} name</Label>

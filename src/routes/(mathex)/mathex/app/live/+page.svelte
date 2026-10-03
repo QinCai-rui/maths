@@ -91,9 +91,9 @@
     </a>
     <div class="mt-9 grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-start">
       <section class="lg:sticky lg:top-8">
-        <p class="mathex-kicker">Physical event mode</p>
+        <p class="mathex-kicker">In-person event</p>
         <Header size="h1" class="mt-2 text-4xl leading-none tracking-[-0.04em] sm:text-5xl">
-          Put the room<br /><span class="text-primary">on the board.</span>
+          Set up live scoring.
         </Header>
         <p class="mt-5 max-w-sm leading-7 text-muted-foreground">
           Teams solve on paper while markers record progress. No questions or answers are stored here.
@@ -118,7 +118,7 @@
           createCompetition();
         }}
       >
-        <section class="mathex-panel rounded-3xl p-5 sm:p-7">
+        <section class="mathex-panel p-5 sm:p-7">
           <div>
             <p class="mathex-kicker">Competition details</p>
             <h2 class="mt-1 text-2xl font-bold">The essentials</h2>
@@ -162,7 +162,7 @@
               >
             </div>
           </div>
-          <div class="mt-5 rounded-2xl border border-border/70 bg-background/55 p-4">
+          <div class="mt-5 border border-border bg-background p-4">
             <label class="flex cursor-pointer items-center gap-3 font-semibold">
               <Checkbox bind:checked={timerEnabled} />
               <Clock3 class="h-4 w-4 text-primary" /> Use a competition timer
@@ -181,7 +181,7 @@
             {/if}
           </div>
           <label
-            class="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-background/55 p-4"
+            class="mt-4 flex cursor-pointer items-start gap-3 border border-border bg-background p-4"
           >
             <Checkbox bind:checked={autoFinishWhenComplete} />
             <span>
@@ -193,7 +193,7 @@
           </label>
         </section>
 
-        <section class="mathex-panel rounded-3xl p-5 sm:p-7">
+        <section class="mathex-panel p-5 sm:p-7">
           <div class="mb-5 flex items-end justify-between gap-4">
             <div>
               <p class="mathex-kicker">Teams</p>
@@ -204,7 +204,7 @@
           <TeamEditor bind:teams disabled={creating} />
         </section>
 
-        <Button type="submit" size="lg" class="h-12 w-full text-base shadow-lg shadow-primary/20" disabled={!canCreate}>
+        <Button type="submit" size="lg" class="h-12 w-full text-base" disabled={!canCreate}>
           {creating ? "Creating dashboard..." : "Create live dashboard"}
         </Button>
       </form>

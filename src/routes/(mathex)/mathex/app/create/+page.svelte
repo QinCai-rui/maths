@@ -150,12 +150,12 @@
       <section class="lg:sticky lg:top-24">
         <p class="mathex-kicker">Host setup</p>
         <Header size="h1" class="mt-2 text-4xl leading-none tracking-[-0.04em] sm:text-5xl"
-          >Build the<br /><span class="text-primary">starting line.</span></Header
+          >Create a room.</Header
         >
         <p class="mt-5 max-w-sm leading-7 text-muted-foreground">
           Choose the question set, tune the round, and share a unique room code when everything is ready.
         </p>
-        <div class="mt-8 space-y-4 border-l border-border/70 pl-4 text-sm">
+        <div class="mt-8 space-y-4 border-l border-border pl-4 text-sm">
           <div>
             <p class="font-semibold">1. Select questions</p>
             <p class="mt-0.5 text-muted-foreground">Upload JSON or use your saved editor set.</p>
@@ -172,13 +172,13 @@
       </section>
 
       <div class="space-y-4">
-        <div class="mathex-panel rounded-3xl p-5 sm:p-7">
+        <div class="mathex-panel p-5 sm:p-7">
           <div class="mb-6 flex items-center justify-between">
             <div>
               <p class="mathex-kicker">Room details</p>
               <h2 class="mt-1 text-xl font-bold">Create a new competition</h2>
             </div>
-            <span class="rounded-xl bg-primary/10 p-2.5 text-primary"><FileJson class="h-5 w-5" /></span>
+            <span class="bg-primary/10 p-2.5 text-primary"><FileJson class="h-5 w-5" /></span>
           </div>
           <form
             class="space-y-4"
@@ -192,7 +192,7 @@
               {#if editorSet}
                 <button
                   type="button"
-                  class="mb-2 flex w-full items-center justify-between rounded-xl border p-3.5 text-left transition-colors {useEditorSet
+                  class="mb-2 flex w-full items-center justify-between border p-3.5 text-left transition-colors {useEditorSet
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-primary/50'}"
                   onclick={() => (useEditorSet = true)}
@@ -204,7 +204,7 @@
                 </button>
               {/if}
               <button
-                class="flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-6 text-center transition-colors {dragOver
+                class="flex w-full flex-col items-center gap-2 border-2 border-dashed p-6 text-center transition-colors {dragOver
                   ? 'border-primary bg-primary/5'
                   : 'border-border hover:border-primary/50'} {file && !fileValid ? 'border-destructive' : ''} {file &&
                 !useEditorSet
@@ -273,7 +273,7 @@
                 </p>
               </div>
 
-              <div class="rounded-2xl border border-border/70 bg-muted/30 p-3.5">
+              <div class="border border-border bg-muted/30 p-3.5">
                 <div class="flex items-start gap-2.5">
                   <Checkbox id="visibility-tracking" bind:checked={visibilityTracking} />
                   <div>
@@ -288,14 +288,14 @@
               </div>
             </div>
 
-            <Button type="submit" class="mt-2 w-full shadow-lg shadow-primary/20" size="lg" disabled={!canCreate}>
-              {creating ? "Creating…" : "Create Room"}
+            <Button type="submit" class="mt-2 w-full" size="lg" disabled={!canCreate}>
+              {creating ? "Creating…" : "Create room"}
             </Button>
           </form>
         </div>
 
         <div
-          class="flex flex-col justify-between gap-3 rounded-2xl border border-border/70 bg-muted/30 p-5 sm:flex-row sm:items-center"
+          class="flex flex-col justify-between gap-3 border border-border bg-muted/30 p-5 sm:flex-row sm:items-center"
         >
           <div>
             <p class="text-sm font-semibold">Need a question set?</p>

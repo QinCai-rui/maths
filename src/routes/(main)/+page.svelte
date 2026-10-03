@@ -1,109 +1,91 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
-  import { ArrowRight, Calculator, Gamepad2, Hash, Sigma } from "@lucide/svelte/icons";
+  import { getNumberFacts, getNumberOfTheDay } from "$lib/number-facts";
+  import { ArrowUpRight, Calculator, Gamepad2, Hash } from "@lucide/svelte/icons";
+
+  const today = new Date();
+  const featuredNumber = getNumberOfTheDay(today);
+  const facts = getNumberFacts(featuredNumber);
+  const primeLabel = facts.isPrime ? "Prime" : facts.primeFactorisation;
+  const dateLabel = new Intl.DateTimeFormat("en", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC"
+  }).format(today);
+
+  const shortFactors =
+    facts.factors.length > 6
+      ? `${facts.factors.slice(0, 5).join(", ")}, …, ${facts.factors.at(-1)}`
+      : facts.factors.join(", ");
+  const dailyFacts = [
+    { label: "Even or odd", value: facts.isEven ? "Even" : "Odd" },
+    { label: "Prime or factors", value: primeLabel },
+    { label: "Prime factors", value: facts.primeFactorisation },
+    { label: "Perfect square", value: facts.isSquare ? "Yes" : "No" },
+    { label: "Triangular", value: facts.isTriangular ? "Yes" : "No" },
+    { label: "Factors", value: shortFactors }
+  ];
 </script>
 
-<section class="mathex-shell relative isolate overflow-hidden">
-  <div class="mathex-grid pointer-events-none absolute inset-x-0 top-0 h-[38rem] opacity-70"></div>
-  <div class="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
-    <div class="grid border-y border-border lg:grid-cols-[1.15fr_0.85fr]">
-      <div class="py-8 pr-0 lg:py-14 lg:pr-14">
-        <p class="mathex-kicker">Raymont's Maths</p>
-        <h1 class="mt-5 max-w-3xl text-5xl font-bold leading-[0.91] tracking-[-0.065em] text-foreground sm:text-7xl lg:text-8xl">
-          Mathematics,<br />worth lingering over.
-        </h1>
-        <p class="mt-6 max-w-lg text-base leading-7 text-muted-foreground sm:text-lg">
-          Explore interesting number facts, play a game of Wordle (but with numbers), and put your quick thinking and
-          accuracy to the test in a live Mathex round.
-        </p>
-        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button href="/utilities/number" size="lg" class="gap-2">
-            Explore numbers
-            <ArrowRight class="h-4 w-4" />
-          </Button>
-          <Button href="/mathex" size="lg" variant="outline" class="gap-2.5 bg-card/65">
-            <Calculator class="h-4 w-4" />
-            Open Mathex
-          </Button>
+<svelte:head>
+  <title>Raymont's Maths — Explore numbers and play</title>
+</svelte:head>
+
+<div class="site-home">
+  <main class="site-wrap">
+    <section class="site-hero">
+      <div>
+        <p class="site-eyebrow">Numbers, games and competitions</p>
+        <h1 class="site-title">Mathematics, <em>worth lingering over.</em></h1>
+        <p class="site-lead">Explore number facts, play maths games, or host a Mathex competition.</p>
+        <div class="site-actions">
+          <a class="site-button site-button-primary" href="/tools"><Gamepad2 class="h-4 w-4" /> Explore the tools</a>
+          <a class="site-button site-button-secondary" href="/mathex"><Calculator class="h-4 w-4" /> About Mathex</a>
         </div>
       </div>
 
-      <aside class="border-t border-border py-8 lg:border-l lg:border-t-0 lg:py-14 lg:pl-10">
-        <div class="flex items-start justify-between">
-          <div>
-            <p class="mathex-kicker">A number for today</p>
-            <p class="mt-2 text-sm text-muted-foreground">An irrational beginning.</p>
-          </div>
-          <span
-            class="flex h-10 w-10 items-center justify-center border border-primary bg-primary text-primary-foreground"
+      <aside class="site-daily" aria-labelledby="daily-number-heading">
+        <div id="daily-number-heading" class="sr-only">Number of the day</div>
+        <div class="site-daily-number">{featuredNumber}</div>
+        <div class="site-daily-date">Number of the day · {dateLabel} UTC</div>
+        <dl class="site-daily-facts">
+          {#each dailyFacts as fact}
+            <div class="site-daily-fact">
+              <dt><small>{fact.label}</small></dt>
+              <dd><strong>{fact.value}</strong></dd>
+            </div>
+          {/each}
+        </dl>
+        <p class="site-daily-description">
+          <a href={`/utilities/number/${featuredNumber}`}
+            >See all facts about {featuredNumber} <ArrowUpRight class="inline h-3.5 w-3.5" /></a
           >
-            <Sigma class="h-5 w-5" />
-          </span>
-        </div>
-        <div class="mt-12 border-b border-border pb-5">
-          <div class="text-8xl leading-none text-foreground">π</div>
-          <p class="mt-4 font-mono text-xl font-medium tracking-tight">3.14159...</p>
-        </div>
-        <p class="mt-4 max-w-xs text-sm leading-6 text-muted-foreground">
-          The ratio of a circle&apos;s circumference to its diameter, with no last digit in sight.
         </p>
       </aside>
-    </div>
+    </section>
 
-    <div class="mt-12 grid border-l border-t border-border md:grid-cols-3 lg:mt-16">
-      <a
-        href="/utilities/number"
-        class="group border-b border-r border-border p-6 transition-colors hover:bg-muted/50 sm:p-7"
-      >
-        <div class="flex items-start justify-between">
-          <span class="flex h-10 w-10 items-center justify-center border border-primary/30 bg-primary/5 text-primary"
-            ><Hash class="h-5 w-5" /></span
-          >
-          <span class="font-mono text-xs text-muted-foreground">01</span>
-        </div>
-        <h2 class="mt-8 text-2xl font-bold">Number explorer</h2>
-        <p class="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-          Pull apart any number to see its factors, patterns, and surprising properties.
-        </p>
-        <span class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
-          >Investigate <ArrowRight class="h-4 w-4 transition-transform group-hover:translate-x-1" /></span
-        >
-      </a>
-
-      <a href="/tools" class="group border-b border-r border-border p-6 transition-colors hover:bg-muted/50 sm:p-7">
-        <div class="relative flex items-start justify-between">
-          <span class="flex h-10 w-10 items-center justify-center border border-primary/30 bg-primary/5 text-primary"
-            ><Gamepad2 class="h-5 w-5" /></span
-          >
-          <span class="font-mono text-xs text-muted-foreground">02</span>
-        </div>
-        <h2 class="mt-8 text-2xl font-bold">Games with bite</h2>
-        <p class="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-          Play games that reward pattern-spotting, quick thinking, and a little persistence.
-        </p>
-        <span class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
-          >Play a round <ArrowRight class="h-4 w-4 transition-transform group-hover:translate-x-1" /></span
-        >
-      </a>
-
-      <a
-        href="/mathex"
-        class="group border-b border-r border-border bg-foreground p-6 text-background transition-colors hover:bg-primary sm:p-7"
-      >
-        <div class="flex items-start justify-between">
-          <span class="flex h-10 w-10 items-center justify-center border border-background/30 bg-background/10"
-            ><Calculator class="h-5 w-5" /></span
-          >
-          <span class="font-mono text-xs text-background/65">03</span>
-        </div>
-        <h2 class="mt-8 text-2xl font-bold">Live Mathex</h2>
-        <p class="mt-2 max-w-sm text-sm leading-6 text-background/75">
-          Host a room or race your friends through a real-time mathematics competition.
-        </p>
-        <span class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold"
-          >Join the action <ArrowRight class="h-4 w-4 transition-transform group-hover:translate-x-1" /></span
-        >
-      </a>
-    </div>
-  </div>
-</section>
+    <section class="site-section" aria-labelledby="ways-heading">
+      <div class="site-section-head">
+        <h2 id="ways-heading">Find your way in</h2>
+        <span>Explore the site</span>
+      </div>
+      <div class="site-ways">
+        <a class="site-way" href="/tools#number-facts">
+          <h3>Number facts</h3>
+          <p>Explore factors, patterns and surprising properties for any whole number.</p>
+          <span class="site-way-action">Look up a number</span>
+        </a>
+        <a class="site-way" href="/tools#games">
+          <h3>Maths games</h3>
+          <p>Quick puzzles for pattern-spotting, number sense and mental arithmetic.</p>
+          <span class="site-way-action">Find a game</span>
+        </a>
+        <a class="site-way" href="/mathex">
+          <h3>Live Mathex</h3>
+          <p>Host a room or race your friends through a real-time maths competition.</p>
+          <span class="site-way-action">About Mathex</span>
+        </a>
+      </div>
+    </section>
+  </main>
+</div>

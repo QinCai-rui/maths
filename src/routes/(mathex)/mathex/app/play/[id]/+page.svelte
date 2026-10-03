@@ -206,22 +206,20 @@
   </AlertDialog.Content>
 </AlertDialog.Root>
 
-<div class="mathex-shell min-h-screen p-4 sm:p-6">
+<div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
   {#if gameState === "connecting"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
-      <span
-        class="mathex-panel flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-medium text-muted-foreground"
-      >
+      <span class="mathex-panel flex items-center gap-3 px-5 py-4 text-lg font-medium text-muted-foreground">
         <LoaderCircle class="h-5 w-5 animate-spin" />
         Connecting...
       </span>
     </div>
   {:else if gameState === "choose-name"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
-      <div class="mathex-panel w-full max-w-md rounded-3xl p-7 sm:p-9">
-        <p class="mathex-kicker">Player check-in</p>
-        <Header size="h1" class="mt-2 text-3xl tracking-[-0.04em]">Choose your name.</Header>
-        <p class="mt-2 text-sm leading-6 text-muted-foreground">This is how you will appear on the live leaderboard.</p>
+      <div class="mathex-panel w-full max-w-md p-6 sm:p-8">
+        <p class="mathex-kicker">Join the competition</p>
+        <Header size="h1" class="mt-2 text-3xl tracking-[-0.04em]">Choose a display name</Header>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">Your name will appear on the leaderboard.</p>
         <form
           class="flex flex-col items-center"
           onsubmit={(e) => {
@@ -242,29 +240,27 @@
             <Label for="name" class="text-sm font-medium">Your name</Label>
             <Input bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
           </div>
-          <Button type="submit" class="mt-5 w-full shadow-lg shadow-primary/20" size="lg">Join competition</Button>
+          <Button type="submit" class="mt-5 w-full" size="lg">Join competition</Button>
         </form>
       </div>
     </div>
   {:else if gameState === "waiting_start"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
-      <span
-        class="mathex-panel flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-medium text-muted-foreground"
-      >
+      <span class="mathex-panel flex items-center gap-3 px-5 py-4 text-lg font-medium text-muted-foreground">
         <LoaderCircle class="h-5 w-5 animate-spin" />
-        Waiting for game to start...
+        Waiting for the host to start the competition
       </span>
     </div>
   {:else if gameState === "started"}
     <div class="mx-auto w-full max-w-3xl">
-      <header class="mathex-panel flex items-center justify-between rounded-2xl p-3.5 sm:p-4">
+      <header class="mathex-panel flex items-center justify-between p-3.5 sm:p-4">
         <div class="flex items-center gap-3">
-          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"
+          <span class="flex h-9 w-9 items-center justify-center bg-primary/10 text-primary"
             ><Timer class="h-4 w-4" /></span
           >
           <div>
             <p class="text-xl font-bold tabular-nums sm:text-2xl">{msToMinutesAndSeconds(timePassed)}</p>
-            <p class="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Elapsed time</p>
+            <p class="text-xs font-medium text-muted-foreground">Elapsed time</p>
           </div>
         </div>
         <div class="text-right">
@@ -281,7 +277,7 @@
       </header>
 
       {#if running}
-        <div class="mathex-panel mt-4 rounded-3xl p-7 text-center sm:p-9">
+        <div class="mathex-panel mt-4 p-7 text-center sm:p-9">
           {#if answerFeedback === "correct"}
             <div
               class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
@@ -289,7 +285,7 @@
               <CircleCheckBig class="h-9 w-9" />
             </div>
             <p class="mathex-kicker mt-5 text-emerald-600 dark:text-emerald-400">Correct answer</p>
-            <Header size="h3" class="mt-1 text-3xl">Excellent work.</Header>
+            <Header size="h3" class="mt-1 text-3xl">Correct</Header>
             <p class="mt-2 text-sm text-muted-foreground">Loading your next question...</p>
           {:else if answerFeedback === "wrong"}
             <div
@@ -298,7 +294,7 @@
               <CircleX class="h-9 w-9" />
             </div>
             <p class="mathex-kicker mt-5 text-destructive">Not quite</p>
-            <Header size="h3" class="mt-1 text-3xl">Try again.</Header>
+            <Header size="h3" class="mt-1 text-3xl">Not correct</Header>
             <p class="mt-2 text-sm text-muted-foreground">The question will reopen in a moment.</p>
           {:else}
             <p class="mathex-kicker">Answer received</p>
@@ -310,9 +306,12 @@
           {/if}
         </div>
       {:else}
-        <div class="mathex-panel mt-4 rounded-3xl p-6 sm:p-9">
-          <div class="mb-7 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">
-            <Flag class="h-3.5 w-3.5" /> Problem {currentQuestion.number}
+        <div class="mathex-panel mt-4 p-6 sm:p-9">
+          <div
+            class="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4 text-sm font-semibold text-primary"
+          >
+            <span class="flex items-center gap-2"><Flag class="h-4 w-4" /> Question {currentQuestion.number}</span>
+            <span class="tabular-nums text-muted-foreground">{questionCount} total</span>
           </div>
           <div class="question-content prose prose-slate max-w-none dark:prose-invert">
             {@html renderMath(currentQuestion.content)}
@@ -364,7 +363,7 @@
           >
             <Button
               type="submit"
-              class="w-full shadow-lg shadow-primary/20"
+              class="w-full"
               size="lg"
               disabled={currentQuestion.requireAllSolutionGroups
                 ? answers.some((value) => value === null || value === "")
@@ -381,14 +380,12 @@
     </div>
   {:else if gameState === "finished"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
-      <div class="mathex-panel w-full max-w-md rounded-3xl p-7 text-center sm:p-9">
-        <div
-          class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-        >
+      <div class="mathex-panel w-full max-w-md p-7 text-center sm:p-9">
+        <div class="mx-auto flex h-14 w-14 items-center justify-center bg-accent text-primary">
           <CircleCheckBig class="h-7 w-7" />
         </div>
         <p class="mathex-kicker mt-5">Round complete</p>
-        <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">You finished!</Header>
+        <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Finished</Header>
         {#if leaderboard.length > 0}
           {@const myEntry = leaderboard.find((e) => e.name === name)}
           {#if myEntry}
@@ -412,7 +409,7 @@
                   1
                     ? 'bg-yellow-400 text-yellow-900'
                     : entry.rank === 2
-                      ? 'bg-gray-300 text-gray-700'
+                      ? 'bg-muted text-muted-foreground'
                       : entry.rank === 3
                         ? 'bg-amber-600 text-white'
                         : 'bg-muted text-muted-foreground'}"

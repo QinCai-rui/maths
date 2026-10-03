@@ -50,7 +50,7 @@
 <div class="mt-4">
   <SolutionsEditor bind:solutions={question.solutions} grouped={question.requireAllSolutionGroups} {disabled} />
 </div>
-<div class="mt-4 rounded-lg border border-border/60 bg-muted/20 p-3">
+<div class="mt-4 rounded-lg border border-border bg-muted/20 p-3">
   <div class="flex items-center space-x-2">
     <Checkbox id="require-all-solutions" bind:checked={question.requireAllSolutionGroups} {disabled} />
     <Label for="require-all-solutions" class="cursor-pointer text-sm font-medium">Require every answer group</Label>

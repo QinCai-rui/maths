@@ -1,45 +1,50 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Header } from "$lib/components/ui/header";
-  import { Hash } from "@lucide/svelte/icons";
 
   let query = $state("");
-  async function submit() {
-    if (isNaN(Number(query))) return;
-    requestAnimationFrame(() => goto(`/utilities/number/${query}`));
+  let errorMessage = $state("");
+
+  function submit(event: SubmitEvent) {
+    event.preventDefault();
+    const cleanQuery = query.trim();
+    if (!/^\d+$/.test(cleanQuery)) {
+      errorMessage = "Enter a whole number between 0 and 10,000,000.";
+      return;
+    }
+    const number = Number(cleanQuery);
+    if (!Number.isSafeInteger(number) || number > 10_000_000) {
+      errorMessage = "Enter a whole number between 0 and 10,000,000.";
+      return;
+    }
+    errorMessage = "";
+    void goto(`/utilities/number/${number}`);
   }
 </script>
 
-<div class="py-12">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-    <div class="mx-auto max-w-2xl text-center">
-      <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <Hash class="h-6 w-6" />
-      </div>
-      <Header size="h1">Number Search</Header>
-      <p class="mt-4 text-lg text-muted-foreground">Search for a number and get fun facts about it!</p>
+<svelte:head>
+  <title>Number facts — Raymont's Maths</title>
+</svelte:head>
 
-      <form onsubmit={submit} class="mt-8 flex justify-center">
-        <div class="flex w-full max-w-sm items-center gap-2">
-          <Input
-            bind:value={query}
-            onkeypress={(e) => {
-              if (e.key === "Enter") {
-                submit();
-              } else if (!"0123456789".split("").includes(e.key)) {
-                e.preventDefault();
-              }
-            }}
-            onpaste={(e) => e.preventDefault()}
-            type="search"
-            placeholder="Search for a number"
-            class="text-center text-lg"
-          />
-          <Button type="submit" class="gap-2">Search</Button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
+<main class="site-wrap site-page">
+  <p class="site-eyebrow">A closer look at numbers</p>
+  <h1 class="site-page-title">Number facts</h1>
+  <p class="site-page-intro">Enter a whole number to see its factors, prime factorisation and other properties.</p>
+
+  <form class="site-search" onsubmit={submit}>
+    <label class="sr-only" for="number-search">Whole number</label>
+    <input
+      id="number-search"
+      bind:value={query}
+      type="text"
+      inputmode="numeric"
+      autocomplete="off"
+      placeholder="For example, 28"
+      aria-describedby="search-help search-error"
+    />
+    <button class="site-button site-button-primary" type="submit">Show facts</button>
+  </form>
+  <p id="search-help" class="mt-2 text-sm text-muted-foreground">Use a whole number from 0 to 10,000,000.</p>
+  {#if errorMessage}
+    <p id="search-error" class="mt-2 text-sm font-medium text-destructive" role="alert">{errorMessage}</p>
+  {/if}
+</main>

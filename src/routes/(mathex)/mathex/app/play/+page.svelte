@@ -40,7 +40,7 @@
   }
 </script>
 
-<div class="mathex-shell relative flex min-h-full items-center justify-center overflow-hidden p-4">
+<div class="mathex-shell relative flex min-h-full items-center justify-center overflow-hidden px-3 py-8 sm:px-6">
   <div class="mathex-grid pointer-events-none absolute inset-0 opacity-70"></div>
   <main class="relative w-full max-w-lg">
     <a
@@ -48,19 +48,17 @@
       class="mb-10 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       ><ArrowLeft class="h-4 w-4" /> Competition home</a
     >
-    <div class="mathex-panel rounded-3xl p-6 sm:p-9">
-      <div
-        class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-      >
+    <div class="mathex-panel p-6 sm:p-9">
+      <div class="flex h-12 w-12 items-center justify-center bg-primary text-primary-foreground">
         <KeyRound class="h-6 w-6" />
       </div>
-      <p class="mathex-kicker mt-7">Player check-in</p>
-      <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Enter the room.</Header>
+      <p class="mathex-kicker mt-7">Join a competition</p>
+      <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Enter the room code</Header>
       <p class="mt-3 leading-7 text-muted-foreground">
         Your host has a 6-digit access code. Enter it below to join the competition lobby.
       </p>
-      <div class="mt-8 rounded-2xl border border-border/70 bg-background/55 p-4 sm:p-5">
-        <p class="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Room code</p>
+      <div class="mt-8 border border-border bg-background p-4 sm:p-5">
+        <p class="mb-3 text-sm font-semibold text-muted-foreground">Six-digit room code</p>
         <InputOTP.Root maxlength={6} spellcheck="false" pattern={REGEXP_ONLY_DIGITS} bind:value={() => code, setCode}>
           {#snippet children({ cells })}
             <div class="flex w-full justify-between gap-1.5 sm:gap-2">

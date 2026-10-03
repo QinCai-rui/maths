@@ -75,7 +75,9 @@
     if (!showLogs) return [];
     if (verbosity === "all") return logs;
     if (verbosity === "submissions")
-      return logs.filter((l) => l.type === "submitted" || l.type === "correct" || l.type === "wrong" || l.type === "skipped");
+      return logs.filter(
+        (l) => l.type === "submitted" || l.type === "correct" || l.type === "wrong" || l.type === "skipped"
+      );
     if (verbosity === "finished")
       return logs.filter(
         (l) => l.type === "finished" || l.type === "correct" || l.type === "wrong" || l.type === "visibility"
@@ -135,7 +137,7 @@
   }
 </script>
 
-<div class="mathex-shell min-h-screen p-4 sm:p-6">
+<div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
   <main class="mx-auto flex w-full max-w-7xl flex-col gap-4">
     <header class="flex flex-col justify-between gap-4 py-2 sm:flex-row sm:items-end">
       <div>
@@ -148,7 +150,7 @@
         {currentState === "lobby" ? "LOBBY OPEN" : currentState === "started" ? "ROUND LIVE" : "ROUND FINISHED"}</span
       >
     </header>
-    <div class="mathex-panel rounded-2xl p-5 sm:p-6">
+    <div class="mathex-panel p-5 sm:p-6">
       <div class="flex flex-col items-center justify-center gap-3 text-center sm:flex-row sm:gap-5">
         <span class="text-sm text-muted-foreground"
           >Players join at <span class="font-mono font-medium text-foreground">{page.url.host}/mathex/app/play</span
@@ -156,7 +158,7 @@
         >
         <button
           type="button"
-          class="group flex items-center gap-3 rounded-xl bg-primary px-4 py-2.5 text-primary-foreground shadow-lg shadow-primary/20"
+          class="group flex items-center gap-3 bg-primary px-4 py-2.5 text-primary-foreground"
           onclick={copyRoomCode}
           ><span class="text-2xl font-bold tracking-[0.08em] sm:text-3xl">{roomId}</span><Copy
             class="h-4 w-4 opacity-75 transition-opacity group-hover:opacity-100"
@@ -166,7 +168,7 @@
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
-      <div class="mathex-panel rounded-2xl p-5 sm:p-6">
+      <div class="mathex-panel p-5 sm:p-6">
         <div class="flex items-center justify-between">
           <Header size="h2" class="text-2xl">Players</Header><span
             class="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary"
@@ -231,7 +233,7 @@
       </div>
 
       <div class="flex flex-col gap-4">
-        <div class="mathex-panel rounded-2xl p-5 sm:p-6">
+        <div class="mathex-panel p-5 sm:p-6">
           <Header size="h2">Alerts</Header>
           <form
             class="mt-4 flex w-full flex-col gap-3 sm:flex-row"
@@ -267,7 +269,7 @@
         </div>
 
         {#if currentState === "finished" && leaderboard.length > 0}
-          <div class="mathex-panel rounded-2xl p-5 sm:p-6">
+          <div class="mathex-panel p-5 sm:p-6">
             <div class="flex items-center justify-between">
               <Header size="h2">Leaderboard</Header>
               <div class="flex items-center gap-2">
@@ -291,7 +293,7 @@
                     1
                       ? 'bg-yellow-400 text-yellow-900'
                       : entry.rank === 2
-                        ? 'bg-gray-300 text-gray-700'
+                        ? 'bg-muted text-muted-foreground'
                         : entry.rank === 3
                           ? 'bg-amber-600 text-white'
                           : 'bg-muted text-muted-foreground'}"
@@ -319,7 +321,7 @@
           </div>
         {/if}
 
-        <div class="mathex-panel rounded-2xl p-5 sm:p-6">
+        <div class="mathex-panel p-5 sm:p-6">
           <div class="flex items-center justify-between">
             <Header size="h2">Logs ({filteredLogs.length})</Header>
             <div class="flex items-center gap-3">
@@ -341,7 +343,7 @@
           </div>
           {#if showLogs}
             <div
-              class="mt-3 max-h-48 overflow-y-auto scrollbar-thin rounded-lg border border-border/40 bg-muted/20 p-2 font-mono text-xs"
+              class="mt-3 max-h-48 overflow-y-auto scrollbar-thin border border-border bg-muted/20 p-2 font-mono text-xs"
             >
               {#each filteredLogs as log}
                 <div
@@ -395,7 +397,7 @@
             currentState = "finished";
           }
         }}
-        class="w-full shadow-lg shadow-primary/20 sm:w-auto"
+        class="w-full sm:w-auto"
         size="lg">{currentState === "lobby" ? "Start" : "Finish"} Game</Button
       >
     {/if}

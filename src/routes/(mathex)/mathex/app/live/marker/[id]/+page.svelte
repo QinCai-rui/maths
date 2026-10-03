@@ -103,17 +103,17 @@
 
 <svelte:head><title>{snapshot?.name || "Mathex Live"} - Marker</title></svelte:head>
 
-<div class="mathex-shell min-h-screen p-4 sm:p-6">
+<div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
   {#if !authenticated}
     <main class="mx-auto grid min-h-[80vh] max-w-md place-items-center">
       <form
-        class="mathex-panel w-full rounded-3xl p-6 sm:p-8"
+        class="mathex-panel w-full p-6 sm:p-8"
         onsubmit={(event) => {
           event.preventDefault();
           unlock();
         }}
       >
-        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"
+        <span class="flex h-12 w-12 items-center justify-center bg-primary/10 text-primary"
           ><ShieldCheck class="h-6 w-6" /></span
         >
         <p class="mathex-kicker mt-6">Marker access</p>
@@ -154,7 +154,7 @@
           {#if focusedTeamId}<Button variant="outline" onclick={() => (focusedTeamId = null)}
               ><LayoutGrid /> All teams</Button
             >{/if}
-          <span class="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary"
+          <span class="bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary"
             >{connected ? snapshot.state : "reconnecting"}</span
           >
         </div>
@@ -162,14 +162,14 @@
 
       {#if focusedTeam}
         <section class="mt-4 grid gap-4 lg:grid-cols-[1fr_0.55fr]">
-          <div class="mathex-panel rounded-3xl p-6 sm:p-9">
+          <div class="mathex-panel p-5 sm:p-8">
             <button
               type="button"
               class="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
               onclick={() => (focusedTeamId = null)}><ArrowLeft class="h-4 w-4" /> Back to all teams</button
             >
             <div class="mt-10 text-center">
-              <p class="text-sm font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              <p class="text-sm font-semibold text-muted-foreground">
                 {focusedTeam.group || "Ungrouped"}
               </p>
               <h2 class="mt-2 text-3xl font-black sm:text-5xl">{focusedTeam.name}</h2>
@@ -185,7 +185,9 @@
                 </div>
               {/if}
             </div>
-            <div class="mt-10 grid grid-cols-3 gap-2 sm:gap-4">
+            <div
+              class="sticky bottom-2 mt-8 grid grid-cols-3 gap-2 bg-background/95 py-2 sm:static sm:bottom-auto sm:mt-10 sm:bg-transparent sm:py-0"
+            >
               <Button
                 class="h-16 gap-1 bg-emerald-600 text-base hover:bg-emerald-700 sm:h-20 sm:text-lg"
                 onclick={() => mark(focusedTeam.id, "correct")}
@@ -213,18 +215,18 @@
               >
             </div>
           </div>
-          <aside class="mathex-panel rounded-3xl p-5 sm:p-7">
+          <aside class="mathex-panel p-5 sm:p-7">
             <p class="mathex-kicker">Team record</p>
             <div class="mt-5 grid grid-cols-3 gap-2 text-center">
-              <div class="rounded-xl bg-emerald-500/10 p-3">
+              <div class="bg-emerald-500/10 p-3">
                 <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{focusedTeam.correct}</p>
                 <p class="text-xs text-muted-foreground">Correct</p>
               </div>
-              <div class="rounded-xl bg-red-500/10 p-3">
+              <div class="bg-red-500/10 p-3">
                 <p class="text-2xl font-black text-red-600 dark:text-red-400">{focusedTeam.incorrect}</p>
                 <p class="text-xs text-muted-foreground">Wrong</p>
               </div>
-              <div class="rounded-xl bg-amber-500/10 p-3">
+              <div class="bg-amber-500/10 p-3">
                 <p class="text-2xl font-black text-amber-600 dark:text-amber-400">{focusedTeam.skipped}</p>
                 <p class="text-xs text-muted-foreground">Skipped</p>
               </div>
@@ -257,7 +259,7 @@
         </section>
       {:else}
         <section class="mt-4">
-          <div class="mathex-panel flex flex-col justify-between gap-4 rounded-2xl p-4 sm:flex-row sm:items-center">
+          <div class="mathex-panel flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center">
             <div>
               <p class="font-bold">All teams</p>
               <p class="text-sm text-muted-foreground">Tap a team for a focused marking view, or mark directly here.</p>
@@ -274,7 +276,7 @@
           </div>
           <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {#each visibleTeams as team}
-              <article class="mathex-panel rounded-2xl p-4">
+              <article class="mathex-panel p-4">
                 <button
                   type="button"
                   class="flex w-full items-center justify-between gap-3 text-left"
@@ -285,7 +287,7 @@
                     <p class="text-xs text-muted-foreground">{team.group || "Ungrouped"}</p>
                   </div>
                   <div class="shrink-0 text-right">
-                    <p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Next</p>
+                    <p class="text-xs font-semibold text-muted-foreground">Next question</p>
                     <p class="text-2xl font-black tabular-nums text-primary">
                       {team.currentQuestion > snapshot.questionCount ? "Done" : `Q${team.currentQuestion}`}
                     </p>

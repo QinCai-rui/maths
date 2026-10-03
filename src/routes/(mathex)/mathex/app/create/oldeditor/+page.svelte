@@ -485,9 +485,9 @@
   </AlertDialog.Content>
 </AlertDialog.Root>
 
-<div class="flex h-screen flex-col">
+<div class="mathex-editor flex h-screen flex-col">
   <!-- Header bar -->
-  <div class="flex shrink-0 items-center gap-3 border-b border-border/40 bg-background px-4 py-2">
+  <div class="flex shrink-0 items-center gap-3 border-b border-border bg-background px-4 py-2">
     <Header size="h3" class="!m-0">Set Editor</Header>
     <span class="ml-1 text-xs text-muted-foreground">{questions.length}/100</span>
     {#if isDirty}
@@ -617,7 +617,7 @@
     <!-- Main editor area -->
     <div class="min-h-0 flex-1 overflow-auto p-4 lg:p-6">
       <div class="mx-auto max-w-3xl">
-        <div class="mb-6 grid gap-4 rounded-xl border border-border/60 bg-card p-5 shadow-sm">
+        <div class="mb-6 grid gap-4 border border-border bg-card p-5">
           <div class="grid gap-1.5">
             <label class="text-sm font-medium" for="set-name">Set name</label>
             <input
@@ -638,14 +638,14 @@
           <div class="mb-4 flex items-center gap-3">
             <Header size="h2" class="!m-0">Question {currentQuestionIdx + 1}</Header>
           </div>
-          <div class="flex flex-col gap-6 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+          <div class="flex flex-col gap-6 border border-border bg-card p-6">
             {#key currentQuestionIdx}
               <QuestionEditor question={currentQuestion} />
             {/key}
           </div>
         {:else}
           <div
-            class="flex flex-col items-center justify-center rounded-xl border border-border/60 bg-card p-12 shadow-sm text-center"
+            class="flex flex-col items-center justify-center border border-border bg-card p-12 text-center"
           >
             <div class="mb-6 text-2xl font-semibold text-foreground">Create your first question</div>
             <p class="mb-6 max-w-md text-muted-foreground">

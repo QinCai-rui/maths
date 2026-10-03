@@ -31,7 +31,7 @@
 
 <svelte:head><title>Marker Desk - Mathex Live</title></svelte:head>
 
-<div class="mathex-shell relative flex min-h-full items-center justify-center overflow-hidden p-4">
+<div class="mathex-shell relative flex min-h-full items-center justify-center overflow-hidden px-3 py-8 sm:px-6">
   <div class="mathex-grid pointer-events-none absolute inset-0 opacity-70"></div>
   <main class="relative w-full max-w-lg">
     <a
@@ -40,17 +40,17 @@
     >
       <ArrowLeft class="h-4 w-4" /> Live dashboard setup
     </a>
-    <section class="mathex-panel rounded-3xl p-6 sm:p-9">
-      <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"
+    <section class="mathex-panel p-6 sm:p-9">
+      <span class="flex h-12 w-12 items-center justify-center bg-primary/10 text-primary"
         ><ShieldCheck class="h-6 w-6" /></span
       >
-      <p class="mathex-kicker mt-7">Marker desk</p>
-      <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Enter the room.</Header>
+      <p class="mathex-kicker mt-7">Marker access</p>
+      <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Enter the event code</Header>
       <p class="mt-3 leading-7 text-muted-foreground">
         Enter the six-digit live competition code, then use the marker PIN.
       </p>
-      <div class="mt-8 rounded-2xl border border-border/70 bg-background/55 p-4 sm:p-5">
-        <p class="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Room code</p>
+      <div class="mt-8 border border-border bg-background p-4 sm:p-5">
+        <p class="mb-3 text-sm font-semibold text-muted-foreground">Six-digit event code</p>
         <InputOTP.Root maxlength={6} spellcheck="false" pattern={REGEXP_ONLY_DIGITS} bind:value={() => code, setCode}>
           {#snippet children({ cells })}
             <div class="flex w-full justify-between gap-1.5 sm:gap-2">

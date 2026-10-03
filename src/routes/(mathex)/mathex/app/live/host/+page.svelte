@@ -130,11 +130,11 @@
 
 <svelte:head><title>{snapshot?.name || "Mathex Live"} - Host</title></svelte:head>
 
-<div class="mathex-shell min-h-screen p-4 sm:p-6">
+<div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
   <main class="mx-auto flex w-full max-w-7xl flex-col gap-4">
     <header class="flex flex-col justify-between gap-4 py-2 sm:flex-row sm:items-end">
       <div>
-        <p class="mathex-kicker">Host control · {id}</p>
+        <p class="mathex-kicker">Host console <span class="font-mono tabular-nums">· {id}</span></p>
         <Header size="h1" class="mt-1 text-3xl tracking-[-0.04em]">{snapshot?.name || "Connecting..."}</Header>
       </div>
       <span
@@ -148,13 +148,13 @@
     </header>
 
     {#if !id || !hostToken}
-      <section class="mathex-panel rounded-3xl p-8 text-center">
+      <section class="mathex-panel p-8 text-center">
         <h2 class="text-xl font-bold">Host link incomplete</h2>
         <p class="mt-2 text-muted-foreground">Open the private host link created with the competition.</p>
       </section>
     {:else if snapshot}
       <section class="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <div class="mathex-panel rounded-3xl p-5 sm:p-7">
+        <div class="mathex-panel p-5 sm:p-7">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p class="mathex-kicker">Round control</p>
@@ -191,17 +191,17 @@
           </div>
           {#if snapshot.state === "finished"}
             <div
-              class="mt-5 rounded-2xl bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-700 dark:text-emerald-400"
+              class="mt-5 border border-border bg-accent p-4 text-sm font-semibold text-accent-foreground"
             >
               This competition is finished. The public scoreboard remains available.
             </div>
           {/if}
         </div>
 
-        <div class="mathex-panel rounded-3xl p-5 sm:p-7">
+        <div class="mathex-panel p-5 sm:p-7">
           <p class="mathex-kicker">Open on other screens</p>
           <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div class="rounded-2xl border border-border/70 p-4">
+            <div class="border border-border p-4">
               <Radio class="h-5 w-5 text-primary" />
               <p class="mt-3 font-bold">Scoreboard</p>
               <p class="mt-1 text-xs text-muted-foreground">Safe for the projector</p>
@@ -215,7 +215,7 @@
                 >
               </div>
             </div>
-            <div class="rounded-2xl border border-border/70 p-4">
+            <div class="border border-border p-4">
               <ShieldCheck class="h-5 w-5 text-primary" />
               <p class="mt-3 font-bold">Marker desk</p>
               <p class="mt-1 text-xs text-muted-foreground">Protected by marker PIN</p>
@@ -253,7 +253,7 @@
         </div>
       </section>
 
-      <section class="mathex-panel rounded-3xl p-5 sm:p-7">
+      <section class="mathex-panel p-5 sm:p-7">
         <div class="mb-4 flex items-end justify-between gap-4">
           <div>
             <p class="mathex-kicker">Live standings</p>
@@ -263,9 +263,7 @@
         </div>
         <div class="grid gap-2 lg:grid-cols-2">
           {#each snapshot.teams as team}
-            <div
-              class="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 rounded-xl border border-border/70 bg-background/55 p-3"
-            >
+            <div class="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-b border-border p-3">
               <span class="text-center text-xl font-black text-muted-foreground">{team.rank}</span>
               <div class="min-w-0">
                 <p class="truncate font-bold">{team.name}</p>
@@ -285,7 +283,7 @@
         </div>
       </section>
 
-      <section class="mathex-panel rounded-3xl p-5 sm:p-7">
+      <section class="mathex-panel p-5 sm:p-7">
         <div class="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
             <p class="mathex-kicker">Roster</p>
@@ -301,7 +299,7 @@
         <TeamEditor bind:teams disabled={saving || snapshot.state === "finished"} />
       </section>
     {:else}
-      <section class="mathex-panel rounded-3xl p-8 text-center">
+      <section class="mathex-panel p-8 text-center">
         <p class="text-muted-foreground">Loading host controls...</p>
       </section>
     {/if}

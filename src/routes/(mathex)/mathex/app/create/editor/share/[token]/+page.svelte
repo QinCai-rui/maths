@@ -80,7 +80,7 @@
 
 <div class="mathex-shell min-h-screen px-4 py-10 sm:px-6">
   <main class="mx-auto max-w-2xl">
-    <section class="mathex-panel rounded-3xl p-6 sm:p-9">
+    <section class="mathex-panel p-6 sm:p-9">
       {#if status === "loading"}
         <LoaderCircle class="h-9 w-9 animate-spin text-primary" />
         <Header size="h1" class="mt-5 text-3xl">Loading shared set...</Header>
@@ -96,8 +96,8 @@
           Replacing it will clear the local draft on this device. Export a JSON backup first so you can restore it
           later.
         </p>
-        <div class="mt-6 max-h-72 overflow-y-auto rounded-xl border border-border bg-muted/30 p-4">
-          <p class="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Conflicts found</p>
+        <div class="mt-6 max-h-72 overflow-y-auto border border-border bg-muted/30 p-4">
+          <p class="mb-2 text-xs font-semibold text-muted-foreground">Differences</p>
           <ul class="space-y-1.5 text-sm">
             {#each differences as difference}<li class="flex gap-2">
                 <span class="text-amber-600">•</span>{difference}

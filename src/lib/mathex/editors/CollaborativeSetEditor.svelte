@@ -903,8 +903,8 @@
 </script>
 
 {#if sessionToken && !joined}
-  <div class="flex min-h-screen items-center justify-center bg-[#f6f7fb] p-5 dark:bg-zinc-950">
-    <div class="w-full max-w-md rounded-2xl border bg-background p-7 shadow-xl shadow-slate-900/5">
+  <div class="mathex-editor flex min-h-screen items-center justify-center bg-background p-5">
+    <div class="mathex-panel w-full max-w-md p-7">
       {#if deleted}
         <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
           <Trash2 />
@@ -915,10 +915,10 @@
         </p>
         <Button href="/mathex/app/create/editor">Open a new editor</Button>
       {:else}
-        <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-blue-600 text-white">
+        <div class="mb-5 flex size-12 items-center justify-center bg-primary text-primary-foreground">
           <UsersRound />
         </div>
-        <p class="mb-1 text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Collaborative set</p>
+        <p class="mb-1 text-xs font-semibold text-primary">Collaborative set</p>
         <Header size="h1" class="!mb-2 text-2xl">Choose how you appear</Header>
         <p class="mb-6 text-sm leading-6 text-muted-foreground">
           Your name is shown while you edit and beside any question you lock.
@@ -926,14 +926,14 @@
         <label class="grid gap-2 text-sm font-semibold">
           Display name
           <input
-            class="h-11 rounded-lg border bg-background px-3 font-normal outline-none ring-blue-500/20 focus:border-blue-500 focus:ring-4"
+            class="h-11 border bg-background px-3 font-normal outline-none ring-primary/20 focus:border-primary focus:ring-4"
             bind:value={displayName}
             maxlength="20"
             placeholder="e.g. Raymont"
             onkeydown={(event) => event.key === "Enter" && joinSession()}
           />
         </label>
-        <Button class="mt-5 w-full bg-blue-600 hover:bg-blue-700" onclick={() => joinSession()} disabled={joining}
+        <Button class="mt-5 w-full" onclick={() => joinSession()} disabled={joining}
           >{joining ? "Joining..." : "Join editor"}</Button
         >
         <p class="mt-4 text-center text-xs text-muted-foreground">
@@ -943,8 +943,8 @@
     </div>
   </div>
 {:else}
-  <div class="flex h-screen flex-col overflow-hidden bg-[#f3f5f9] text-foreground dark:bg-zinc-950">
-    <header class="z-30 shrink-0 border-b bg-background/95 shadow-sm backdrop-blur">
+  <div class="mathex-editor flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <header class="z-30 shrink-0 border-b bg-background/95 backdrop-blur">
       <div class="flex min-h-14 items-center gap-2 px-3 sm:px-4">
         <button
           class="rounded-lg p-2 hover:bg-accent lg:hidden"
@@ -953,12 +953,12 @@
         >
         <a
           href="/mathex/app/create/editor"
-          class="mr-1 flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-sm"
+          class="mr-1 flex size-9 shrink-0 items-center justify-center bg-primary font-bold text-primary-foreground"
           >M</a
         >
         <div class="min-w-0 flex-1">
           <input
-            class="w-full max-w-xl truncate rounded border border-transparent bg-transparent px-2 py-0.5 text-sm font-semibold outline-none hover:border-border focus:border-blue-500 disabled:opacity-80"
+            class="w-full max-w-xl truncate border border-transparent bg-transparent px-2 py-0.5 text-sm font-semibold outline-none hover:border-border focus:border-primary disabled:opacity-80"
             bind:value={setName}
             maxlength="120"
             placeholder="Untitled question set"
@@ -967,9 +967,9 @@
           <div class="flex items-center gap-2 px-2 text-[0.68rem] text-muted-foreground">
             {#if sessionToken}
               <span
-                class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold {connected
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200'}"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold {connected
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-destructive/10 text-destructive'}"
               >
                 {#if connected}<Wifi class="size-3.5" />{:else}<WifiOff class="size-3.5" />{/if}
                 {connected ? "Live" : "Disconnected"}
@@ -987,18 +987,18 @@
           <div class="hidden items-center -space-x-2 sm:flex">
             {#each collaborators.slice(0, 5) as collaborator}
               <div
-                class="flex size-8 items-center justify-center rounded-full border-2 border-background bg-blue-100 text-xs font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+                class="flex size-8 items-center justify-center rounded-full border-2 border-background bg-accent text-xs font-bold text-accent-foreground"
                 title={`${collaborator.displayName}${collaborator.isHost ? " (host)" : ""}`}
               >
                 {collaborator.displayName.slice(0, 1).toUpperCase()}
               </div>
             {/each}
           </div>
-          <Button class="gap-2 bg-blue-600 hover:bg-blue-700" size="sm" onclick={copySessionLink}
+          <Button class="gap-2" size="sm" onclick={copySessionLink}
             ><Link2 class="size-4" /><span class="hidden sm:inline">Share</span></Button
           >
         {:else}
-          <Button class="gap-2 bg-blue-600 hover:bg-blue-700" size="sm" onclick={() => (goLiveOpen = true)}
+          <Button class="gap-2" size="sm" onclick={() => (goLiveOpen = true)}
             ><Radio class="size-4" /><span class="hidden sm:inline">Go live</span></Button
           >
         {/if}
@@ -1014,7 +1014,7 @@
               onclick={() => (exportOpen = false)}
               aria-label="Close menu"
             ></button>
-            <div class="absolute right-0 z-40 mt-2 w-60 rounded-xl border bg-popover p-1.5 text-sm shadow-xl">
+            <div class="absolute right-0 z-40 mt-2 w-60 border bg-popover p-1.5 text-sm">
               {#if !sessionToken}<button class="menu-item" onclick={importFile}><Upload /> Import JSON</button>{/if}
               <button class="menu-item" onclick={downloadJson}><FileJson /> Download JSON</button>
               <button class="menu-item" onclick={() => exportPdf(false)}><Download /> Question PDF</button>
@@ -1061,12 +1061,12 @@
 
     <div class="relative flex min-h-0 flex-1">
       <aside
-        class="absolute inset-y-0 left-0 z-20 w-72 border-r bg-background p-3 shadow-xl transition-transform lg:static lg:w-64 lg:translate-x-0 lg:shadow-none {mobileOutlineOpen
+        class="absolute inset-y-0 left-0 z-20 w-72 border-r bg-background p-3 transition-transform lg:static lg:w-64 lg:translate-x-0 {mobileOutlineOpen
           ? 'translate-x-0'
           : '-translate-x-full'}"
       >
         <div class="mb-2 flex items-center justify-between px-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Document outline</span>
+          <span class="text-xs font-semibold text-muted-foreground">Question list</span>
           <button class="rounded p-1 hover:bg-accent lg:hidden" onclick={() => (mobileOutlineOpen = false)}
             ><X class="size-4" /></button
           >
@@ -1076,7 +1076,7 @@
             {@const lock = lockFor(question.id)}
             <div
               class="group rounded-xl border border-transparent {currentQuestionId === question.id
-                ? 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40'
+                ? 'border-primary bg-accent'
                 : 'hover:bg-accent/60'}"
             >
               <button
@@ -1089,7 +1089,7 @@
                 >
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-xs font-medium">{questionPreview(question)}</span>
-                  {#if lock}<span class="mt-1 flex items-center gap-1 truncate text-[0.65rem] text-blue-600"
+                  {#if lock}<span class="mt-1 flex items-center gap-1 truncate text-[0.65rem] text-primary"
                       ><LockKeyhole class="size-3" />
                       {lock.connectionId === socket?.id ? "You are editing" : `${lock.displayName} is editing`}</span
                     >{/if}
@@ -1097,7 +1097,7 @@
               </button>
               {#if (!sessionToken || isHost) && currentQuestionId === question.id}
                 <div
-                  class="flex items-center justify-end gap-0.5 border-t border-blue-100 px-2 py-1 dark:border-blue-900"
+                  class="flex items-center justify-end gap-0.5 border-t border-border px-2 py-1"
                 >
                   <button
                     class="outline-action"
@@ -1140,7 +1140,7 @@
       <main class="min-w-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 lg:px-10">
         <div class="mx-auto max-w-4xl">
           {#if detailsOpen}
-            <section class="mb-5 rounded-2xl border bg-background p-5 shadow-sm">
+            <section class="mb-5 border bg-background p-5">
               <div class="mb-4 flex items-center justify-between">
                 <div>
                   <h2 class="font-semibold">Set details</h2>
@@ -1223,7 +1223,7 @@
             {@const readOnly = sessionStatus !== "active" || !hasOwnLock}
             <div class="mb-3 flex items-center gap-3 px-1">
               <div>
-                <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-600">
+                <p class="text-xs font-semibold text-primary">
                   Question {currentQuestionIndex + 1}
                 </p>
                 <h1 class="text-xl font-semibold">Edit question</h1>
@@ -1232,7 +1232,7 @@
                 <div
                   class="ml-auto flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-xs shadow-sm"
                 >
-                  <span class="size-2 rounded-full bg-blue-500"></span>
+                  <span class="size-2 rounded-full bg-primary"></span>
                   {currentLock.connectionId === socket?.id
                     ? "You are editing"
                     : `${currentLock.displayName} is editing`}
@@ -1241,7 +1241,7 @@
             </div>
             {#if lockedByOther(currentQuestion.id) && currentLock}
               <div
-                class="mb-3 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100"
+                class="mb-3 flex items-center gap-2 border border-border bg-accent px-4 py-3 text-sm text-accent-foreground"
               >
                 <LockKeyhole class="size-4" /><strong>{currentLock.displayName}</strong> has this question. You can watch
                 changes live.
@@ -1298,7 +1298,7 @@
           {:else}
             <section class="document-page flex min-h-[32rem] flex-col items-center justify-center text-center">
               <div
-                class="mb-5 flex size-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950"
+                class="mb-5 flex size-14 items-center justify-center bg-accent text-primary"
               >
                 <FileText />
               </div>
@@ -1307,7 +1307,7 @@
                 Add a question to begin. You can go live whenever you are ready for others to join.
               </p>
               {#if !sessionToken || isHost}<Button
-                  class="mt-6 gap-2 bg-blue-600 hover:bg-blue-700"
+                  class="mt-6 gap-2"
                   onclick={addQuestion}><Plus /> Add first question</Button
                 >{/if}
             </section>
@@ -1318,7 +1318,7 @@
       {#if sessionToken}
         <aside class="hidden w-56 shrink-0 border-l bg-background p-4 xl:block">
           <div class="mb-4 flex items-center gap-2">
-            <UsersRound class="size-4 text-blue-600" />
+            <UsersRound class="size-4 text-primary" />
             <h2 class="text-sm font-semibold">In this document</h2>
             <span class="ml-auto rounded-full bg-muted px-2 py-0.5 text-[0.65rem]">{collaborators.length}</span>
           </div>
@@ -1327,7 +1327,7 @@
               {@const collaboratorLock = locks.find((lock) => lock.connectionId === collaborator.connectionId)}
               <div class="flex items-center gap-2.5 rounded-xl p-2 hover:bg-accent/60">
                 <div
-                  class="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+                  class="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground"
                 >
                   {collaborator.displayName.slice(0, 1).toUpperCase()}
                 </div>
@@ -1348,7 +1348,7 @@
           </div>
           <div class="mt-5 rounded-xl border bg-muted/30 p-3">
             <p class="flex items-center gap-1.5 text-xs font-semibold">
-              <Wifi class="size-3.5 text-emerald-500" /> Live editing
+              <Wifi class="size-3.5 text-primary" /> Live editing
             </p>
             <p class="mt-1 text-[0.68rem] leading-4 text-muted-foreground">
               Focus a question to reserve it. Everyone else can follow your edits in real time.
@@ -1366,7 +1366,7 @@
     role="presentation"
     onclick={(event) => event.target === event.currentTarget && (pendingDeleteQuestion = null)}
   >
-    <div class="w-full max-w-md rounded-2xl border bg-background p-6 shadow-2xl">
+    <div class="w-full max-w-md border bg-background p-6">
       <div class="mb-4 flex size-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
         <Trash2 />
       </div>
@@ -1390,9 +1390,9 @@
     role="presentation"
     onclick={(event) => event.target === event.currentTarget && (goLiveOpen = false)}
   >
-    <div class="w-full max-w-md rounded-2xl border bg-background p-6 shadow-2xl">
+    <div class="w-full max-w-md border bg-background p-6">
       <div class="mb-5 flex items-start justify-between">
-        <div class="flex size-11 items-center justify-center rounded-xl bg-blue-600 text-white"><Radio /></div>
+        <div class="flex size-11 items-center justify-center bg-primary text-primary-foreground"><Radio /></div>
         <button class="rounded-lg p-2 hover:bg-accent" onclick={() => (goLiveOpen = false)}><X class="size-4" /></button
         >
       </div>
@@ -1403,7 +1403,7 @@
       </p>
       <label class="mt-5 grid gap-2 text-sm font-semibold"
         >Your display name<input
-          class="h-11 rounded-lg border bg-background px-3 font-normal outline-none ring-blue-500/20 focus:border-blue-500 focus:ring-4"
+          class="h-11 border bg-background px-3 font-normal outline-none ring-primary/20 focus:border-primary focus:ring-4"
           bind:value={goLiveName}
           maxlength="20"
           placeholder="Shown to collaborators"
@@ -1412,7 +1412,7 @@
       >
       <div class="mt-6 flex justify-end gap-2">
         <Button variant="outline" onclick={() => (goLiveOpen = false)}>Cancel</Button><Button
-          class="gap-2 bg-blue-600 hover:bg-blue-700"
+          class="gap-2"
           onclick={createSession}
           disabled={creating}><UsersRound /> {creating ? "Starting..." : "Start and invite"}</Button
         >

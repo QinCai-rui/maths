@@ -44,6 +44,10 @@ export const createWSServer = (base: ServerInstance) => {
   const saveRoom = (room: Room) => roomStore.save(room);
   const io = new Server(base, {
     serveClient: false,
+    // Leave non-Socket.IO upgrade requests (e.g. Vite's dev WebSocket) alone.
+    // Engine.IO otherwise ends them after destroyUpgradeTimeout (1s), which makes
+    // `bun run dev` hard-refresh the browser every second.
+    destroyUpgrade: false,
     // Question images are embedded as data URLs in the portable question set.
     maxHttpBufferSize: envInteger("MATHEX_MAX_HTTP_BUFFER_BYTES", 10 * 1024 * 1024, 1_048_576, 52_428_800)
   });
