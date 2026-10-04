@@ -27,10 +27,6 @@
   ];
 </script>
 
-<svelte:head>
-  <title>Raymont's Maths — Explore numbers and play</title>
-</svelte:head>
-
 <div class="site-home">
   <main class="site-wrap">
     <section class="site-hero">

@@ -24,7 +24,7 @@
 
 <svelte:head>
   <title>Raymont's Maths</title>
-  <meta name="description" content="Explore number facts, play maths games and host a live Mathex round." />
+  <meta name="description" content="Raymont's Maths" />
 </svelte:head>
 
 <Toaster />
