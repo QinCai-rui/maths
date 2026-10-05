@@ -91,7 +91,7 @@
   let a11yLoaded = $state(false);
   const A11Y_KEY = "basicfacts.a11y.v1";
   let interval: ReturnType<typeof setInterval> | undefined;
-  let answerInput: HTMLInputElement | undefined;
+  let answerInput = $state<HTMLInputElement>();
 
   const focusAnswer = () => void tick().then(() => answerInput?.focus());
 

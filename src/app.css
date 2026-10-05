@@ -579,6 +579,36 @@
   --clay: #ef9279;
 }
 
+/* Dialogs, menus and toasts render in a portal on document.body, outside the
+   .public-site/.mathex-app scopes. Give them the same green tokens so popup
+   buttons match the rest of the site instead of falling back to root blue. */
+:is(
+  [data-slot="alert-dialog-content"],
+  [data-slot="alert-dialog-overlay"],
+  [data-slot="select-content"],
+  [data-slot="menubar-content"],
+  [data-sonner-toaster]
+) {
+  --primary: #1f6b57;
+  --primary-foreground: #ffffff;
+  --accent: #dce9e2;
+  --accent-foreground: #0c4234;
+  --ring: #1f6b57;
+}
+.dark :is(
+  [data-slot="alert-dialog-content"],
+  [data-slot="alert-dialog-overlay"],
+  [data-slot="select-content"],
+  [data-slot="menubar-content"],
+  [data-sonner-toaster]
+) {
+  --primary: #74bea1;
+  --primary-foreground: #10241b;
+  --accent: #263d33;
+  --accent-foreground: #d5eee1;
+  --ring: #74bea1;
+}
+
 .public-site :is(button, input, a) {
   font-family: inherit;
 }

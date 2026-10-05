@@ -22,7 +22,10 @@ const webSocketServer = {
   configureServer(server: ViteDevServer) {
     if (!server.httpServer) return;
     const realtime = createWSServer(server.httpServer);
-    server.httpServer.once("close", realtime.flush);
+    server.httpServer.once("close", () => {
+      realtime.dispose();
+      realtime.flush();
+    });
   }
 };
 
@@ -31,8 +34,5 @@ export default defineConfig({
   define: {
     __BUILD_COMMIT__: JSON.stringify(buildCommit),
     __BUILD_TIME__: JSON.stringify(buildTime)
-  },
-  server: {
-    hmr: false
   }
 });

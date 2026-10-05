@@ -18,6 +18,7 @@ let shuttingDown = false;
 function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  realtime.dispose();
   realtime.flush();
   realtime.io.close();
   server.close(() => process.exit(0));
