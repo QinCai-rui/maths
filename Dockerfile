@@ -28,18 +28,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 
 COPY --from=build /app/build ./build
 COPY server.ts ./
-COPY src/ws/index.server.ts ./src/ws/index.server.ts
-COPY src/ws/physical.server.ts ./src/ws/physical.server.ts
-COPY src/ws/set-share.server.ts ./src/ws/set-share.server.ts
-COPY src/ws/collaborative-set.server.ts ./src/ws/collaborative-set.server.ts
-COPY src/lib/mathex/schemas.ts ./src/lib/mathex/schemas.ts
-COPY src/lib/mathex/rooms.server.ts ./src/lib/mathex/rooms.server.ts
-COPY src/lib/mathex/physical.schemas.ts ./src/lib/mathex/physical.schemas.ts
-COPY src/lib/mathex/physical.server.ts ./src/lib/mathex/physical.server.ts
-COPY src/lib/mathex/set-share.schemas.ts ./src/lib/mathex/set-share.schemas.ts
-COPY src/lib/mathex/set-share.server.ts ./src/lib/mathex/set-share.server.ts
-COPY src/lib/mathex/collaborative-set.schemas.ts ./src/lib/mathex/collaborative-set.schemas.ts
-COPY src/lib/mathex/collaborative-set.server.ts ./src/lib/mathex/collaborative-set.server.ts
+COPY --from=build /app/src ./src
 
 ENV NODE_ENV=production
 ENV PORT=5185
