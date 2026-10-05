@@ -7,6 +7,11 @@
   } from "$lib/mathex/physical.schemas";
   import { Check, CircleMinus, Clock3, Radio, X } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
+  import { flip } from "svelte/animate";
+
+  const motionDuration = $derived(
+    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
+  );
 
   const id = page.params.id;
   const socket: Socket<PhysicalScoreboardServerToClientEvents, PhysicalScoreboardClientToServerEvents> = io(
@@ -87,8 +92,9 @@
                 {group.name}
               </h2>{/if}
             <div class="space-y-2">
-              {#each group.teams as team}
+              {#each group.teams as team (team.id)}
                 <article
+                  animate:flip={{ duration: motionDuration }}
                   class="scoreboard-team grid grid-cols-[3rem_1fr_auto] items-center gap-3 border-b border-border bg-card px-3 py-4 sm:grid-cols-[4rem_1fr_7rem_8rem_auto] sm:px-5 sm:py-5"
                 >
                   <span class="text-center text-2xl font-semibold tabular-nums text-muted-foreground sm:text-3xl"

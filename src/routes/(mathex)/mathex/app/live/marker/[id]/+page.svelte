@@ -13,6 +13,7 @@
   import { ArrowLeft, Check, CircleMinus, LayoutGrid, RotateCcw, ShieldCheck, Target, X } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { onMount } from "svelte";
+  import { flip } from "svelte/animate";
   import { toast } from "svelte-sonner";
 
   const id = page.params.id;
@@ -38,6 +39,10 @@
     (snapshot?.teams || []).filter((team) => group === "all" || team.group === group)
   );
   const focusedTeam = $derived.by(() => snapshot?.teams.find((team) => team.id === focusedTeamId) || null);
+
+  const motionDuration = $derived(
+    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
+  );
 
   socket.on("connect", () => {
     authenticated = true;
@@ -275,8 +280,8 @@
               >{/if}
           </div>
           <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {#each visibleTeams as team}
-              <article class="mathex-panel p-4">
+            {#each visibleTeams as team (team.id)}
+              <article animate:flip={{ duration: motionDuration }} class="mathex-panel p-4">
                 <button
                   type="button"
                   class="flex w-full items-center justify-between gap-3 text-left"

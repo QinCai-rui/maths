@@ -13,7 +13,12 @@
   import { CirclePause, CirclePlay, Copy, ExternalLink, Flag, Radio, Save, ShieldCheck } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { toast } from "svelte-sonner";
+  import { flip } from "svelte/animate";
   import TeamEditor, { type EditableTeam } from "../TeamEditor.svelte";
+
+  const motionDuration = $derived(
+    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
+  );
 
   const id = page.url.searchParams.get("id") || "";
   const hostToken = page.url.searchParams.get("hostToken") || "";
@@ -262,8 +267,11 @@
           <span class="text-sm text-muted-foreground">Correct, then time</span>
         </div>
         <div class="grid gap-2 lg:grid-cols-2">
-          {#each snapshot.teams as team}
-            <div class="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-b border-border p-3">
+          {#each snapshot.teams as team (team.id)}
+            <div
+              animate:flip={{ duration: motionDuration }}
+              class="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-b border-border p-3"
+            >
               <span class="text-center text-xl font-black text-muted-foreground">{team.rank}</span>
               <div class="min-w-0">
                 <p class="truncate font-bold">{team.name}</p>

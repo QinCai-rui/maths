@@ -1,5 +1,17 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import Calculator from "$lib/mathex/Calculator.svelte";
+  import SketchPad from "$lib/mathex/SketchPad.svelte";
+  import { DEFAULT_ROOM_SETTINGS, type ChatMessage } from "$lib/mathex/schemas";
+  import {
+    Calculator as CalculatorIcon,
+    Pencil,
+    Trophy,
+    MessageCircle,
+    Send,
+    UserX,
+    Hourglass
+  } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import {
     type RoomServerToClientEvents,
@@ -34,19 +46,27 @@
 
   import DOMPurify from "dompurify";
   import { renderMath } from "$lib/mathex/content";
+  import { flip } from "svelte/animate";
+
+  const motionDuration = $derived(
+    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
+  );
 
   const roomId = page.params.id;
   const sessionKey = `mathex-player-${roomId}`;
 
   let gameState: State = $state("connecting");
+  let kicked = $state(false);
 
   let name: string = $state("");
-  let playerId = "";
+  let playerId = $state("");
+  let publicPlayerId = $state("");
 
   import { toast } from "svelte-sonner";
   import type { z } from "zod";
 
   const socket: Socket<RoomServerToClientEvents, RoomClientToServerEvents> = io(`/room-${roomId}`);
+  socket.on("playerIdentity", (id) => (publicPlayerId = id));
   socket.on("alert", (type, message) => {
     if (type === "normal" || type === "action" || type === "default") {
       toast(message);
@@ -72,7 +92,23 @@
     toast.success("Connected!");
   });
   socket.on("connect_error", () => toast.error("Failed to connect! Does this room exist?"));
-  socket.on("disconnect", () => toast.warning("Disconnected!"));
+  socket.on("disconnect", () => {
+    if (!kicked) toast.warning("Disconnected!");
+  });
+  socket.on("kicked", () => {
+    kicked = true;
+    gameState = "kicked";
+    running = false;
+    try {
+      localStorage.removeItem(sessionKey);
+    } catch {
+      /* Storage is optional. */
+    }
+  });
+  socket.on("joinDenied", (reason) => {
+    gameState = "choose-name";
+    toast.error(reason);
+  });
 
   $effect(() => {
     const reportVisibility = () => socket.emit("visibilityChange", document.hidden);
@@ -106,13 +142,28 @@
   });
   let startingTime: number | null = $state(null);
   let timePassed = $state(0);
-  setInterval(() => {
-    if (!startingTime) timePassed = 0;
-    else timePassed = Date.now() - startingTime;
-  }, 100);
+  let progressInterval: ReturnType<typeof setInterval> | undefined;
+  let confettiTimer: ReturnType<typeof setTimeout> | undefined;
+  let clockNow = $state(Date.now());
+  $effect(() => {
+    const timer = setInterval(() => {
+      clockNow = Date.now();
+      if (gameState === "started") timePassed = startingTime === null ? 0 : clockNow - startingTime;
+    }, 100);
+    return () => {
+      clearInterval(timer);
+      clearInterval(progressInterval);
+      clearTimeout(confettiTimer);
+      socket.disconnect();
+    };
+  });
   socket.on("joined", (joinedName) => {
     name = joinedName;
-    localStorage.setItem(sessionKey, JSON.stringify({ name, playerId }));
+    try {
+      localStorage.setItem(sessionKey, JSON.stringify({ name, playerId }));
+    } catch {
+      /* Keep playing without saved sessions. */
+    }
   });
   socket.on("gameStart", (serverStartingTime) => {
     gameState = "started";
@@ -120,10 +171,15 @@
   });
   socket.on("gameFinish", () => {
     gameState = "finished";
+    running = false;
+    clearInterval(progressInterval);
+    sketchOpen = false;
+    calcOpen = false;
   });
   socket.on("confetti", () => {
     confetti = true;
-    setTimeout(() => (confetti = false), 6000);
+    clearTimeout(confettiTimer);
+    confettiTimer = setTimeout(() => (confetti = false), 6000);
   });
   let skipConfirmOpen = $state(false);
 
@@ -148,21 +204,100 @@
     answerFeedback = null;
     running = Date.now();
     runningDuration = durationMs;
-    const interval = setInterval(() => {
+    clearInterval(progressInterval);
+    progressInterval = setInterval(() => {
       if (running) runningVisible = ((Date.now() - running) / runningDuration) * 100;
-      else clearInterval(interval);
-    });
+      else clearInterval(progressInterval);
+    }, 50);
   });
   socket.on("answerResult", (correct) => {
     answerFeedback = correct ? "correct" : "wrong";
     if (!correct) answer = null;
   });
-  socket.on("stopRunning", () => (running = false));
+  socket.on("stopRunning", () => {
+    running = false;
+    clearInterval(progressInterval);
+  });
   let questionCount = $state(1);
   socket.on("questionCount", (data) => (questionCount = data));
 
   let leaderboard: LeaderboardEntry[] = $state([]);
   socket.on("leaderboard", (data) => (leaderboard = data));
+  let settings = $state({ ...DEFAULT_ROOM_SETTINGS });
+  let endsAt = $state<number | null>(null);
+  let panel = $state<"standings" | "chat" | null>(null);
+  let calcOpen = $state(false);
+  let sketchOpen = $state(false);
+  let chat = $state<ChatMessage[]>([]);
+  let chatDraft = $state("");
+  let unread = $state(0);
+  let muted = $state(false);
+  let chatContainer = $state<HTMLDivElement | null>(null);
+  let standingsContainer = $state<HTMLDivElement | null>(null);
+  let selfPinned = $state<"top" | "bottom" | null>(null);
+  socket.on("roomSettings", (value) => (settings = value));
+  socket.on("gameEndsAt", (value) => (endsAt = value));
+  socket.on("chatHistory", (messages) => (chat = messages.slice(-200)));
+  socket.on("chatMessage", (message) => {
+    chat = [...chat, message].slice(-200);
+    if (panel !== "chat") unread++;
+  });
+  socket.on("chatDeleted", (id) => (chat = chat.filter((message) => message.id !== id)));
+  socket.on("chatMuted", (value) => (muted = value));
+  $effect(() => {
+    if (!settings.showLeaderboard && panel === "standings") {
+      panel = null;
+      leaderboard = [];
+    }
+    if (!settings.allowChat && panel === "chat") panel = null;
+    if (!settings.allowCalculator) calcOpen = false;
+    if (!settings.allowSketch) sketchOpen = false;
+  });
+  $effect(() => {
+    if (panel === "chat" && chatContainer) {
+      chat.length;
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      unread = 0;
+    }
+  });
+  function pinSelf() {
+    const container = standingsContainer;
+    const row = container?.querySelector<HTMLElement>("[data-self]");
+    if (!container || !row) {
+      selfPinned = null;
+      return;
+    }
+    const box = container.getBoundingClientRect(),
+      item = row.getBoundingClientRect();
+    selfPinned = item.top < box.top - 1 ? "top" : item.bottom > box.bottom + 1 ? "bottom" : null;
+  }
+  $effect(() => {
+    leaderboard;
+    panel;
+    standingsContainer;
+    const frame = requestAnimationFrame(pinSelf);
+    return () => cancelAnimationFrame(frame);
+  });
+  function sendChat() {
+    const text = chatDraft.trim();
+    if (!text || muted || !settings.allowChat) return;
+    socket.emit("sendChat", text.slice(0, 500));
+    chatDraft = "";
+  }
+  function submitAnswer() {
+    const value = currentQuestion.requireAllSolutionGroups ? answers : answer;
+    if (running || gameState !== "started") return;
+    if (
+      value === null ||
+      value === "" ||
+      (Array.isArray(value) && value.some((item) => item === null || item === ""))
+    ) {
+      toast.error("Enter an answer first");
+      return;
+    }
+    socket.emit("answer", value as string | number | (string | number)[]);
+    sketchOpen = false;
+  }
 
   function joinRoom() {
     const trimmedName = name.trim();
@@ -171,6 +306,7 @@
       return;
     }
     name = trimmedName;
+    kicked = false;
     playerId = createId();
     socket.emit("join", name, playerId);
   }
@@ -206,6 +342,17 @@
   </AlertDialog.Content>
 </AlertDialog.Root>
 
+{#snippet standingsRow(entry: LeaderboardEntry, self: boolean)}
+  <div
+    data-self={self ? "" : undefined}
+    class="flex items-center gap-2 border border-border p-2 text-sm {self ? 'bg-accent' : 'bg-card'}"
+  >
+    <span class="w-6 shrink-0 font-semibold">{entry.rank}</span><span class="min-w-0 flex-1 truncate font-medium"
+      >{entry.name}</span
+    ><span class="shrink-0 tabular-nums">{entry.correctCount}/{entry.totalQuestions}</span>
+  </div>
+{/snippet}
+
 <div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
   {#if gameState === "connecting"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
@@ -238,7 +385,7 @@
           {/if}
           <div class="mt-4 w-full space-y-2">
             <Label for="name" class="text-sm font-medium">Your name</Label>
-            <Input bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
+            <Input id="name" bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
           </div>
           <Button type="submit" class="mt-5 w-full" size="lg">Join competition</Button>
         </form>
@@ -252,15 +399,24 @@
       </span>
     </div>
   {:else if gameState === "started"}
-    <div class="mx-auto w-full max-w-3xl">
+    <div class="mx-auto w-full {panel ? 'max-w-6xl' : 'max-w-3xl'}">
       <header class="mathex-panel flex items-center justify-between p-3.5 sm:p-4">
         <div class="flex items-center gap-3">
           <span class="flex h-9 w-9 items-center justify-center bg-primary/10 text-primary"
-            ><Timer class="h-4 w-4" /></span
+            >{#if endsAt !== null}<Hourglass class="h-4 w-4" />{:else}<Timer class="h-4 w-4" />{/if}</span
           >
           <div>
-            <p class="text-xl font-bold tabular-nums sm:text-2xl">{msToMinutesAndSeconds(timePassed)}</p>
-            <p class="text-xs font-medium text-muted-foreground">Elapsed time</p>
+            {#if endsAt !== null}
+              <p class="text-xl font-bold tabular-nums sm:text-2xl" role="timer">
+                {msToMinutesAndSeconds(Math.max(0, endsAt - clockNow))}
+              </p>
+              <p class="text-xs font-medium text-muted-foreground">
+                Time left · {msToMinutesAndSeconds(timePassed)} elapsed
+              </p>
+            {:else}
+              <p class="text-xl font-bold tabular-nums sm:text-2xl">{msToMinutesAndSeconds(timePassed)}</p>
+              <p class="text-xs font-medium text-muted-foreground">Elapsed time</p>
+            {/if}
           </div>
         </div>
         <div class="text-right">
@@ -275,108 +431,188 @@
           </div>
         </div>
       </header>
-
-      {#if running}
-        <div class="mathex-panel mt-4 p-7 text-center sm:p-9">
-          {#if answerFeedback === "correct"}
-            <div
-              class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-            >
-              <CircleCheckBig class="h-9 w-9" />
-            </div>
-            <p class="mathex-kicker mt-5 text-emerald-600 dark:text-emerald-400">Correct answer</p>
-            <Header size="h3" class="mt-1 text-3xl">Correct</Header>
-            <p class="mt-2 text-sm text-muted-foreground">Loading your next question...</p>
-          {:else if answerFeedback === "wrong"}
-            <div
-              class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive"
-            >
-              <CircleX class="h-9 w-9" />
-            </div>
-            <p class="mathex-kicker mt-5 text-destructive">Not quite</p>
-            <Header size="h3" class="mt-1 text-3xl">Not correct</Header>
-            <p class="mt-2 text-sm text-muted-foreground">The question will reopen in a moment.</p>
-          {:else}
-            <p class="mathex-kicker">Answer received</p>
-            <Header size="h3" class="mt-1">Checking your work...</Header>
-            <div class="mt-4 flex items-center gap-3">
-              <LoaderCircle class="h-5 w-5 animate-spin text-primary" />
-              <Progress value={runningVisible} class="*:transition-none" />
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <div class="mathex-panel mt-4 p-6 sm:p-9">
-          <div
-            class="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4 text-sm font-semibold text-primary"
-          >
-            <span class="flex items-center gap-2"><Flag class="h-4 w-4" /> Question {currentQuestion.number}</span>
-            <span class="tabular-nums text-muted-foreground">{questionCount} total</span>
-          </div>
-          <div class="question-content prose prose-slate max-w-none dark:prose-invert">
-            {@html renderMath(currentQuestion.content)}
-          </div>
-          <div class="mt-6">
-            {#if currentQuestion.requireAllSolutionGroups}
-              <div class="grid gap-4">
-                {#each currentQuestion.answerGroups as answerGroup, index}
-                  <div class="grid gap-1.5">
-                    <Label>Answer {index + 1}</Label>
-                    {#if answerGroup.length === 1 && answerGroup[0] === "number"}
-                      <NumberAnswer bind:answer={answers[index]} />
-                    {:else if answerGroup.length === 1 && answerGroup[0] === "text"}
-                      <TextAnswer bind:answer={answers[index]} />
-                    {:else}
-                      <ExpressionAnswer bind:answer={answers[index]} />
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "number"}
-              <NumberAnswer bind:answer />
-            {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "text"}
-              <TextAnswer bind:answer />
-            {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "expression"}
-              <ExpressionAnswer bind:answer />
-            {:else}
-              <ExpressionAnswer bind:answer />
-            {/if}
-          </div>
-          <form
-            class="mt-4"
-            onsubmit={(e) => {
-              e.preventDefault();
-              const submittedAnswer = currentQuestion.requireAllSolutionGroups ? answers : answer;
-              if (
-                (Array.isArray(submittedAnswer) && submittedAnswer.some((value) => value === null || value === "")) ||
-                submittedAnswer === null ||
-                submittedAnswer === ""
-              ) {
-                toast.error("Enter an answer first");
-                return;
-              }
-              socket.emit(
-                "answer",
-                Array.isArray(submittedAnswer) ? (submittedAnswer as (string | number)[]) : submittedAnswer
-              );
+      <div class="mt-3 flex flex-wrap gap-2" role="group" aria-label="Player tools">
+        {#if settings.showLeaderboard}<Button
+            size="sm"
+            variant={panel === "standings" ? "default" : "outline"}
+            onclick={() => (panel = panel === "standings" ? null : "standings")}
+            aria-pressed={panel === "standings"}><Trophy class="h-4 w-4" />Standings</Button
+          >{/if}
+        {#if settings.allowCalculator}<Button
+            size="sm"
+            variant={calcOpen ? "default" : "outline"}
+            onclick={() => (calcOpen = !calcOpen)}
+            aria-pressed={calcOpen}><CalculatorIcon class="h-4 w-4" />Calculator</Button
+          >{/if}
+        {#if settings.allowSketch}<Button
+            size="sm"
+            variant={sketchOpen ? "default" : "outline"}
+            onclick={() => (sketchOpen = !sketchOpen)}
+            aria-pressed={sketchOpen}><Pencil class="h-4 w-4" />Sketch</Button
+          >{/if}
+        {#if settings.allowChat}<Button
+            size="sm"
+            variant={panel === "chat" ? "default" : "outline"}
+            onclick={() => {
+              panel = panel === "chat" ? null : "chat";
+              unread = 0;
             }}
-          >
-            <Button
-              type="submit"
-              class="w-full"
-              size="lg"
-              disabled={currentQuestion.requireAllSolutionGroups
-                ? answers.some((value) => value === null || value === "")
-                : answer === null || answer === ""}>Lock in answer</Button
-            >
-          </form>
-          {#if currentQuestion.skippable}
-            <Button variant="outline" class="mt-2 w-full gap-2" size="lg" onclick={confirmSkip}>
-              <CircleMinus class="h-4 w-4" /> Skip question
-            </Button>
+            aria-pressed={panel === "chat"}
+            ><MessageCircle class="h-4 w-4" />Chat{unread > 0 ? ` (${Math.min(unread, 99)})` : ""}</Button
+          >{/if}
+      </div>
+      <div class="grid items-start gap-4 {panel ? 'lg:grid-cols-[minmax(0,1fr)_300px]' : ''}">
+        <div class="min-w-0">
+          {#if running}
+            <div class="mathex-panel mt-4 p-7 text-center sm:p-9">
+              {#if answerFeedback === "correct"}
+                <div
+                  class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                >
+                  <CircleCheckBig class="h-9 w-9" />
+                </div>
+                <p class="mathex-kicker mt-5 text-emerald-600 dark:text-emerald-400">Correct answer</p>
+                <Header size="h3" class="mt-1 text-3xl">Correct</Header>
+                <p class="mt-2 text-sm text-muted-foreground">Loading your next question...</p>
+              {:else if answerFeedback === "wrong"}
+                <div
+                  class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive"
+                >
+                  <CircleX class="h-9 w-9" />
+                </div>
+                <p class="mathex-kicker mt-5 text-destructive">Not quite</p>
+                <Header size="h3" class="mt-1 text-3xl">Not correct</Header>
+                <p class="mt-2 text-sm text-muted-foreground">The question will reopen in a moment.</p>
+              {:else}
+                <p class="mathex-kicker">Answer received</p>
+                <Header size="h3" class="mt-1">Checking your work...</Header>
+                <div class="mt-4 flex items-center gap-3">
+                  <LoaderCircle class="h-5 w-5 animate-spin text-primary" />
+                  <Progress value={runningVisible} class="*:transition-none" />
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <div class="mathex-panel mt-4 p-6 sm:p-9">
+              <div
+                class="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4 text-sm font-semibold text-primary"
+              >
+                <span class="flex items-center gap-2"><Flag class="h-4 w-4" /> Question {currentQuestion.number}</span>
+                <span class="tabular-nums text-muted-foreground">{questionCount} total</span>
+              </div>
+              <div class="question-content prose prose-slate max-w-none dark:prose-invert">
+                {@html renderMath(currentQuestion.content)}
+              </div>
+              <form
+                class="mt-6"
+                onsubmit={(event) => {
+                  event.preventDefault();
+                  submitAnswer();
+                }}
+              >
+                <div>
+                  {#if currentQuestion.requireAllSolutionGroups}
+                    <div class="grid gap-4">
+                      {#each currentQuestion.answerGroups as answerGroup, index}
+                        <div class="grid gap-1.5">
+                          <Label>Answer {index + 1}</Label>
+                          {#if answerGroup.length === 1 && answerGroup[0] === "number"}
+                            <NumberAnswer bind:answer={answers[index]} />
+                          {:else if answerGroup.length === 1 && answerGroup[0] === "text"}
+                            <TextAnswer bind:answer={answers[index]} />
+                          {:else}
+                            <ExpressionAnswer bind:answer={answers[index]} />
+                          {/if}
+                        </div>
+                      {/each}
+                    </div>
+                  {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "number"}
+                    <NumberAnswer bind:answer />
+                  {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "text"}
+                    <TextAnswer bind:answer />
+                  {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "expression"}
+                    <ExpressionAnswer bind:answer />
+                  {:else}
+                    <ExpressionAnswer bind:answer />
+                  {/if}
+                </div>
+                <Button
+                  type="submit"
+                  class="mt-4 w-full"
+                  size="lg"
+                  disabled={currentQuestion.requireAllSolutionGroups
+                    ? answers.some((value) => value === null || value === "")
+                    : answer === null || answer === ""}>Lock in answer</Button
+                >
+              </form>
+              {#if currentQuestion.skippable}
+                <Button variant="outline" class="mt-2 w-full gap-2" size="lg" onclick={confirmSkip}>
+                  <CircleMinus class="h-4 w-4" /> Skip question
+                </Button>
+              {/if}
+            </div>
           {/if}
         </div>
-      {/if}
+        {#if panel === "standings" && settings.showLeaderboard}
+          {@const self = leaderboard.find((entry) => entry.playerId === publicPlayerId)}
+          <aside class="mathex-panel mt-4 p-4" aria-label="Live standings">
+            <h2 class="font-semibold">Live standings</h2>
+            <p class="mt-1 text-xs text-muted-foreground">Correct answers first, then elapsed time.</p>
+            <div class="relative mt-3">
+              {#if self && selfPinned}<div
+                  class="absolute inset-x-0 z-10 {selfPinned === 'top' ? 'top-0' : 'bottom-0'}"
+                  aria-hidden="true"
+                >
+                  {@render standingsRow(self, true)}
+                </div>{/if}
+              <div
+                bind:this={standingsContainer}
+                onscroll={pinSelf}
+                class="flex max-h-96 flex-col gap-2 overflow-y-auto scrollbar-thin"
+              >
+                {#each leaderboard as entry (entry.playerId)}{@render standingsRow(
+                    entry,
+                    entry.playerId === publicPlayerId
+                  )}{:else}<p class="text-sm text-muted-foreground">No standings yet.</p>{/each}
+              </div>
+            </div>
+          </aside>
+        {:else if panel === "chat" && settings.allowChat}
+          <aside class="mathex-panel mt-4 p-4" aria-label="Player chat">
+            <h2 class="font-semibold">Player chat</h2>
+            <p class="mt-1 text-xs text-muted-foreground">The host can read and moderate messages.</p>
+            <div
+              bind:this={chatContainer}
+              class="mt-3 flex max-h-80 min-h-32 flex-col gap-2 overflow-y-auto scrollbar-thin"
+            >
+              {#each chat as message (message.id)}<div
+                  class="border border-border p-2 {message.playerId === publicPlayerId ? 'bg-accent' : 'bg-muted/30'}"
+                >
+                  <p class="text-xs font-semibold">{message.name}</p>
+                  <p class="break-words text-sm">{message.text}</p>
+                </div>{:else}<p class="text-sm text-muted-foreground">No messages yet.</p>{/each}
+            </div>
+            {#if muted}<p class="mt-3 text-sm text-muted-foreground">The host has muted your chat.</p>{/if}
+            <form
+              class="mt-3 flex gap-2"
+              onsubmit={(event) => {
+                event.preventDefault();
+                sendChat();
+              }}
+            >
+              <Input
+                aria-label="Chat message"
+                placeholder="Message the room"
+                maxlength={500}
+                bind:value={chatDraft}
+                disabled={muted}
+              /><Button type="submit" size="icon" aria-label="Send message" disabled={muted || !chatDraft.trim()}
+                ><Send class="h-4 w-4" /></Button
+              >
+            </form>
+          </aside>
+        {/if}
+      </div>
     </div>
   {:else if gameState === "finished"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
@@ -387,20 +623,22 @@
         <p class="mathex-kicker mt-5">Round complete</p>
         <Header size="h1" class="mt-2 text-4xl tracking-[-0.04em]">Finished</Header>
         {#if leaderboard.length > 0}
-          {@const myEntry = leaderboard.find((e) => e.name === name)}
+          {@const myEntry = leaderboard.find((e) => e.playerId === publicPlayerId)}
           {#if myEntry}
             <div class="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2">
               <span class="text-lg font-bold text-primary">#{myEntry.rank}</span>
               <span class="text-sm text-muted-foreground">
                 &middot; {myEntry.totalMs !== null ? msToMinutesAndSeconds(myEntry.totalMs) : "DNF"} &middot;
-                {myEntry.questionsCompleted}/{myEntry.totalQuestions} correct
+                {myEntry.correctCount}/{myEntry.totalQuestions} correct
               </span>
             </div>
           {/if}
           <div class="mt-4 flex flex-col gap-1.5 text-left">
-            {#each leaderboard as entry}
+            {#each leaderboard as entry (entry.playerId)}
               <div
-                class="flex items-center gap-2 rounded-lg border border-border/60 p-2 {entry.name === name
+                animate:flip={{ duration: motionDuration }}
+                class="flex items-center gap-2 rounded-lg border border-border/60 p-2 {entry.playerId ===
+                publicPlayerId
                   ? 'bg-primary/5 border-primary/20'
                   : 'bg-muted/30'}"
               >
@@ -416,11 +654,13 @@
                 >
                   {entry.rank}
                 </div>
-                <span class="truncate text-sm font-medium {entry.name === name ? 'text-primary' : ''}"
+                <span
+                  class="truncate text-sm font-medium {entry.playerId === publicPlayerId ? 'text-primary' : ''}"
                   >{entry.name}</span
                 >
                 <span class="ml-auto shrink-0 text-xs text-muted-foreground">
-                  {entry.totalMs !== null ? msToMinutesAndSeconds(entry.totalMs) : "DNF"} &middot; {entry.questionsCompleted}/{entry.totalQuestions}
+                  {entry.totalMs !== null ? msToMinutesAndSeconds(entry.totalMs) : "Not started"} &middot; {entry.correctCount}/{entry.totalQuestions}
+                  correct
                 </span>
               </div>
             {/each}
@@ -431,8 +671,34 @@
         </p>
       </div>
     </div>
+  {:else if gameState === "kicked"}
+    <div class="mx-auto flex min-h-[calc(100vh-3rem)] max-w-md items-center">
+      <div class="mathex-panel p-7">
+        <UserX class="h-8 w-8 text-destructive" /><Header size="h1" class="mt-4 text-3xl">Removed by the host</Header>
+        <p class="mt-3 text-muted-foreground">
+          Your entry was removed. You can join again if the host allows late joining.
+        </p>
+        <Button
+          class="mt-5"
+          onclick={() => {
+            kicked = false;
+            name = "";
+            playerId = "";
+            gameState = "connecting";
+            socket.connect();
+          }}>Join again</Button
+        ><Button href="/mathex/app" variant="outline" class="ml-2 mt-5">Competition home</Button>
+      </div>
+    </div>
   {/if}
 </div>
+
+<Calculator open={calcOpen && gameState === "started" && settings.allowCalculator} onclose={() => (calcOpen = false)} />
+<SketchPad
+  open={sketchOpen && gameState === "started" && settings.allowSketch}
+  storageKey={`mathex-sketch-${roomId}`}
+  onclose={() => (sketchOpen = false)}
+/>
 
 <style>
   .question-content :global(img) {

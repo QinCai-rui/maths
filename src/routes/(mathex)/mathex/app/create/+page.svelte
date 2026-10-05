@@ -4,6 +4,8 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Checkbox } from "$lib/components/ui/checkbox";
+  import RoomOptions from "$lib/mathex/RoomOptions.svelte";
+  import { DEFAULT_ROOM_SETTINGS } from "$lib/mathex/schemas";
   import { toast } from "svelte-sonner";
 
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
@@ -23,6 +25,13 @@
   import { io, type Socket } from "socket.io-client";
   import { goto } from "$app/navigation";
   const socket: Socket<RoomCreateServerToClientEvents, RoomCreateClientToServerEvents> = io("/rooms");
+  $effect(() => () => {
+    socket.disconnect();
+  });
+  socket.on("error", (message) => {
+    creating = false;
+    toast.error(message);
+  });
   const ROOM_SET_KEY = "mathex-room-set";
 
   let file: File | undefined = $state(undefined);
@@ -35,10 +44,11 @@
   let dragOver = $state(false);
   let runningTime = $state(16);
   let visibilityTracking = $state(false);
+  let settings = $state({ ...DEFAULT_ROOM_SETTINGS });
 
   function parseQuestions(value: unknown) {
     const source = value && typeof value === "object" && "questions" in value ? value.questions : value;
-    return z.array(Question).safeParse(source);
+    return z.array(Question).min(1).max(100).safeParse(source);
   }
 
   $effect(() => {
@@ -117,11 +127,11 @@
       const result = parseQuestions(parsed);
       if (!result.success) throw new Error("Invalid question set");
       const set = result.data;
-      socket.emit("newRoom", roomNameResult.data, set, runningTime * 1000, visibilityTracking);
       socket.once("goto", (path) => {
         socket.disconnect();
         goto(path);
       });
+      socket.emit("newRoom", roomNameResult.data, set, runningTime * 1000, visibilityTracking, settings);
     } catch {
       toast.error("Failed to create room");
       creating = false;
@@ -149,9 +159,7 @@
     <div class="mt-10 grid gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-start">
       <section class="lg:sticky lg:top-24">
         <p class="mathex-kicker">Host setup</p>
-        <Header size="h1" class="mt-2 text-4xl leading-none tracking-[-0.04em] sm:text-5xl"
-          >Create a room.</Header
-        >
+        <Header size="h1" class="mt-2 text-4xl leading-none tracking-[-0.04em] sm:text-5xl">Create a room.</Header>
         <p class="mt-5 max-w-sm leading-7 text-muted-foreground">
           Choose the question set, tune the round, and share a unique room code when everything is ready.
         </p>
@@ -288,6 +296,17 @@
               </div>
             </div>
 
+            <details class="border border-border p-4">
+              <summary class="cursor-pointer font-semibold">Game options and player tools</summary>
+              <div class="mt-4">
+                <RoomOptions
+                  uid="create"
+                  {settings}
+                  onchange={(change) => (settings = { ...settings, ...change })}
+                  ontimer={(minutes) => (settings.gameTimerMs = minutes === null ? null : Math.round(minutes * 60000))}
+                />
+              </div>
+            </details>
             <Button type="submit" class="mt-2 w-full" size="lg" disabled={!canCreate}>
               {creating ? "Creating…" : "Create room"}
             </Button>

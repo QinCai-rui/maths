@@ -13,6 +13,7 @@
   import { io, type Socket } from "socket.io-client";
   import type { RoomCreateClientToServerEvents, RoomCreateServerToClientEvents } from "$lib/mathex/schemas";
   const socket: Socket<RoomCreateServerToClientEvents, RoomCreateClientToServerEvents> = io("/rooms");
+  $effect(() => () => { socket.disconnect(); });
 
   let code: string = $state("");
   let lastCode: string = "";
@@ -21,11 +22,9 @@
     if (code.length === 6 && lastCode !== code) {
       lastCode = code;
       toast.promise(
-        new Promise<void>(async (resolve, reject) => {
-          if (await socket.emitWithAck("checkRoom", code)) {
-            resolve();
-          } else reject();
-        }),
+         socket.timeout(5000).emitWithAck("checkRoom", code).then((exists) => {
+           if (!exists) { lastCode = ""; throw new Error("Room does not exist"); }
+         }).catch((error) => { lastCode = ""; throw error; }),
         {
           loading: "Loading...",
           success() {
