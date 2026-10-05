@@ -6,13 +6,21 @@ export const RoomName = z
   .min(3, "The room name has to be at least 3 characters long")
   .max(60, "The room name cannot be greater than 60 characters long");
 
-export type State = "connecting" | "choose-name" | "waiting_start" | "started" | "finished";
+export type State = "connecting" | "choose-name" | "waiting_start" | "started" | "finished" | "kicked";
 
 export interface RoomServerToClientEvents {
   alert: (type: ToastT["type"], message: string) => void;
   lobby: () => void;
   gameStart: (startingTime: number) => void;
   gameFinish: () => void;
+  kicked: () => void;
+  joinDenied: (reason: string) => void;
+  roomSettings: (settings: RoomSettings) => void;
+  gameEndsAt: (endsAt: number | null) => void;
+  chatHistory: (messages: ChatMessage[]) => void;
+  chatMessage: (message: ChatMessage) => void;
+  chatDeleted: (id: string) => void;
+  chatMuted: (muted: boolean) => void;
   running: (durationMs: number) => void;
   answerResult: (correct: boolean) => void;
   stopRunning: () => void;
@@ -27,6 +35,7 @@ export interface RoomServerToClientEvents {
   confetti: () => void;
   questionCount: (data: number) => void;
   joined: (name: string) => void;
+  playerIdentity: (publicId: string) => void;
   leaderboard: (data: LeaderboardEntry[]) => void;
 }
 
@@ -35,6 +44,7 @@ export interface RoomClientToServerEvents {
   answer: (value: string | number | (string | number)[]) => void;
   skip: () => void;
   visibilityChange: (hidden: boolean) => void;
+  sendChat: (text: string) => void;
 }
 
 export interface RoomInterServerEvents {}
@@ -51,6 +61,11 @@ export interface RoomSocketData {
   awaySince: number | null;
   visibilityFlags: number;
   skips: number;
+  correctCount: number;
+  questionsCompleted: number;
+  /** Timestamp of the most recent correct answer. Null until the first one. */
+  correctReachedAtMs: number | null;
+  chatMuted: boolean;
 }
 
 export type LogVerbosity = "all" | "submissions" | "finished";
@@ -58,19 +73,23 @@ export type LogVerbosity = "all" | "submissions" | "finished";
 export interface LogEntry {
   timestamp: number;
   playerName: string;
-  type: "submitted" | "running" | "correct" | "wrong" | "finished" | "visibility" | "skipped";
+  /** Private reconnect id. Absent on entries written before id-tagged logs. */
+  playerId?: string;
+  type: "submitted" | "running" | "correct" | "wrong" | "finished" | "visibility" | "skipped" | "kicked" | "moderation";
   questionNumber: number;
   detail?: string;
 }
 
 export interface LeaderboardEntry {
   rank: number;
+  playerId: string;
   name: string;
   totalMs: number | null;
   questionsCompleted: number;
   totalQuestions: number;
   visibilityFlags: number;
   skips: number;
+  correctCount: number;
 }
 
 export interface RoomCreateClientToServerEvents {
@@ -78,13 +97,15 @@ export interface RoomCreateClientToServerEvents {
     name: string,
     questions: z.infer<typeof Question>[],
     runningTimeMs: number,
-    visibilityTracking: boolean
+    visibilityTracking: boolean,
+    settings?: RoomSettings
   ) => void;
   checkRoom: (id: string, callback: (exists: boolean) => void) => void;
 }
 
 export interface RoomCreateServerToClientEvents {
   goto: (path: string) => void;
+  error: (message: string) => void;
 }
 
 export interface RoomCreateInterServerEvents {}
@@ -95,6 +116,11 @@ export interface RoomManageClientToServerEvents {
   start: () => void;
   finish: () => void;
   alertAll: (type: ToastT["type"], message: string) => void;
+  kick: (playerId: string) => void;
+  updateSettings: (settings: Partial<RoomSettings>) => void;
+  setGameTimer: (minutes: number | null) => void;
+  deleteChat: (id: string) => void;
+  muteChat: (playerId: string, muted: boolean) => void;
 }
 
 export interface RoomManageServerToClientEvents {
@@ -104,6 +130,12 @@ export interface RoomManageServerToClientEvents {
   logs: (data: LogEntry[]) => void;
   log: (entry: LogEntry) => void;
   leaderboard: (data: LeaderboardEntry[]) => void;
+  roomSettings: (settings: RoomSettings) => void;
+  gameEndsAt: (endsAt: number | null) => void;
+  chatHistory: (messages: ChatMessage[]) => void;
+  chatMessage: (message: ChatMessage) => void;
+  chatDeleted: (id: string) => void;
+  questionCount: (count: number) => void;
 }
 
 export interface RoomManageInterServerEvents {}
@@ -174,6 +206,34 @@ export const QuestionSet = z.object({
 
 export type RoomState = "lobby" | "started" | "finished";
 
+export interface RoomSettings {
+  allowLateJoin: boolean;
+  showLeaderboard: boolean;
+  allowCalculator: boolean;
+  allowChat: boolean;
+  allowSketch: boolean;
+  gameTimerMs: number | null;
+  endOnPerfectScore: boolean;
+}
+
+export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
+  allowLateJoin: true,
+  showLeaderboard: true,
+  allowCalculator: true,
+  allowChat: false,
+  allowSketch: false,
+  gameTimerMs: null,
+  endOnPerfectScore: false
+};
+
+export interface ChatMessage {
+  id: string;
+  playerId: string;
+  name: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface Room {
   id: string;
   name: string;
@@ -184,6 +244,10 @@ export interface Room {
   visibilityTracking: boolean;
   players: Map<string, RoomSocketData>;
   logs: LogEntry[];
+  settings: RoomSettings;
+  endsAt: number | null;
+  startedAt: number | null;
+  chat: ChatMessage[];
 }
 
 export interface ClientKnownRoom {

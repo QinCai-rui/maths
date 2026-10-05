@@ -20,7 +20,6 @@ import {
   type RoomManageSocketData,
   type Room,
   type LogEntry,
-  type LeaderboardEntry,
   type SolutionType,
   RoomName,
   Question
@@ -28,9 +27,10 @@ import {
 
 import { z } from "zod";
 
-import { randomBytes, randomInt } from "crypto";
+import { createHash, randomBytes, randomInt } from "crypto";
 import { create, all } from "mathjs";
 import { RoomStore } from "../lib/mathex/rooms.server";
+import { buildLeaderboard, sortedPlayers as getPlayers, sanitizeRoomSettings } from "../lib/mathex/room-state";
 import { registerPhysicalCompetitionServer } from "./physical.server";
 import { registerSetShareServer } from "./set-share.server";
 import { registerCollaborativeSetServer } from "./collaborative-set.server";
@@ -41,7 +41,30 @@ const math = create(all, config);
 export const createWSServer = (base: ServerInstance) => {
   const roomStore = new RoomStore();
   const rooms = roomStore.loadRooms();
-  const saveRoom = (room: Room) => roomStore.save(room);
+  const pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
+  const saveRoom = (room: Room) => {
+    const pending = pendingSaves.get(room.id);
+    if (pending !== undefined) clearTimeout(pending);
+    pendingSaves.delete(room.id);
+    roomStore.save(room);
+  };
+  function saveChatSoon(room: Room) {
+    if (pendingSaves.has(room.id)) return;
+    pendingSaves.set(
+      room.id,
+      setTimeout(() => saveRoom(room), 250)
+    );
+  }
+  const endTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const answerTimers = new Set<ReturnType<typeof setTimeout>>();
+  const chatRates = new Map<string, number[]>();
+  function later(callback: () => void, delay: number) {
+    const timer = setTimeout(() => {
+      answerTimers.delete(timer);
+      callback();
+    }, delay);
+    answerTimers.add(timer);
+  }
   const io = new Server(base, {
     serveClient: false,
     // Leave non-Socket.IO upgrade requests (e.g. Vite's dev WebSocket) alone.
@@ -61,10 +84,16 @@ export const createWSServer = (base: ServerInstance) => {
     RoomCreateSocketData
   > = io.of("/rooms");
   roomCreateNamespace.on("connection", (socket) => {
-    socket.on("newRoom", (name, questions, runningTimeMs, visibilityTracking) => {
-      const roomName = RoomName.parse(name);
-      const roomQuestions = z.array(Question).parse(questions);
-      const clampedTime = Math.min(Math.max(runningTimeMs || 16000, 1000), 60000);
+    socket.on("newRoom", (name, questions, runningTimeMs, visibilityTracking, settings) => {
+      const parsedName = RoomName.safeParse(name);
+      const parsedQuestions = z.array(Question).min(1).max(100).safeParse(questions);
+      if (!parsedName.success || !parsedQuestions.success) {
+        socket.emit("error", "Enter a valid room name and a set of 1 to 100 questions.");
+        return;
+      }
+      const roomName = parsedName.data;
+      const roomQuestions = parsedQuestions.data;
+      const clampedTime = Number.isFinite(runningTimeMs) ? Math.min(Math.max(runningTimeMs, 1000), 60000) : 16000;
 
       let roomId = "";
       do {
@@ -80,7 +109,11 @@ export const createWSServer = (base: ServerInstance) => {
         runningTimeMs: clampedTime,
         visibilityTracking,
         players: new Map(),
-        logs: []
+        logs: [],
+        settings: sanitizeRoomSettings(settings),
+        endsAt: null,
+        startedAt: null,
+        chat: []
       };
       rooms.set(roomId, room);
       saveRoom(room);
@@ -116,20 +149,26 @@ export const createWSServer = (base: ServerInstance) => {
       RoomInterServerEvents,
       RoomSocketData
     >;
-    setTimeout(async () => {
+    const roomManageNamespace = io.of(`/manage-${roomId}`);
+    setTimeout(() => {
       socket.emit("state", room.state);
       socket.emit("playerData", getPlayers(room));
       socket.emit("logs", room.logs);
-      if (room.state === "finished") socket.emit("leaderboard", buildLeaderboard(room));
+      socket.emit("questionCount", room.questions.length);
+      socket.emit("roomSettings", room.settings);
+      socket.emit("gameEndsAt", room.endsAt);
+      socket.emit("chatHistory", room.chat);
+      socket.emit("leaderboard", buildLeaderboard(room));
     });
     socket.on("alertAll", async (type, message) => {
-      roomNamespace.emit("alert", type, message);
+      emitToMembers(room, "alert", type, message);
     });
-    socket.on("start", async () => {
+    socket.on("start", () => {
       if (room.state !== "lobby") return;
       room.state = "started";
-      roomNamespace.emit("alert", "info", "Game has started!");
+      emitToMembers(room, "alert", "info", "Game has started!");
       const startedAt = Date.now();
+      room.startedAt = startedAt;
       const firstQuestion = room.questions[0];
       for (const player of room.players.values()) {
         player.currentQuestion = 1;
@@ -137,9 +176,14 @@ export const createWSServer = (base: ServerInstance) => {
         player.finishingTime = null;
         player.isRunning = false;
         player.runningUntil = null;
+        player.correctCount = 0;
+        player.questionsCompleted = 0;
+        player.correctReachedAtMs = null;
+        player.skips = 0;
+        player.awaySince = null;
       }
-      for (const playerSocket of await roomNamespace.fetchSockets()) {
-        if (!playerSocket.data.name) continue;
+      for (const playerSocket of roomNamespace.sockets.values()) {
+        if (!isMember(room, playerSocket.data)) continue;
         playerSocket.emit("gameStart", startedAt);
         playerSocket.emit(
           "newQuestion",
@@ -151,27 +195,101 @@ export const createWSServer = (base: ServerInstance) => {
           firstQuestion.skippable
         );
       }
+      room.endsAt = room.settings.gameTimerMs ? startedAt + room.settings.gameTimerMs : null;
+      if (room.endsAt !== null) scheduleEndTimer(room);
       saveRoom(room);
+      emitToMembers(room, "roomSettings", room.settings);
+      emitToMembers(room, "gameEndsAt", room.endsAt);
+      io.of(`/manage-${room.id}`).emit("gameEndsAt", room.endsAt);
+      publishLeaderboard(room);
       roomManageNamespace.emit("state", room.state);
       roomManageNamespace.emit("playerData", getPlayers(room));
     });
-    socket.on("finish", async () => {
-      if (room.state !== "started") return;
-      room.state = "finished";
-      roomNamespace.emit("alert", "info", "Game has finished for everyone!");
-      const finishedAt = Date.now();
-      for (const player of room.players.values()) {
-        if (!player.finishingTime) player.finishingTime = finishedAt;
+    socket.on("finish", () => finishRoom(room, "Game has finished for everyone!"));
+    socket.on("updateSettings", (partial) => {
+      if (!partial || typeof partial !== "object") return;
+      const next = { ...room.settings };
+      for (const key of [
+        "allowLateJoin",
+        "showLeaderboard",
+        "allowCalculator",
+        "allowChat",
+        "allowSketch",
+        "endOnPerfectScore"
+      ] as const) {
+        if (typeof partial[key] === "boolean") next[key] = partial[key];
+      }
+      room.settings = next;
+      saveRoom(room);
+      emitToMembers(room, "roomSettings", next);
+      io.of(`/manage-${room.id}`).emit("roomSettings", next);
+      if (next.allowChat) emitToMembers(room, "chatHistory", room.chat);
+      publishLeaderboard(room);
+      if (next.endOnPerfectScore && room.state === "started") {
+        const winner = [...room.players.values()].find((player) => player.correctCount === room.questions.length);
+        if (winner) finishRoom(room, `${winner.name} answered every question correctly. The game has finished.`);
+      }
+    });
+    socket.on("setGameTimer", (minutes) => {
+      if (minutes !== null && (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes < 0)) return;
+      const ms = minutes ? Math.round(Math.min(Math.max(minutes, 0.5), 480) * 60000) : null;
+      room.settings.gameTimerMs = ms;
+      clearEndTimer(room.id);
+      if (room.state === "started") {
+        room.endsAt = ms === null ? null : Date.now() + ms;
+        if (room.endsAt !== null) scheduleEndTimer(room);
       }
       saveRoom(room);
-      const lb = buildLeaderboard(room);
-      for (const playerSocket of await roomNamespace.fetchSockets()) {
-        playerSocket.emit("gameFinish");
+      emitToMembers(room, "roomSettings", room.settings);
+      emitToMembers(room, "gameEndsAt", room.endsAt);
+      io.of(`/manage-${room.id}`).emit("roomSettings", room.settings);
+      io.of(`/manage-${room.id}`).emit("gameEndsAt", room.endsAt);
+    });
+    socket.on("kick", (playerId) => {
+      const target = room.players.get(playerId);
+      if (!target) return;
+      room.players.delete(playerId);
+      chatRates.delete(`${room.id}:${playerId}`);
+      target.isRunning = false;
+      target.runningUntil = null;
+      appendLog(room, {
+        timestamp: Date.now(),
+        playerName: target.name || "Unknown",
+        playerId,
+        type: "kicked",
+        questionNumber: target.currentQuestion
+      });
+      for (const peer of roomNamespace.sockets.values()) {
+        if (peer.data.playerId === playerId) {
+          peer.emit("kicked");
+          peer.disconnect(true);
+        }
       }
-      roomNamespace.emit("leaderboard", lb);
-      roomManageNamespace.emit("state", room.state);
-      roomManageNamespace.emit("playerData", getPlayers(room));
-      roomManageNamespace.emit("leaderboard", lb);
+      publishPlayers(room);
+      publishLeaderboard(room);
+    });
+    socket.on("deleteChat", (id) => {
+      if (typeof id !== "string" || !room.chat.some((message) => message.id === id)) return;
+      room.chat = room.chat.filter((message) => message.id !== id);
+      saveRoom(room);
+      emitToMembers(room, "chatDeleted", id);
+      io.of(`/manage-${room.id}`).emit("chatDeleted", id);
+    });
+    socket.on("muteChat", (playerId, muted) => {
+      const player = room.players.get(playerId);
+      if (!player || typeof muted !== "boolean") return;
+      player.chatMuted = muted;
+      appendLog(room, {
+        timestamp: Date.now(),
+        playerName: player.name || "Unknown",
+        playerId: player.playerId!,
+        type: "moderation",
+        questionNumber: player.currentQuestion,
+        detail: muted ? "muted in chat" : "unmuted in chat"
+      });
+      for (const peer of roomNamespace.sockets.values())
+        if (peer.data.playerId === playerId) peer.emit("chatMuted", muted);
+      publishPlayers(room);
     });
   });
 
@@ -187,8 +305,10 @@ export const createWSServer = (base: ServerInstance) => {
     const room = rooms.get(roomId);
     if (!room) {
       socket.emit("alert", "error", "Room does not exist!");
+      socket.disconnect();
       return;
     }
+    const roomManageNamespace = io.of(`/manage-${roomId}`);
     socket.data = {
       playerId: null,
       currentQuestion: 1,
@@ -200,11 +320,23 @@ export const createWSServer = (base: ServerInstance) => {
       runningUntil: null,
       awaySince: null,
       visibilityFlags: 0,
-      skips: 0
+      skips: 0,
+      correctCount: 0,
+      questionsCompleted: 0,
+      correctReachedAtMs: null,
+      chatMuted: false
     };
-    socket.on("join", async (name, playerId) => {
+    socket.on("join", (name, playerId) => {
+      if (typeof name !== "string" || typeof playerId !== "string") return;
+      if (socket.data.playerId && socket.data.playerId !== playerId) {
+        socket.emit("joinDenied", "You have already joined this room.");
+        return;
+      }
       const playerName = name.trim();
-      if (!playerName || playerName.length > 20 || !playerId || playerId.length > 128) return;
+      if (!playerName || playerName.length > 20 || !playerId || playerId.length > 128) {
+        socket.emit("joinDenied", "Choose a name of 1 to 20 characters.");
+        return;
+      }
       const room = rooms.get(roomId);
       if (!room) {
         socket.disconnect();
@@ -214,27 +346,46 @@ export const createWSServer = (base: ServerInstance) => {
       if (existingPlayer) {
         socket.data = existingPlayer;
       } else {
+        // Public standings/chat ids are 64-hex hashes, never issued as private
+        // reconnect ids (clients generate UUIDs). Reject them as fresh identities.
+        if (/^[0-9a-f]{64}$/.test(playerId)) {
+          socket.emit("joinDenied", "That ID is not valid for a new player. Rejoin with your original link.");
+          return;
+        }
+        if (room.state !== "lobby" && !room.settings.allowLateJoin) {
+          socket.emit("joinDenied", "Late joining is disabled for this game.");
+          return;
+        }
         const duplicateName = [...room.players.values()].some(
           (player) => player.name?.toLowerCase() === playerName.toLowerCase()
         );
         if (duplicateName) {
-          socket.emit("alert", "error", "That username is already in use");
+          socket.emit("joinDenied", "That username is already in use");
           return;
         }
         socket.data.playerId = playerId;
         socket.data.name = playerName;
+        if (room.state === "started") socket.data.startingTime = room.startedAt ?? Date.now();
         room.players.set(playerId, socket.data);
         saveRoom(room);
       }
       io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
       socket.emit("joined", socket.data.name!);
+      socket.emit("playerIdentity", publicPlayerId(room, socket.data.playerId!));
       socket.emit("questionCount", room.questions.length);
+      socket.emit("roomSettings", room.settings);
+      socket.emit("gameEndsAt", room.endsAt);
+      socket.emit("chatMuted", socket.data.chatMuted);
+      if (room.settings.allowChat) socket.emit("chatHistory", room.chat);
+      if (room.settings.showLeaderboard || room.state === "finished")
+        socket.emit("leaderboard", playerLeaderboard(room));
+      publishLeaderboard(room);
       if (room.state === "lobby") {
         socket.emit("lobby");
       } else if (room.state === "started") {
         if (socket.data.finishingTime) {
           socket.emit("gameFinish");
-          socket.emit("leaderboard", buildLeaderboard(room));
+          socket.emit("leaderboard", playerLeaderboard(room));
           return;
         }
         const question = room.questions[socket.data.currentQuestion - 1];
@@ -253,20 +404,31 @@ export const createWSServer = (base: ServerInstance) => {
         }
       } else {
         socket.emit("gameFinish");
-        socket.emit("leaderboard", buildLeaderboard(room));
+        socket.emit("leaderboard", playerLeaderboard(room));
       }
     });
     socket.on("answer", (answer) => {
-      if (!socket.data.name || room.state !== "started" || socket.data.isRunning) return;
+      if (!canPlay(room, socket.data)) return;
+      if (!(typeof answer === "string" || typeof answer === "number" || Array.isArray(answer))) return;
+      if (
+        Array.isArray(answer) &&
+        (answer.length > 100 || answer.some((value) => typeof value !== "string" && typeof value !== "number"))
+      )
+        return;
+      if (String(answer).length > 10000) return;
+      const player = socket.data;
+      const questionNumber = player.currentQuestion;
+      const attemptValid = () => canFinishAnswer(room, player, questionNumber);
 
       const currentQuestion = room.questions[socket.data.currentQuestion - 1];
       socket.data.isRunning = true;
       socket.data.runningUntil = Date.now() + room.runningTimeMs;
-      socket.emit("running", room.runningTimeMs);
+      emitToPlayer(room, socket.data, "running", room.runningTimeMs);
 
       const submitLog: LogEntry = {
         timestamp: Date.now(),
         playerName: socket.data.name || "Unknown",
+        playerId: socket.data.playerId!,
         type: "submitted",
         questionNumber: socket.data.currentQuestion,
         detail: String(answer)
@@ -276,33 +438,48 @@ export const createWSServer = (base: ServerInstance) => {
       roomManageNamespace.emit("log", submitLog);
 
       const isCorrect = checkSolution(answer, currentQuestion);
-      setTimeout(async () => {
-        socket.emit("answerResult", isCorrect);
-        socket.data.runningUntil = Date.now() + 900;
+      const decidedAt = Date.now();
+      later(() => {
+        if (!attemptValid()) return;
+        emitToPlayer(room, player, "answerResult", isCorrect);
+        player.runningUntil = Date.now() + 900;
 
         // Let the player see the outcome before presenting the next action.
-        setTimeout(() => {
+        later(() => {
+          if (!attemptValid()) return;
+          socket.data = player;
           if (isCorrect) {
-            socket.emit("alert", "success", "Correct!");
+            player.correctCount++;
+            player.questionsCompleted++;
+            player.correctReachedAtMs = decidedAt;
+            emitToPlayer(room, player, "alert", "success", "Correct!");
             const correctLog: LogEntry = {
-              timestamp: Date.now(),
+              timestamp: decidedAt,
               playerName: socket.data.name || "Unknown",
+              playerId: player.playerId!,
               type: "correct",
               questionNumber: socket.data.currentQuestion
             };
             room.logs.push(correctLog);
             saveRoom(room);
             roomManageNamespace.emit("log", correctLog);
+            if (room.settings.endOnPerfectScore && player.correctCount === room.questions.length) {
+              emitToPlayer(room, player, "confetti");
+              finishRoom(room, `${player.name} answered every question correctly. The game has finished.`);
+              return;
+            }
             if (socket.data.currentQuestion >= room.questions.length) {
               socket.data.finishingTime = Date.now();
-              socket.emit("alert", "success", "You have completed the questions!");
-              socket.emit("gameFinish");
-              socket.emit("confetti");
-              socket.nsp.emit("leaderboard", buildLeaderboard(room));
+              emitToPlayer(room, player, "alert", "success", "You have completed the questions!");
+              emitToPlayer(room, player, "gameFinish");
+              emitToPlayer(room, player, "confetti");
+              emitToPlayer(room, player, "leaderboard", playerLeaderboard(room));
+              publishLeaderboard(room);
               roomManageNamespace.emit("alert", "info", `${socket.data.name} has finished all questions!`);
               const finishLog: LogEntry = {
                 timestamp: Date.now(),
                 playerName: socket.data.name || "Unknown",
+                playerId: player.playerId!,
                 type: "finished",
                 questionNumber: socket.data.currentQuestion
               };
@@ -314,7 +491,9 @@ export const createWSServer = (base: ServerInstance) => {
               socket.data.currentQuestion++;
               saveRoom(room);
               const nextQuestion = room.questions[socket.data.currentQuestion - 1];
-              socket.emit(
+              emitToPlayer(
+                room,
+                player,
                 "newQuestion",
                 nextQuestion.contents,
                 answerGroups(nextQuestion),
@@ -325,11 +504,13 @@ export const createWSServer = (base: ServerInstance) => {
               );
             }
             io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
+            publishLeaderboard(room);
           } else {
-            socket.emit("alert", "error", "Wrong!");
+            emitToPlayer(room, player, "alert", "error", "Wrong!");
             const wrongLog: LogEntry = {
               timestamp: Date.now(),
               playerName: socket.data.name || "Unknown",
+              playerId: player.playerId!,
               type: "wrong",
               questionNumber: socket.data.currentQuestion,
               detail: String(answer)
@@ -338,7 +519,7 @@ export const createWSServer = (base: ServerInstance) => {
             saveRoom(room);
             roomManageNamespace.emit("log", wrongLog);
           }
-          socket.emit("stopRunning");
+          emitToPlayer(room, player, "stopRunning");
           socket.data.isRunning = false;
           socket.data.runningUntil = null;
           saveRoom(room);
@@ -346,17 +527,19 @@ export const createWSServer = (base: ServerInstance) => {
       }, room.runningTimeMs);
     });
     socket.on("skip", () => {
-      if (!socket.data.name || room.state !== "started" || socket.data.isRunning) return;
+      if (!canPlay(room, socket.data)) return;
       if (socket.data.currentQuestion > room.questions.length) return;
 
       const currentQuestion = room.questions[socket.data.currentQuestion - 1];
       if (!currentQuestion.skippable) return;
 
       socket.data.skips++;
+      socket.data.questionsCompleted++;
 
       const skipLog: LogEntry = {
         timestamp: Date.now(),
-        playerName: socket.data.name,
+        playerName: socket.data.name || "Unknown",
+        playerId: socket.data.playerId!,
         type: "skipped",
         questionNumber: socket.data.currentQuestion
       };
@@ -366,12 +549,14 @@ export const createWSServer = (base: ServerInstance) => {
 
       if (socket.data.currentQuestion >= room.questions.length) {
         socket.data.finishingTime = Date.now();
-        socket.emit("gameFinish");
-        socket.nsp.emit("leaderboard", buildLeaderboard(room));
+        emitToPlayer(room, socket.data, "gameFinish");
+        emitToPlayer(room, socket.data, "leaderboard", playerLeaderboard(room));
+        publishLeaderboard(room);
         roomManageNamespace.emit("alert", "info", `${socket.data.name} has finished (skipped last question)`);
         const finishLog: LogEntry = {
           timestamp: Date.now(),
-          playerName: socket.data.name,
+          playerName: socket.data.name || "Unknown",
+          playerId: socket.data.playerId!,
           type: "finished",
           questionNumber: socket.data.currentQuestion
         };
@@ -382,9 +567,11 @@ export const createWSServer = (base: ServerInstance) => {
       } else {
         socket.data.currentQuestion++;
         saveRoom(room);
-        socket.emit("alert", "info", "Question skipped");
+        emitToPlayer(room, socket.data, "alert", "info", "Question skipped");
         const nextQuestion = room.questions[socket.data.currentQuestion - 1];
-        socket.emit(
+        emitToPlayer(
+          room,
+          socket.data,
           "newQuestion",
           nextQuestion.contents,
           answerGroups(nextQuestion),
@@ -395,16 +582,44 @@ export const createWSServer = (base: ServerInstance) => {
         );
       }
       io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
+      publishLeaderboard(room);
     });
-    socket.on("visibilityChange", async (hidden) => {
-      if (!room.visibilityTracking || room.state !== "started" || !socket.data.name) return;
+    socket.on("sendChat", (text) => {
+      if (!isMember(room, socket.data) || !room.settings.allowChat || socket.data.chatMuted || typeof text !== "string")
+        return;
+      const clean = text.trim().slice(0, 500);
+      if (!clean) return;
+      const key = `${room.id}:${socket.data.playerId}`;
+      const now = Date.now();
+      const recent = (chatRates.get(key) ?? []).filter((time) => now - time < 10000);
+      if (recent.length >= 5) {
+        socket.emit("alert", "warning", "Please wait before sending more messages.");
+        return;
+      }
+      chatRates.set(key, [...recent, now]);
+      const message = {
+        id: randomBytes(8).toString("hex"),
+        playerId: publicPlayerId(room, socket.data.playerId!),
+        name: socket.data.name!,
+        text: clean,
+        timestamp: now
+      };
+      room.chat = [...room.chat, message].slice(-200);
+      saveChatSoon(room);
+      emitToMembers(room, "chatMessage", message);
+      io.of(`/manage-${room.id}`).emit("chatMessage", message);
+    });
+    socket.on("visibilityChange", (hidden) => {
+      if (typeof hidden !== "boolean") return;
+      if (!room.visibilityTracking || room.state !== "started" || !isMember(room, socket.data)) return;
 
       if (hidden && !socket.data.awaySince) {
         socket.data.awaySince = Date.now();
         socket.data.visibilityFlags++;
         const log: LogEntry = {
           timestamp: socket.data.awaySince,
-          playerName: socket.data.name,
+          playerName: socket.data.name || "Unknown",
+          playerId: socket.data.playerId!,
           type: "visibility",
           questionNumber: socket.data.currentQuestion,
           detail: "left the game tab"
@@ -418,7 +633,8 @@ export const createWSServer = (base: ServerInstance) => {
         socket.data.awaySince = null;
         const log: LogEntry = {
           timestamp: Date.now(),
-          playerName: socket.data.name,
+          playerName: socket.data.name || "Unknown",
+          playerId: socket.data.playerId!,
           type: "visibility",
           questionNumber: socket.data.currentQuestion,
           detail: `returned after ${Math.ceil(awayMs / 1000)}s away`
@@ -436,46 +652,149 @@ export const createWSServer = (base: ServerInstance) => {
     setTimeout(() => io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room)));
   });
 
-  function getPlayers(room: Room) {
-    const data = [...room.players.values()];
-    data.sort((a, b) => {
-      if (!a.startingTime && !b.startingTime) return 0;
-      if (!a.startingTime) return 1;
-      if (!b.startingTime) return -1;
-      if (a.finishingTime && !b.finishingTime) return -1;
-      if (b.finishingTime && !a.finishingTime) return 1;
-      if (a.finishingTime && b.finishingTime)
-        return a.finishingTime - a.startingTime - (b.finishingTime - b.startingTime);
-      return b.currentQuestion - a.currentQuestion;
-    });
-    return data;
+  function isMember(room: Room, player: RoomSocketData) {
+    return !!player.playerId && room.players.get(player.playerId) === player;
   }
 
-  function buildLeaderboard(room: Room): LeaderboardEntry[] {
-    const entries: LeaderboardEntry[] = [];
-    for (const d of room.players.values()) {
-      const totalMs = d.finishingTime && d.startingTime ? d.finishingTime - d.startingTime : null;
-      entries.push({
-        rank: 0,
-        name: d.name || "Unknown",
-        totalMs,
-        questionsCompleted: d.currentQuestion - (d.finishingTime ? 0 : 1),
-        totalQuestions: room.questions.length,
-        visibilityFlags: d.visibilityFlags,
-        skips: d.skips
-      });
+  function canPlay(room: Room, player: RoomSocketData) {
+    if (room.state === "started" && room.endsAt !== null && room.endsAt <= Date.now())
+      finishRoom(room, "Time is up! The game has finished.");
+    return (
+      isMember(room, player) &&
+      room.state === "started" &&
+      !player.isRunning &&
+      player.finishingTime === null &&
+      player.questionsCompleted < room.questions.length
+    );
+  }
+
+  function canFinishAnswer(room: Room, player: RoomSocketData, questionNumber: number) {
+    if (room.state === "started" && room.endsAt !== null && room.endsAt <= Date.now())
+      finishRoom(room, "Time is up! The game has finished.");
+    return (
+      isMember(room, player) &&
+      room.state === "started" &&
+      player.isRunning &&
+      player.finishingTime === null &&
+      player.currentQuestion === questionNumber
+    );
+  }
+
+  function emitToPlayer<E extends keyof RoomServerToClientEvents>(
+    room: Room,
+    player: RoomSocketData,
+    event: E,
+    ...args: Parameters<RoomServerToClientEvents[E]>
+  ) {
+    const namespace = io.of(`/room-${room.id}`) as Namespace<
+      RoomClientToServerEvents,
+      RoomServerToClientEvents,
+      RoomInterServerEvents,
+      RoomSocketData
+    >;
+    for (const peer of namespace.sockets.values()) {
+      if (peer.data.playerId === player.playerId) peer.emit(event, ...args);
     }
-    entries.sort((a, b) => {
-      if (a.totalMs !== null && b.totalMs !== null) return a.totalMs - b.totalMs;
-      if (a.totalMs !== null) return -1;
-      if (b.totalMs !== null) return 1;
-      return b.questionsCompleted - a.questionsCompleted;
-    });
-    entries.forEach((e, i) => (e.rank = i + 1));
-    return entries;
   }
 
-  return { io, flush: collaborativeSets.flush };
+  function emitToMembers<E extends keyof RoomServerToClientEvents>(
+    room: Room,
+    event: E,
+    ...args: Parameters<RoomServerToClientEvents[E]>
+  ) {
+    const namespace = io.of(`/room-${room.id}`) as Namespace<
+      RoomClientToServerEvents,
+      RoomServerToClientEvents,
+      RoomInterServerEvents,
+      RoomSocketData
+    >;
+    for (const peer of namespace.sockets.values()) {
+      if (isMember(room, peer.data)) peer.emit(event, ...args);
+    }
+  }
+
+  function appendLog(room: Room, entry: LogEntry) {
+    room.logs.push(entry);
+    saveRoom(room);
+    io.of(`/manage-${room.id}`).emit("log", entry);
+  }
+
+  function publishPlayers(room: Room) {
+    io.of(`/manage-${room.id}`).emit("playerData", getPlayers(room));
+  }
+
+  function publishLeaderboard(room: Room) {
+    const leaderboard = buildLeaderboard(room);
+    io.of(`/manage-${room.id}`).emit("leaderboard", leaderboard);
+    if (room.settings.showLeaderboard || room.state === "finished")
+      emitToMembers(room, "leaderboard", playerLeaderboard(room));
+  }
+
+  // Reconnect credentials must never appear in player-visible standings or chat.
+  function publicPlayerId(room: Room, playerId: string) {
+    return createHash("sha256").update(room.runToken).update(":").update(playerId).digest("hex");
+  }
+
+  function playerLeaderboard(room: Room) {
+    return buildLeaderboard(room).map((entry) => ({ ...entry, playerId: publicPlayerId(room, entry.playerId) }));
+  }
+
+  function clearEndTimer(id: string) {
+    const timer = endTimers.get(id);
+    if (timer !== undefined) clearTimeout(timer);
+    endTimers.delete(id);
+  }
+
+  function scheduleEndTimer(room: Room) {
+    clearEndTimer(room.id);
+    if (room.endsAt === null) return;
+    endTimers.set(
+      room.id,
+      setTimeout(() => finishRoom(room, "Time is up! The game has finished."), Math.max(0, room.endsAt - Date.now()))
+    );
+  }
+
+  function finishRoom(room: Room, message: string) {
+    if (room.state !== "started") return;
+    clearEndTimer(room.id);
+    room.state = "finished";
+    room.endsAt = null;
+    const now = Date.now();
+    for (const player of room.players.values()) {
+      if (player.startingTime !== null) player.finishingTime ??= now;
+      player.isRunning = false;
+      player.runningUntil = null;
+    }
+    saveRoom(room);
+    emitToMembers(room, "alert", "info", message);
+    emitToMembers(room, "stopRunning");
+    emitToMembers(room, "gameFinish");
+    emitToMembers(room, "gameEndsAt", null);
+    io.of(`/manage-${room.id}`).emit("state", room.state);
+    io.of(`/manage-${room.id}`).emit("gameEndsAt", null);
+    publishPlayers(room);
+    publishLeaderboard(room);
+  }
+
+  for (const room of rooms.values()) {
+    if (room.state === "started" && room.endsAt !== null) scheduleEndTimer(room);
+  }
+
+  return {
+    io,
+    flush: collaborativeSets.flush,
+    dispose: () => {
+      for (const id of pendingSaves.keys()) {
+        const room = rooms.get(id);
+        if (room) saveRoom(room);
+      }
+      for (const timer of endTimers.values()) clearTimeout(timer);
+      for (const timer of answerTimers) clearTimeout(timer);
+      endTimers.clear();
+      answerTimers.clear();
+      chatRates.clear();
+    }
+  };
 };
 
 function envInteger(name: string, fallback: number, minimum: number, maximum: number): number {
