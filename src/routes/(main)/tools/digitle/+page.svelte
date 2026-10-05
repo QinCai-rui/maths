@@ -92,6 +92,9 @@
   let status = $state<Status>("playing");
   let current = $state("");
   let stats = $state<Stats>(emptyStats());
+  let lockInput = $state(false);
+  const winDelay =
+    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 2400;
   let showHelp = $state(false);
   let showResult = $state(false);
   let showConfetti = $state(false);
@@ -181,7 +184,7 @@
             rows = [];
             status = "playing";
           }
-          showResult = status !== "playing";
+          showResult = false;
           return;
         }
       } catch {
@@ -218,7 +221,7 @@
   }
 
   function submit() {
-    if (status !== "playing" || showHelp || showResult) return;
+    if (status !== "playing" || showHelp || showResult || lockInput) return;
     if (current.length !== LENGTH) {
       shaking = true;
       setTimeout(() => (shaking = false), 550);
@@ -228,12 +231,16 @@
     rows = [...rows, current];
     current = "";
     if (rows[rows.length - 1] === target) {
-      status = "won";
-      recordResult();
-      persistDaily();
-      showConfetti = true;
-      setTimeout(() => (showConfetti = false), 5000);
-      setTimeout(() => (showResult = true), 3800);
+      // Hold the win feedback until the last tile finishes revealing.
+      lockInput = true;
+      setTimeout(() => {
+        status = "won";
+        recordResult();
+        persistDaily();
+        showConfetti = true;
+        setTimeout(() => (showConfetti = false), 5000);
+        setTimeout(() => (showResult = true), 1000);
+      }, winDelay);
     } else if (rows.length >= ATTEMPTS) {
       status = "lost";
       recordResult();
@@ -250,7 +257,7 @@
       else if (showHelp) closeHelp();
       return;
     }
-    if (status !== "playing" || showHelp || showResult) return;
+    if (status !== "playing" || showHelp || showResult || lockInput) return;
     if (/^\d$/.test(key)) {
       if (current.length < LENGTH) current += key;
     } else if (key === "Enter") {
@@ -576,6 +583,7 @@
           {/each}
         </div>
         <p class="digitle-countdown">Next number in {countdown}</p>
+        <p class="digitle-local-note">Personal stats, stored only on this device.</p>
       {/if}
       <div class="digitle-dialog-actions">
         <Button onclick={share} class="gap-1.5"><Share2 class="h-4 w-4" /> Share</Button>
@@ -881,6 +889,12 @@
   .digitle-countdown {
     text-align: center;
     font-variant-numeric: tabular-nums;
+  }
+  .digitle-local-note {
+    margin-top: 0.2rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
   }
   .digitle-dialog-actions {
     display: flex;
