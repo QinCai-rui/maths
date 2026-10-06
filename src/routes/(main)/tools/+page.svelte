@@ -80,10 +80,10 @@
     </p>
   </header>
 
-  <section class="site-section" id="number-facts" aria-labelledby="number-tools-heading">
+  <section class="site-section" id="explore" aria-labelledby="explore-heading">
     <div class="site-section-head">
-      <h2 id="number-tools-heading">Number facts</h2>
-      <span>Look up a whole number</span>
+      <h2 id="explore-heading">Explore</h2>
+      <span>Numbers worth poking at</span>
     </div>
     <div class="site-tool-grid">
       {#each numberTools as tool}

@@ -67,7 +67,7 @@
         <span>Explore the site</span>
       </div>
       <div class="site-ways">
-        <a class="site-way" href="/tools#number-facts">
+        <a class="site-way" href="/tools#explore">
           <h3>Number facts</h3>
           <p>Explore factors, patterns and surprising properties for any whole number.</p>
           <span class="site-way-action">Look up a number</span>
