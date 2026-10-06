@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>%sveltekit.status%</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f3f4ee;
+        color: #191c16;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #171b17;
+          color: #edf0e8;
+        }
+      }
+      main {
+        max-width: 28rem;
+        padding: 2rem;
+        text-align: center;
+      }
+      .status {
+        display: inline-grid;
+        place-items: center;
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 9999px;
+        background: #1f6b5720;
+        color: #1f6b57;
+        font-weight: 700;
+        font-size: 1.5rem;
+      }
+      @media (prefers-color-scheme: dark) {
+        .status {
+          background: #74bea120;
+          color: #74bea1;
+        }
+      }
+      h1 {
+        margin: 1rem 0 0;
+        font-size: 1.5rem;
+      }
+      p {
+        margin: 0.5rem 0 0;
+        color: #62695f;
+      }
+      @media (prefers-color-scheme: dark) {
+        p {
+          color: #adb6a8;
+        }
+      }
+      a {
+        color: #1f6b57;
+      }
+      @media (prefers-color-scheme: dark) {
+        a {
+          color: #74bea1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="status">%sveltekit.status%</span>
+      <h1>Something went wrong</h1>
+      <p>%sveltekit.error.message%</p>
+      <p><a href="/">Go back home</a></p>
+    </main>
+  </body>
+</html>
