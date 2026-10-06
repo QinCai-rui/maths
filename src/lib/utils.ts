@@ -15,11 +15,22 @@ export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & {
 };
 
 export const msToMinutesAndSeconds = (ms: number) => {
-  const totalSeconds = Math.floor(ms / 1000);
+  const sign = ms < 0 ? "−" : "";
+  const totalSeconds = Math.floor(Math.abs(ms) / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  return `${sign}${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 };
+
+const ISSUE_REPO = "QinCai-rui/maths";
+
+export function reportIssueUrl(status: number, pageUrl: string, message?: string) {
+  const params = new URLSearchParams({
+    title: `Error ${status} on ${pageUrl}`,
+    body: `Status: ${status}\nURL: ${pageUrl}\nMessage: ${message || "unknown"}\n\nWhat I was doing:\n`
+  });
+  return `https://github.com/${ISSUE_REPO}/issues/new?${params.toString()}`;
+}
 
 export async function copyText(text: string) {
   if (navigator.clipboard?.writeText) {
