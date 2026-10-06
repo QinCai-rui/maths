@@ -7,9 +7,10 @@
 
   interface Props {
     answer: any;
+    id?: string;
   }
 
-  let { answer = $bindable() }: Props = $props();
+  let { answer = $bindable(), id }: Props = $props();
   let preview = $state("");
   let error = $state("");
 
@@ -32,7 +33,14 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <Input type="text" bind:value={answer} oninput={updatePreview} placeholder="Type a math expression" class="text-lg" />
+  <Input
+    {id}
+    type="text"
+    bind:value={answer}
+    oninput={updatePreview}
+    placeholder="Type a math expression"
+    class="text-lg"
+  />
   {#if preview}
     <div class="rounded border border-border/40 bg-muted/30 p-2 text-center text-sm">
       {@html preview}

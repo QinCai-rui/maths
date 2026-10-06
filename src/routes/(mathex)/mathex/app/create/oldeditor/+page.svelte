@@ -485,7 +485,7 @@
   </AlertDialog.Content>
 </AlertDialog.Root>
 
-<div class="mathex-editor flex h-screen flex-col">
+<div class="mathex-editor flex h-dvh flex-col">
   <!-- Header bar -->
   <div class="flex shrink-0 items-center gap-3 border-b border-border bg-background px-4 py-2">
     <Header size="h3" class="!m-0">Set Editor</Header>
@@ -644,9 +644,7 @@
             {/key}
           </div>
         {:else}
-          <div
-            class="flex flex-col items-center justify-center border border-border bg-card p-12 text-center"
-          >
+          <div class="flex flex-col items-center justify-center border border-border bg-card p-12 text-center">
             <div class="mb-6 text-2xl font-semibold text-foreground">Create your first question</div>
             <p class="mb-6 max-w-md text-muted-foreground">
               Start building a question set by adding a question, or import an existing set.

@@ -97,7 +97,13 @@
   });
 
   const canCreate = $derived(
-    (fileValid || (useEditorSet && editorSet !== undefined)) && roomNameValid && roomName.length >= 3 && !creating
+    (fileValid || (useEditorSet && editorSet !== undefined)) &&
+      roomNameValid &&
+      roomName.length >= 3 &&
+      Number.isFinite(runningTime) &&
+      runningTime >= 1 &&
+      runningTime <= 60 &&
+      !creating
   );
 
   function handleFileDrop(e: DragEvent) {
@@ -131,7 +137,14 @@
         socket.disconnect();
         goto(path);
       });
-      socket.emit("newRoom", roomNameResult.data, set, runningTime * 1000, visibilityTracking, settings);
+      socket.emit(
+        "newRoom",
+        roomNameResult.data,
+        set,
+        Math.min(60, Math.max(1, Math.round(runningTime))) * 1000,
+        visibilityTracking,
+        settings
+      );
     } catch {
       toast.error("Failed to create room");
       creating = false;

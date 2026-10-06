@@ -9,7 +9,7 @@
     PhysicalHostSnapshot,
     PhysicalOperationResult
   } from "$lib/mathex/physical.schemas";
-  import { copyText } from "$lib/utils";
+  import { copyText, msToMinutesAndSeconds } from "$lib/utils";
   import { CirclePause, CirclePlay, Copy, ExternalLink, Flag, Radio, Save, ShieldCheck } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { toast } from "svelte-sonner";
@@ -31,6 +31,7 @@
   let teams: EditableTeam[] = $state([]);
   let connected = $state(false);
   let saving = $state(false);
+  let loadError = $state(false);
   let markerPin = $state("");
   let snapshotReceivedAt = $state(Date.now());
 
@@ -46,11 +47,25 @@
           : "READY TO START"
   );
 
-  socket.on("connect", () => (connected = true));
-  socket.on("disconnect", () => (connected = false));
-  socket.on("connect_error", () => toast.error("Could not connect to the live dashboard"));
-  socket.on("error", (message) => toast.error(message));
+  socket.on("connect", () => {
+    connected = true;
+    saving = false;
+    loadError = false;
+  });
+  socket.on("disconnect", () => {
+    connected = false;
+    saving = false;
+  });
+  socket.on("connect_error", () => {
+    loadError = true;
+    toast.error("Could not connect to the live dashboard");
+  });
+  socket.on("error", (message) => {
+    loadError = true;
+    toast.error(message);
+  });
   socket.on("snapshot", (next) => {
+    loadError = false;
     const previousRoster = snapshot?.teams.map(({ id, name, group }) => ({ id, name, group }));
     const nextRoster = next.teams.map(({ id, name, group }) => ({ id, name, group }));
     snapshot = next;
@@ -61,7 +76,14 @@
   let now = $state(Date.now());
   $effect(() => {
     const timer = setInterval(() => (now = Date.now()), 250);
-    return () => clearInterval(timer);
+    const fallback = setTimeout(() => {
+      if (!snapshot) loadError = true;
+    }, 8000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(fallback);
+      socket.disconnect();
+    };
   });
 
   const liveElapsedMs = $derived.by(() => {
@@ -73,12 +95,7 @@
     if (!current || current.countdownDurationMs === null) return null;
     return current.countdownDurationMs - liveElapsedMs;
   });
-  const clock = $derived.by(() => {
-    const value = remainingMs ?? liveElapsedMs;
-    const sign = value < 0 ? "-" : "";
-    const seconds = Math.floor(Math.abs(value) / 1000);
-    return `${sign}${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-  });
+  const clock = $derived(msToMinutesAndSeconds(remainingMs ?? liveElapsedMs));
 
   function act(action: "start" | "pause" | "resume" | "finish") {
     if (action === "finish" && !confirm("Finish this competition? Markers will no longer be able to record results."))
@@ -195,9 +212,7 @@
             </div>
           </div>
           {#if snapshot.state === "finished"}
-            <div
-              class="mt-5 border border-border bg-accent p-4 text-sm font-semibold text-accent-foreground"
-            >
+            <div class="mt-5 border border-border bg-accent p-4 text-sm font-semibold text-accent-foreground">
               This competition is finished. The public scoreboard remains available.
             </div>
           {/if}
@@ -305,6 +320,16 @@
           >
         </div>
         <TeamEditor bind:teams disabled={saving || snapshot.state === "finished"} />
+      </section>
+    {:else if loadError}
+      <section class="mathex-panel p-8 text-center">
+        <p class="mathex-kicker">Connection problem</p>
+        <Header size="h2" class="mt-2 text-2xl">Could not open the host console</Header>
+        <p class="mt-2 text-sm text-muted-foreground">The link may be wrong, or the live competition may have ended.</p>
+        <div class="mt-4 flex justify-center gap-2">
+          <Button onclick={() => location.reload()}>Refresh</Button>
+          <Button href="/mathex/app/live" variant="outline">Live dashboard</Button>
+        </div>
       </section>
     {:else}
       <section class="mathex-panel p-8 text-center">

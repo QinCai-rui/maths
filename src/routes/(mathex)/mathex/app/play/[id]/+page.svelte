@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import Calculator from "$lib/mathex/Calculator.svelte";
+  import RankBadge from "$lib/mathex/RankBadge.svelte";
   import SketchPad from "$lib/mathex/SketchPad.svelte";
   import { DEFAULT_ROOM_SETTINGS, type ChatMessage } from "$lib/mathex/schemas";
   import {
@@ -46,21 +47,20 @@
 
   import DOMPurify from "dompurify";
   import { renderMath } from "$lib/mathex/content";
-  import { flip } from "svelte/animate";
-
-  const motionDuration = $derived(
-    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
-  );
+  const reduceMotion = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const roomId = page.params.id;
   const sessionKey = `mathex-player-${roomId}`;
 
   let gameState: State = $state("connecting");
   let kicked = $state(false);
+  let connectionError = $state(false);
 
   let name: string = $state("");
   let playerId = $state("");
   let publicPlayerId = $state("");
+  let joining = $state(false);
+  let joinTimer: ReturnType<typeof setTimeout> | undefined;
 
   import { toast } from "svelte-sonner";
   import type { z } from "zod";
@@ -68,6 +68,9 @@
   const socket: Socket<RoomServerToClientEvents, RoomClientToServerEvents> = io(`/room-${roomId}`);
   socket.on("playerIdentity", (id) => (publicPlayerId = id));
   socket.on("alert", (type, message) => {
+    if (type === "error" && gameState === "connecting" && message.includes("Room does not exist")) {
+      connectionError = true;
+    }
     if (type === "normal" || type === "action" || type === "default") {
       toast(message);
     } else {
@@ -91,14 +94,21 @@
     }
     toast.success("Connected!");
   });
-  socket.on("connect_error", () => toast.error("Failed to connect! Does this room exist?"));
+  socket.on("connect_error", () => {
+    connectionError = true;
+    toast.error("Failed to connect! Does this room exist?");
+  });
   socket.on("disconnect", () => {
-    if (!kicked) toast.warning("Disconnected!");
+    if (!kicked) {
+      toast.warning("Disconnected!");
+      if (gameState === "connecting") connectionError = true;
+    }
   });
   socket.on("kicked", () => {
     kicked = true;
     gameState = "kicked";
     running = false;
+    skipConfirmOpen = false;
     try {
       localStorage.removeItem(sessionKey);
     } catch {
@@ -106,6 +116,8 @@
     }
   });
   socket.on("joinDenied", (reason) => {
+    joining = false;
+    clearTimeout(joinTimer);
     gameState = "choose-name";
     toast.error(reason);
   });
@@ -144,6 +156,8 @@
   let timePassed = $state(0);
   let progressInterval: ReturnType<typeof setInterval> | undefined;
   let confettiTimer: ReturnType<typeof setTimeout> | undefined;
+  let submittingAnswer = $state(false);
+  let answerTimer: ReturnType<typeof setTimeout> | undefined;
   let clockNow = $state(Date.now());
   $effect(() => {
     const timer = setInterval(() => {
@@ -154,10 +168,14 @@
       clearInterval(timer);
       clearInterval(progressInterval);
       clearTimeout(confettiTimer);
+      clearTimeout(joinTimer);
+      clearTimeout(answerTimer);
       socket.disconnect();
     };
   });
   socket.on("joined", (joinedName) => {
+    joining = false;
+    clearTimeout(joinTimer);
     name = joinedName;
     try {
       localStorage.setItem(sessionKey, JSON.stringify({ name, playerId }));
@@ -172,11 +190,13 @@
   socket.on("gameFinish", () => {
     gameState = "finished";
     running = false;
+    skipConfirmOpen = false;
     clearInterval(progressInterval);
     sketchOpen = false;
     calcOpen = false;
   });
   socket.on("confetti", () => {
+    if (reduceMotion) return;
     confetti = true;
     clearTimeout(confettiTimer);
     confettiTimer = setTimeout(() => (confetti = false), 6000);
@@ -186,6 +206,9 @@
   socket.on(
     "newQuestion",
     (content, answerGroups, requireAllSolutionGroups, solutionOrderMatters, questionNumber, skippable) => {
+      submittingAnswer = false;
+      clearTimeout(answerTimer);
+      skipConfirmOpen = false;
       answer = null;
       answers = answerGroups.map(() => null);
       answerFeedback = null;
@@ -211,6 +234,8 @@
     }, 50);
   });
   socket.on("answerResult", (correct) => {
+    submittingAnswer = false;
+    clearTimeout(answerTimer);
     answerFeedback = correct ? "correct" : "wrong";
     if (!correct) answer = null;
   });
@@ -285,6 +310,7 @@
     chatDraft = "";
   }
   function submitAnswer() {
+    if (submittingAnswer) return;
     const value = currentQuestion.requireAllSolutionGroups ? answers : answer;
     if (running || gameState !== "started") return;
     if (
@@ -295,20 +321,29 @@
       toast.error("Enter an answer first");
       return;
     }
+    submittingAnswer = true;
     socket.emit("answer", value as string | number | (string | number)[]);
     sketchOpen = false;
+    // Re-enable if the server never acknowledges the answer.
+    clearTimeout(answerTimer);
+    answerTimer = setTimeout(() => (submittingAnswer = false), 4000);
   }
 
   function joinRoom() {
+    if (joining) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
       toast.error("Enter a username");
       return;
     }
+    joining = true;
     name = trimmedName;
     kicked = false;
     playerId = createId();
     socket.emit("join", name, playerId);
+    // Re-enable if the server never answers (e.g. a dropped connection).
+    clearTimeout(joinTimer);
+    joinTimer = setTimeout(() => (joining = false), 2000);
   }
 
   function confirmSkip() {
@@ -356,10 +391,21 @@
 <div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
   {#if gameState === "connecting"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
-      <span class="mathex-panel flex items-center gap-3 px-5 py-4 text-lg font-medium text-muted-foreground">
-        <LoaderCircle class="h-5 w-5 animate-spin" />
-        Connecting...
-      </span>
+      {#if connectionError}
+        <div class="mathex-panel max-w-md p-6 text-center sm:p-8">
+          <p class="mathex-kicker">Connection problem</p>
+          <Header size="h2" class="mt-2 text-2xl">That room could not be reached</Header>
+          <p class="mt-2 text-sm leading-6 text-muted-foreground">
+            It may not exist, or the competition may have ended. Check the code and try again.
+          </p>
+          <Button href="/mathex/app/play" class="mt-5 w-full" size="lg">Enter a different code</Button>
+        </div>
+      {:else}
+        <span class="mathex-panel flex items-center gap-3 px-5 py-4 text-lg font-medium text-muted-foreground">
+          <LoaderCircle class="h-5 w-5 animate-spin" />
+          Connecting...
+        </span>
+      {/if}
     </div>
   {:else if gameState === "choose-name"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
@@ -387,7 +433,9 @@
             <Label for="name" class="text-sm font-medium">Your name</Label>
             <Input id="name" bind:value={name} type="text" placeholder="Enter your name" maxlength={20} />
           </div>
-          <Button type="submit" class="mt-5 w-full" size="lg">Join competition</Button>
+          <Button type="submit" class="mt-5 w-full" size="lg" disabled={joining || !name.trim()}
+            >{joining ? "Joining…" : "Join competition"}</Button
+          >
         </form>
       </div>
     </div>
@@ -464,7 +512,7 @@
       <div class="grid items-start gap-4 {panel ? 'lg:grid-cols-[minmax(0,1fr)_300px]' : ''}">
         <div class="min-w-0">
           {#if running}
-            <div class="mathex-panel mt-4 p-7 text-center sm:p-9">
+            <div class="mathex-panel mt-4 p-7 text-center sm:p-9" role="status" aria-live="polite">
               {#if answerFeedback === "correct"}
                 <div
                   class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
@@ -515,34 +563,38 @@
                     <div class="grid gap-4">
                       {#each currentQuestion.answerGroups as answerGroup, index}
                         <div class="grid gap-1.5">
-                          <Label>Answer {index + 1}</Label>
+                          <Label for={`answer-${index}`}>Answer {index + 1}</Label>
                           {#if answerGroup.length === 1 && answerGroup[0] === "number"}
-                            <NumberAnswer bind:answer={answers[index]} />
+                            <NumberAnswer id={`answer-${index}`} bind:answer={answers[index]} />
                           {:else if answerGroup.length === 1 && answerGroup[0] === "text"}
-                            <TextAnswer bind:answer={answers[index]} />
+                            <TextAnswer id={`answer-${index}`} bind:answer={answers[index]} />
                           {:else}
-                            <ExpressionAnswer bind:answer={answers[index]} />
+                            <ExpressionAnswer id={`answer-${index}`} bind:answer={answers[index]} />
                           {/if}
                         </div>
                       {/each}
                     </div>
-                  {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "number"}
-                    <NumberAnswer bind:answer />
-                  {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "text"}
-                    <TextAnswer bind:answer />
-                  {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "expression"}
-                    <ExpressionAnswer bind:answer />
                   {:else}
-                    <ExpressionAnswer bind:answer />
+                    <Label for="answer-single" class="sr-only">Your answer</Label>
+                    {#if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "number"}
+                      <NumberAnswer id="answer-single" bind:answer />
+                    {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "text"}
+                      <TextAnswer id="answer-single" bind:answer />
+                    {:else if currentQuestion.answerGroups[0]?.length === 1 && currentQuestion.answerGroups[0][0] === "expression"}
+                      <ExpressionAnswer id="answer-single" bind:answer />
+                    {:else}
+                      <ExpressionAnswer id="answer-single" bind:answer />
+                    {/if}
                   {/if}
                 </div>
                 <Button
                   type="submit"
                   class="mt-4 w-full"
                   size="lg"
-                  disabled={currentQuestion.requireAllSolutionGroups
-                    ? answers.some((value) => value === null || value === "")
-                    : answer === null || answer === ""}>Lock in answer</Button
+                  disabled={submittingAnswer ||
+                    (currentQuestion.requireAllSolutionGroups
+                      ? answers.some((value) => value === null || value === "")
+                      : answer === null || answer === "")}>{submittingAnswer ? "Submitting…" : "Lock in answer"}</Button
                 >
               </form>
               {#if currentQuestion.skippable}
@@ -568,6 +620,7 @@
               <div
                 bind:this={standingsContainer}
                 onscroll={pinSelf}
+                aria-live="polite"
                 class="flex max-h-96 flex-col gap-2 overflow-y-auto scrollbar-thin"
               >
                 {#each leaderboard as entry (entry.playerId)}{@render standingsRow(
@@ -583,6 +636,9 @@
             <p class="mt-1 text-xs text-muted-foreground">The host can read and moderate messages.</p>
             <div
               bind:this={chatContainer}
+              role="log"
+              aria-live="polite"
+              aria-label="Chat messages"
               class="mt-3 flex max-h-80 min-h-32 flex-col gap-2 overflow-y-auto scrollbar-thin"
             >
               {#each chat as message (message.id)}<div
@@ -636,26 +692,12 @@
           <div class="mt-4 flex flex-col gap-1.5 text-left">
             {#each leaderboard as entry (entry.playerId)}
               <div
-                animate:flip={{ duration: motionDuration }}
-                class="flex items-center gap-2 rounded-lg border border-border/60 p-2 {entry.playerId ===
-                publicPlayerId
+                class="flex items-center gap-2 rounded-lg border border-border/60 p-2 {entry.playerId === publicPlayerId
                   ? 'bg-primary/5 border-primary/20'
                   : 'bg-muted/30'}"
               >
-                <div
-                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold {entry.rank ===
-                  1
-                    ? 'bg-yellow-400 text-yellow-900'
-                    : entry.rank === 2
-                      ? 'bg-muted text-muted-foreground'
-                      : entry.rank === 3
-                        ? 'bg-amber-600 text-white'
-                        : 'bg-muted text-muted-foreground'}"
-                >
-                  {entry.rank}
-                </div>
-                <span
-                  class="truncate text-sm font-medium {entry.playerId === publicPlayerId ? 'text-primary' : ''}"
+                <RankBadge rank={entry.rank} class="h-6 w-6" />
+                <span class="truncate text-sm font-medium {entry.playerId === publicPlayerId ? 'text-primary' : ''}"
                   >{entry.name}</span
                 >
                 <span class="ml-auto shrink-0 text-xs text-muted-foreground">

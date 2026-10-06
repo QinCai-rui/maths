@@ -333,11 +333,14 @@
     onpointercancel={() => (drag = null)}
     onlostpointercapture={() => (drag = null)}
   >
+    <!-- The handle is a drag affordance, not a button; arrow keys nudge the window. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <span
       class="calc-drag"
-      role="button"
       tabindex={0}
       aria-label="Move calculator with arrow keys"
+      aria-roledescription="Window drag handle"
       title="Arrow keys move the calculator"
       onkeydown={movePanel}>Calculator</span
     >
@@ -565,7 +568,7 @@
     overflow: hidden;
     max-height: calc(100vh - 6rem);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 4px;
     background: var(--card);
     box-shadow:
       0 18px 40px -20px rgb(25 28 22 / 45%),
@@ -580,7 +583,7 @@
   .calc-history[hidden] {
     display: none;
   }
-  .calc-panel :is(button, [role="button"]):not(.calc-drag) {
+  .calc-panel button {
     cursor: pointer;
   }
   .calc-header {
@@ -614,7 +617,7 @@
     width: 1.8rem;
     height: 1.8rem;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: 4px;
     background: transparent;
     color: var(--muted-foreground);
     cursor: pointer;
@@ -641,7 +644,7 @@
     min-width: 13rem;
     padding: 0.65rem 0.75rem;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 4px;
     background: var(--card);
     box-shadow:
       0 14px 30px -16px rgb(25 28 22 / 55%),
@@ -665,13 +668,13 @@
     gap: 2px;
     padding: 2px;
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 4px;
     background: var(--card);
   }
   .calc-segmented button {
     padding: 0.22rem 0.6rem;
     border: 0;
-    border-radius: 5px;
+    border-radius: 4px;
     background: transparent;
     color: var(--muted-foreground);
     font-size: 0.75rem;
@@ -726,7 +729,7 @@
     width: 1.5rem;
     height: 1.5rem;
     border: 0;
-    border-radius: 5px;
+    border-radius: 4px;
     background: var(--competition-viridian, var(--primary));
     color: var(--primary-foreground);
     font-size: 0.72rem;
@@ -743,7 +746,7 @@
     width: 100%;
     padding: 0.45rem 0.6rem;
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 4px;
     background: color-mix(in srgb, var(--muted) 55%, var(--card));
     color: var(--foreground);
     text-align: right;
@@ -824,7 +827,7 @@
   .calc-sci-toggle {
     padding: 0.22rem 0.55rem;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 4px;
     background: var(--card);
     color: var(--foreground);
     font-size: 0.72rem;
@@ -846,7 +849,7 @@
     height: 2.4rem;
     border: 1px solid var(--border);
     border-bottom-color: color-mix(in srgb, var(--border) 55%, var(--foreground));
-    border-radius: 8px;
+    border-radius: 4px;
     background: var(--card);
     color: var(--foreground);
     font-size: 0.95rem;
@@ -924,7 +927,7 @@
     gap: 0.15rem;
     padding: 0.45rem 0.55rem;
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 4px;
     background: color-mix(in srgb, var(--muted) 45%, var(--card));
     text-align: right;
   }

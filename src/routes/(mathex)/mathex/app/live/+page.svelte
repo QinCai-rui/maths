@@ -15,6 +15,7 @@
   import TeamEditor, { type EditableTeam } from "./TeamEditor.svelte";
 
   const socket: Socket<PhysicalCreateServerToClientEvents, PhysicalCreateClientToServerEvents> = io("/physical");
+  $effect(() => () => socket.disconnect());
 
   let name = $state("");
   let questionCount = $state(20);
@@ -51,6 +52,7 @@
     creating = false;
     toast.error(message);
   });
+  socket.on("disconnect", () => (creating = false));
   socket.on("goto", (path) => {
     socket.disconnect();
     goto(path);
@@ -180,9 +182,7 @@
               </div>
             {/if}
           </div>
-          <label
-            class="mt-4 flex cursor-pointer items-start gap-3 border border-border bg-background p-4"
-          >
+          <label class="mt-4 flex cursor-pointer items-start gap-3 border border-border bg-background p-4">
             <Checkbox bind:checked={autoFinishWhenComplete} />
             <span>
               <span class="block font-semibold">Automatically finish when all teams are done</span>

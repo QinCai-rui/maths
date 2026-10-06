@@ -8,6 +8,7 @@
   import { Check, CircleMinus, Clock3, Radio, X } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { flip } from "svelte/animate";
+  import { msToMinutesAndSeconds } from "$lib/utils";
 
   const motionDuration = $derived(
     typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
@@ -22,9 +23,14 @@
   let receivedAt = $state(Date.now());
   let now = $state(Date.now());
   let connected = $state(false);
+  let loadError = $state(false);
 
-  socket.on("connect", () => (connected = true));
+  socket.on("connect", () => {
+    connected = true;
+    loadError = false;
+  });
   socket.on("disconnect", () => (connected = false));
+  socket.on("connect_error", () => (loadError = true));
   socket.on("snapshot", (next) => {
     snapshot = next;
     receivedAt = Date.now();
@@ -32,7 +38,10 @@
 
   $effect(() => {
     const timer = setInterval(() => (now = Date.now()), 250);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      socket.disconnect();
+    };
   });
 
   const remainingMs = $derived.by(() => {
@@ -43,12 +52,7 @@
     if (!snapshot) return 0;
     return snapshot.elapsedMs + (snapshot.state === "running" ? now - receivedAt : 0);
   });
-  const formatTime = (milliseconds: number) => {
-    const sign = milliseconds < 0 ? "−" : "";
-    const totalSeconds = Math.floor(Math.abs(milliseconds) / 1000);
-    return `${sign}${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
-  };
-  const clock = $derived(formatTime(remainingMs ?? elapsedMs));
+  const clock = $derived(msToMinutesAndSeconds(remainingMs ?? elapsedMs));
   const clockLabel = $derived(remainingMs === null ? "Elapsed time" : "Time remaining");
   const ranked = $derived.by(() => snapshot?.teams || []);
   const groups = $derived.by(() => {
@@ -119,7 +123,7 @@
                         ? 'text-muted-foreground'
                         : 'text-foreground'}"
                     >
-                      {team.finishTimeMs === null ? "-" : formatTime(team.finishTimeMs)}
+                      {team.finishTimeMs === null ? "-" : msToMinutesAndSeconds(team.finishTimeMs)}
                     </p>
                   </div>
                   <div class="flex items-center gap-2">
@@ -157,11 +161,11 @@
                     <span class="text-xs text-muted-foreground sm:hidden"
                       >{team.finishTimeMs === null
                         ? `Q ${Math.min(team.currentQuestion, snapshot.questionCount)}/${snapshot.questionCount}`
-                        : `Finished ${formatTime(team.finishTimeMs)}`}</span
+                        : `Finished ${msToMinutesAndSeconds(team.finishTimeMs)}`}</span
                     >
                   </div>
                   <div
-                    class="col-span-3 flex h-1.5 gap-0.5 overflow-hidden rounded-full sm:col-span-5"
+                    class="col-span-3 flex h-1.5 gap-px overflow-hidden rounded-full sm:col-span-5"
                     aria-label="{team.name} question progress"
                   >
                     {#each team.questions as question}
@@ -184,6 +188,13 @@
             </div>
           </section>
         {/each}
+      </div>
+    {:else if loadError}
+      <div class="grid min-h-[60vh] place-items-center text-center text-muted-foreground">
+        <div>
+          <p class="text-lg font-semibold text-foreground">That competition could not be reached</p>
+          <p class="mt-1 text-sm">Check the link, or ask the host for a new one.</p>
+        </div>
       </div>
     {:else}
       <div class="grid min-h-[60vh] place-items-center text-muted-foreground">Waiting for competition data...</div>

@@ -217,14 +217,11 @@
   font-family: inherit;
 }
 .mathex-app :is(a, button, input, textarea, select):focus-visible {
-  outline: 3px solid var(--competition-saffron);
+  outline: 3px solid var(--competition-viridian);
   outline-offset: 3px;
 }
 .mathex-app .mathex-shell {
   background: var(--competition-paper);
-}
-.mathex-app .mathex-grid {
-  display: none;
 }
 .mathex-app .mathex-panel {
   border: 1px solid var(--border);
@@ -239,86 +236,13 @@
   letter-spacing: 0.015em;
   text-transform: none;
 }
-.mathex-topbar {
-  position: sticky;
-  z-index: 40;
-  top: 0;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--competition-paper) 94%, transparent);
-  backdrop-filter: blur(10px);
-}
-.mathex-topbar-inner {
-  width: min(1280px, 100%);
-  min-height: 3.8rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-inline: auto;
-  padding-inline: clamp(1rem, 3vw, 2rem);
-}
-.mathex-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  color: var(--foreground);
-  font-size: 1rem;
-  font-weight: 700;
-  text-decoration: none;
-}
-.mathex-brand-mark {
-  width: 1.75rem;
-  height: 1.75rem;
-  display: grid;
-  place-items: center;
-  background: var(--competition-viridian);
-  color: var(--primary-foreground);
-}
-.mathex-navigation {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-.mathex-navigation a,
-.mathex-back-link {
-  padding: 0.4rem 0.65rem;
-  border-radius: 3px;
-  color: var(--muted-foreground);
-  font-size: 0.84rem;
-  text-decoration: none;
-}
-.mathex-navigation a:hover,
-.mathex-back-link:hover {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-.mathex-back-link {
-  font-size: 0.75rem;
-}
-.mathex-footer {
-  border-top: 1px solid var(--border);
-}
-.mathex-footer-inner {
-  width: min(1280px, 100%);
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-inline: auto;
-  padding: 1rem clamp(1rem, 3vw, 2rem);
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-}
-.mathex-footer-inner a {
-  color: inherit;
-  text-underline-offset: 3px;
-}
 .mathex-app [data-slot="button"] {
   border-radius: 3px;
 }
 .mathex-app [data-slot="input"] {
   border-radius: 3px;
 }
-.mathex-app :is(.rounded-3xl, .rounded-2xl, .rounded-xl) {
+.mathex-app :is(.rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg, .rounded-md) {
   border-radius: 4px;
 }
 .mathex-app .rounded-full {
@@ -395,7 +319,7 @@
   font-family: inherit;
 }
 .mathex-editor :is(button, input, textarea, select):focus-visible {
-  outline: 3px solid var(--competition-saffron, #e3a21a);
+  outline: 3px solid var(--competition-viridian, #1f6b57);
   outline-offset: 3px;
 }
 .mathex-editor .menu-item:hover {
@@ -440,6 +364,26 @@
   background: var(--competition-paper);
   font-size: clamp(1rem, 1.1vw, 1.35rem);
 }
+.dark .mathex-scoreboard {
+  --background: #171b17;
+  --foreground: #edf0e8;
+  --muted: #262c26;
+  --muted-foreground: #adb6a8;
+  --card: #202720;
+  --card-foreground: #edf0e8;
+  --border: #394239;
+  --primary: #74bea1;
+  --primary-foreground: #10241b;
+  --accent: #263d33;
+  --accent-foreground: #d5eee1;
+  --destructive: #ef9279;
+  --destructive-foreground: #24110d;
+  --ring: #74bea1;
+  --competition-paper: #171b17;
+  --competition-viridian: #74bea1;
+  --competition-viridian-deep: #b7e3ce;
+  color-scheme: dark;
+}
 .mathex-scoreboard > main {
   width: min(100%, 100rem);
 }
@@ -475,28 +419,14 @@
   background-color: color-mix(in srgb, var(--competition-viridian) 12%, transparent);
 }
 
-@media (max-width: 600px) {
-  .mathex-navigation {
-    gap: 0;
-  }
-  .mathex-navigation a {
-    padding-inline: 0.4rem;
-    font-size: 0.77rem;
-  }
-  .mathex-back-link {
-    display: none;
-  }
-  .mathex-footer-inner {
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .mathex-app *,
   .mathex-app *::before,
   .mathex-app *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
@@ -595,13 +525,14 @@
   --accent-foreground: #0c4234;
   --ring: #1f6b57;
 }
-.dark :is(
-  [data-slot="alert-dialog-content"],
-  [data-slot="alert-dialog-overlay"],
-  [data-slot="select-content"],
-  [data-slot="menubar-content"],
-  [data-sonner-toaster]
-) {
+.dark
+  :is(
+    [data-slot="alert-dialog-content"],
+    [data-slot="alert-dialog-overlay"],
+    [data-slot="select-content"],
+    [data-slot="menubar-content"],
+    [data-sonner-toaster]
+  ) {
   --primary: #74bea1;
   --primary-foreground: #10241b;
   --accent: #263d33;
@@ -618,7 +549,7 @@
 .public-site a:focus-visible,
 .public-site button:focus-visible,
 .public-site input:focus-visible {
-  outline: 3px solid var(--saffron);
+  outline: 3px solid var(--viridian);
   outline-offset: 3px;
 }
 .public-site ::selection {

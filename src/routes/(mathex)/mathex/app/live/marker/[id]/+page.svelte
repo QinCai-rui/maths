@@ -48,6 +48,7 @@
     authenticated = true;
     connected = true;
     checkingPin = false;
+    busyTeams = new Set();
     sessionStorage.setItem(sessionKey, pin);
   });
   socket.on("connect_error", (error) => {
@@ -61,7 +62,10 @@
       toast.error("Could not connect to the marker desk");
     }
   });
-  socket.on("disconnect", () => (connected = false));
+  socket.on("disconnect", () => {
+    connected = false;
+    busyTeams = new Set();
+  });
   socket.on("error", (message) => toast.error(message));
   socket.on("snapshot", (next) => (snapshot = next));
 
@@ -103,6 +107,7 @@
 
   onMount(() => {
     if (pin) unlock();
+    return () => socket.disconnect();
   });
 </script>
 
@@ -177,7 +182,7 @@
               <p class="text-sm font-semibold text-muted-foreground">
                 {focusedTeam.group || "Ungrouped"}
               </p>
-              <h2 class="mt-2 text-3xl font-black sm:text-5xl">{focusedTeam.name}</h2>
+              <h2 class="mt-2 break-words text-3xl font-black sm:text-5xl">{focusedTeam.name}</h2>
               {#if focusedTeam.currentQuestion > snapshot.questionCount}
                 <p class="mt-10 text-2xl font-bold text-emerald-600 dark:text-emerald-400">All questions complete</p>
               {:else}
@@ -270,9 +275,7 @@
               <p class="text-sm text-muted-foreground">Tap a team for a focused marking view, or mark directly here.</p>
             </div>
             {#if groups.length > 0}<label class="flex items-center gap-2 text-sm font-medium"
-                >Group <select
-                  bind:value={group}
-                  class="h-10 rounded-md border border-input bg-background px-3 outline-none focus:ring-2 focus:ring-ring"
+                >Group <select bind:value={group} class="h-10 rounded-md border border-input bg-background px-3"
                   ><option value="all">All groups</option>{#each groups as groupName}<option value={groupName}
                       >{groupName}</option
                     >{/each}</select

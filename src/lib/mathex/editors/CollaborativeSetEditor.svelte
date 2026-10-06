@@ -46,7 +46,7 @@
     X
   } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { toast } from "svelte-sonner";
   import QuestionEditor from "./QuestionEditor.svelte";
 
@@ -900,10 +900,66 @@
     if (sessionToken && !loadedQuestionIds[question.id]) return "Click to load question";
     return stripTags(question.contents).trim().slice(0, 44) || "Untitled question";
   }
+
+  let deleteDialog = $state<HTMLDivElement>();
+  let goLiveDialog = $state<HTMLDivElement>();
+
+  function trapFocus(event: KeyboardEvent, dialog: HTMLDivElement | undefined) {
+    if (event.key !== "Tab" || !dialog) return;
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((element) => element.offsetParent !== null);
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (document.activeElement === dialog) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  $effect(() => {
+    if (!pendingDeleteQuestion) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    tick().then(() => deleteDialog?.focus());
+    return () => previous?.focus();
+  });
+  $effect(() => {
+    if (!goLiveOpen) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    tick().then(() => goLiveDialog?.focus());
+    return () => previous?.focus();
+  });
+
+  let isDesktop = $state(false);
+  $effect(() => {
+    const query = matchMedia("(min-width: 1024px)");
+    const update = () => (isDesktop = query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  });
 </script>
 
+<svelte:window
+  onkeydown={(event) => {
+    if (event.key !== "Escape") return;
+    if (pendingDeleteQuestion) pendingDeleteQuestion = null;
+    else if (goLiveOpen) goLiveOpen = false;
+    else if (exportOpen) exportOpen = false;
+  }}
+/>
+
 {#if sessionToken && !joined}
-  <div class="mathex-editor flex min-h-screen items-center justify-center bg-background p-5">
+  <div class="mathex-editor flex min-h-dvh items-center justify-center bg-background p-5">
     <div class="mathex-panel w-full max-w-md p-7">
       {#if deleted}
         <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
@@ -943,7 +999,7 @@
     </div>
   </div>
 {:else}
-  <div class="mathex-editor flex h-screen flex-col overflow-hidden bg-background text-foreground">
+  <div class="mathex-editor flex h-dvh flex-col overflow-hidden bg-background text-foreground">
     <header class="z-30 shrink-0 border-b bg-background/95 backdrop-blur">
       <div class="flex min-h-14 items-center gap-2 px-3 sm:px-4">
         <button
@@ -1006,15 +1062,24 @@
           <button
             class="rounded-lg p-2 hover:bg-accent"
             onclick={() => (exportOpen = !exportOpen)}
-            aria-label="More actions"><MoreHorizontal class="size-5" /></button
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={exportOpen}><MoreHorizontal class="size-5" /></button
           >
           {#if exportOpen}
             <button
+              type="button"
+              tabindex={-1}
+              aria-hidden="true"
               class="fixed inset-0 z-30 cursor-default"
               onclick={() => (exportOpen = false)}
-              aria-label="Close menu"
             ></button>
-            <div class="absolute right-0 z-40 mt-2 w-60 border bg-popover p-1.5 text-sm">
+            <div
+              class="absolute right-0 z-40 mt-2 w-60 border bg-popover p-1.5 text-sm"
+              role="menu"
+              tabindex={-1}
+              onkeydown={(event) => event.key === "Escape" && (exportOpen = false)}
+            >
               {#if !sessionToken}<button class="menu-item" onclick={importFile}><Upload /> Import JSON</button>{/if}
               <button class="menu-item" onclick={downloadJson}><FileJson /> Download JSON</button>
               <button class="menu-item" onclick={() => exportPdf(false)}><Download /> Question PDF</button>
@@ -1064,6 +1129,8 @@
         class="absolute inset-y-0 left-0 z-20 w-72 border-r bg-background p-3 transition-transform lg:static lg:w-64 lg:translate-x-0 {mobileOutlineOpen
           ? 'translate-x-0'
           : '-translate-x-full'}"
+        inert={!isDesktop && !mobileOutlineOpen}
+        aria-hidden={!isDesktop && !mobileOutlineOpen}
       >
         <div class="mb-2 flex items-center justify-between px-2">
           <span class="text-xs font-semibold text-muted-foreground">Question list</span>
@@ -1096,9 +1163,7 @@
                 </span>
               </button>
               {#if (!sessionToken || isHost) && currentQuestionId === question.id}
-                <div
-                  class="flex items-center justify-end gap-0.5 border-t border-border px-2 py-1"
-                >
+                <div class="flex items-center justify-end gap-0.5 border-t border-border px-2 py-1">
                   <button
                     class="outline-action"
                     onclick={() => moveQuestion(question, -1)}
@@ -1297,18 +1362,15 @@
             </div>
           {:else}
             <section class="document-page flex min-h-[32rem] flex-col items-center justify-center text-center">
-              <div
-                class="mb-5 flex size-14 items-center justify-center bg-accent text-primary"
-              >
+              <div class="mb-5 flex size-14 items-center justify-center bg-accent text-primary">
                 <FileText />
               </div>
               <h1 class="text-2xl font-semibold">Start your question set</h1>
               <p class="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
                 Add a question to begin. You can go live whenever you are ready for others to join.
               </p>
-              {#if !sessionToken || isHost}<Button
-                  class="mt-6 gap-2"
-                  onclick={addQuestion}><Plus /> Add first question</Button
+              {#if !sessionToken || isHost}<Button class="mt-6 gap-2" onclick={addQuestion}
+                  ><Plus /> Add first question</Button
                 >{/if}
             </section>
           {/if}
@@ -1366,7 +1428,15 @@
     role="presentation"
     onclick={(event) => event.target === event.currentTarget && (pendingDeleteQuestion = null)}
   >
-    <div class="w-full max-w-md border bg-background p-6">
+    <div
+      class="w-full max-w-md border bg-background p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Delete question"
+      tabindex="-1"
+      bind:this={deleteDialog}
+      onkeydown={(event) => trapFocus(event, deleteDialog)}
+    >
       <div class="mb-4 flex size-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
         <Trash2 />
       </div>
@@ -1390,7 +1460,15 @@
     role="presentation"
     onclick={(event) => event.target === event.currentTarget && (goLiveOpen = false)}
   >
-    <div class="w-full max-w-md border bg-background p-6">
+    <div
+      class="w-full max-w-md border bg-background p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Start live collaboration"
+      tabindex="-1"
+      bind:this={goLiveDialog}
+      onkeydown={(event) => trapFocus(event, goLiveDialog)}
+    >
       <div class="mb-5 flex items-start justify-between">
         <div class="flex size-11 items-center justify-center bg-primary text-primary-foreground"><Radio /></div>
         <button class="rounded-lg p-2 hover:bg-accent" onclick={() => (goLiveOpen = false)}><X class="size-4" /></button
