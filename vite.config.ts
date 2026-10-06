@@ -4,7 +4,6 @@ import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { execFileSync } from "node:child_process";
 import { type ViteDevServer, defineConfig } from "vite";
-import { createWSServer } from "./src/ws/index.server";
 
 function resolveCommitHash() {
   if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT.slice(0, 7);
@@ -21,8 +20,11 @@ const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
 
 const webSocketServer = {
   name: "webSocketServer",
-  configureServer(server: ViteDevServer) {
+  async configureServer(server: ViteDevServer) {
     if (!server.httpServer) return;
+    // Imported lazily so `svelte-kit sync` (which runs under plain Node in CI)
+    // can load this config without touching Bun-only modules like bun:sqlite.
+    const { createWSServer } = await import("./src/ws/index.server.js");
     const realtime = createWSServer(server.httpServer);
     server.httpServer.once("close", () => {
       realtime.dispose();
