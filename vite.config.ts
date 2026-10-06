@@ -3,6 +3,7 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { type ViteDevServer, defineConfig } from "vite";
 
 function resolveCommitHash() {
@@ -25,8 +26,10 @@ const webSocketServer = {
     // The specifier is built at runtime so config bundlers (rolldown) cannot
     // follow it into Bun-only modules like bun:sqlite. Plain Node loading
     // vite.config.ts (e.g. `svelte-kit sync` in CI) therefore never touches
-    // them; only `vite dev` under Bun executes this import.
-    const wsEntry = `${process.cwd()}/src/ws/index.server.ts`;
+    // them; only `vite dev` under Bun executes this import. Resolved from the
+    // Vite project root (not the launch directory) and converted to a file
+    // URL so it works across platforms.
+    const wsEntry = pathToFileURL(`${server.config.root}/src/ws/index.server.ts`).href;
     const { createWSServer } = (await import(wsEntry)) as typeof import("./src/ws/index.server.js");
     const realtime = createWSServer(server.httpServer);
     server.httpServer.once("close", () => {
