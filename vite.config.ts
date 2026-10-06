@@ -22,9 +22,12 @@ const webSocketServer = {
   name: "webSocketServer",
   async configureServer(server: ViteDevServer) {
     if (!server.httpServer) return;
-    // Imported lazily so `svelte-kit sync` (which runs under plain Node in CI)
-    // can load this config without touching Bun-only modules like bun:sqlite.
-    const { createWSServer } = await import("./src/ws/index.server.js");
+    // The specifier is built at runtime so config bundlers (rolldown) cannot
+    // follow it into Bun-only modules like bun:sqlite. Plain Node loading
+    // vite.config.ts (e.g. `svelte-kit sync` in CI) therefore never touches
+    // them; only `vite dev` under Bun executes this import.
+    const wsEntry = `${process.cwd()}/src/ws/index.server.ts`;
+    const { createWSServer } = (await import(wsEntry)) as typeof import("./src/ws/index.server.js");
     const realtime = createWSServer(server.httpServer);
     server.httpServer.once("close", () => {
       realtime.dispose();
