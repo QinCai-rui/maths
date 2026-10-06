@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Button } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import { reportIssueUrl } from "$lib/utils";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { reportIssueUrl } from "#lib/utils.js";
 
   const isServerError = $derived(page.status >= 500);
   const issueUrl = $derived(reportIssueUrl(page.status, page.url.href, page.error?.message));

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { renderToString } from "katex";
-  import MathField from "$lib/components/MathField.svelte";
+  import MathField from "#lib/components/MathField.svelte";
 
   interface Props {
     html?: string;

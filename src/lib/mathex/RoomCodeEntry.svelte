@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { Header } from "$lib/components/ui/header";
-  import * as InputOTP from "$lib/components/ui/input-otp";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import * as InputOTP from "#lib/components/ui/input-otp/index.js";
   import { ArrowLeft } from "@lucide/svelte/icons";
   import { REGEXP_ONLY_DIGITS } from "bits-ui";
   import { io, type Socket } from "socket.io-client";

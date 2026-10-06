@@ -2,10 +2,10 @@
   import { page } from "$app/state";
   import { flip } from "svelte/animate";
   import { slide } from "svelte/transition";
-  import RoomOptions from "$lib/mathex/RoomOptions.svelte";
-  import RankBadge from "$lib/mathex/RankBadge.svelte";
-  import { DEFAULT_ROOM_SETTINGS, type ChatMessage } from "$lib/mathex/schemas";
-  import { exportableResults } from "$lib/mathex/room-state";
+  import RoomOptions from "#lib/mathex/RoomOptions.svelte";
+  import RankBadge from "#lib/mathex/RankBadge.svelte";
+  import { DEFAULT_ROOM_SETTINGS, type ChatMessage } from "#lib/mathex/schemas.js";
+  import { exportableResults } from "#lib/mathex/room-state.js";
 
   import { io, type Socket } from "socket.io-client";
   import {
@@ -16,16 +16,16 @@
     type LogEntry,
     type LeaderboardEntry,
     type LogVerbosity
-  } from "$lib/mathex/schemas";
+  } from "#lib/mathex/schemas.js";
 
-  import { Input } from "$lib/components/ui/input";
-  import { Button } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import { Progress } from "$lib/components/ui/progress";
-  import { Checkbox } from "$lib/components/ui/checkbox";
-  import * as Select from "$lib/components/ui/select";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import Identicon from "$lib/components/Identicon.svelte";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { Progress } from "#lib/components/ui/progress/index.js";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
+  import Identicon from "#lib/components/Identicon.svelte";
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
   import Hourglass from "@lucide/svelte/icons/hourglass";
   import Copy from "@lucide/svelte/icons/copy";
@@ -37,7 +37,7 @@
   const runToken = page.url.searchParams.get("runToken");
 
   import { toast } from "svelte-sonner";
-  import { copyText, msToMinutesAndSeconds } from "$lib/utils";
+  import { copyText, msToMinutesAndSeconds } from "#lib/utils.js";
 
   const socket: Socket<RoomManageServerToClientEvents, RoomManageClientToServerEvents> = io(`/manage-${roomId}`, {
     query: {

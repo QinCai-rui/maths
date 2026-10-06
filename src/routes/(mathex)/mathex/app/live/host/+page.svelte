@@ -1,21 +1,21 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Button } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import { Input } from "$lib/components/ui/input";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
   import type {
     PhysicalHostClientToServerEvents,
     PhysicalHostServerToClientEvents,
     PhysicalHostSnapshot,
     PhysicalOperationResult
-  } from "$lib/mathex/physical.schemas";
-  import { copyText, msToMinutesAndSeconds } from "$lib/utils";
+  } from "#lib/mathex/physical.schemas.js";
+  import { copyText, msToMinutesAndSeconds } from "#lib/utils.js";
   import { CirclePause, CirclePlay, Copy, ExternalLink, Flag, Radio, Save, ShieldCheck } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { toast } from "svelte-sonner";
   import { flip } from "svelte/animate";
   import TeamEditor, { type EditableTeam } from "../TeamEditor.svelte";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 
   const motionDuration = $derived(
     typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200

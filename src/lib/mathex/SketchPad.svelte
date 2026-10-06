@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte";
-  import { Button } from "$lib/components/ui/button";
+  import { Button } from "#lib/components/ui/button/index.js";
   import { Pen, Eraser, Type, MousePointer2, Undo2, Redo2, Trash2, X } from "@lucide/svelte/icons";
   let { open, onclose, storageKey }: { open: boolean; onclose: () => void; storageKey: string } = $props();
   type Point = { x: number; y: number };

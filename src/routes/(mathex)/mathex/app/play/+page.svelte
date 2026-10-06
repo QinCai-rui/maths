@@ -1,5 +1,5 @@
 <script lang="ts">
-  import RoomCodeEntry from "$lib/mathex/RoomCodeEntry.svelte";
+  import RoomCodeEntry from "#lib/mathex/RoomCodeEntry.svelte";
   import KeyRound from "@lucide/svelte/icons/key-round";
   import UsersRound from "@lucide/svelte/icons/users-round";
 </script>

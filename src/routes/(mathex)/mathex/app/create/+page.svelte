@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { Checkbox } from "$lib/components/ui/checkbox";
-  import RoomOptions from "$lib/mathex/RoomOptions.svelte";
-  import { DEFAULT_ROOM_SETTINGS } from "$lib/mathex/schemas";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Label } from "#lib/components/ui/label/index.js";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+  import RoomOptions from "#lib/mathex/RoomOptions.svelte";
+  import { DEFAULT_ROOM_SETTINGS } from "#lib/mathex/schemas.js";
   import { toast } from "svelte-sonner";
 
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
@@ -19,7 +19,7 @@
     RoomName,
     type RoomCreateServerToClientEvents,
     type RoomCreateClientToServerEvents
-  } from "$lib/mathex/schemas";
+  } from "#lib/mathex/schemas.js";
   import { z } from "zod";
 
   import { io, type Socket } from "socket.io-client";

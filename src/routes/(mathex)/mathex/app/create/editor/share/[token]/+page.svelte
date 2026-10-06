@@ -1,14 +1,19 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { Button } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import { downloadSetJson, MATHEX_DRAFT_KEY, parseQuestionSet, questionSetDifferences } from "$lib/mathex/set-draft";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import {
+    downloadSetJson,
+    MATHEX_DRAFT_KEY,
+    parseQuestionSet,
+    questionSetDifferences
+  } from "#lib/mathex/set-draft.js";
   import type {
     SetShareClientToServerEvents,
     SetShareServerToClientEvents,
     SharedSet
-  } from "$lib/mathex/set-share.schemas";
+  } from "#lib/mathex/set-share.schemas.js";
   import { AlertTriangle, CheckCircle2, Download, FileWarning, LoaderCircle } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { onMount } from "svelte";

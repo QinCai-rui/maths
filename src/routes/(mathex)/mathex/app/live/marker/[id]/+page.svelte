@@ -1,15 +1,15 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Button } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Label } from "#lib/components/ui/label/index.js";
   import type {
     PhysicalMarkerClientToServerEvents,
     PhysicalMarkerServerToClientEvents,
     PhysicalMarkerSnapshot,
     PhysicalOperationResult
-  } from "$lib/mathex/physical.schemas";
+  } from "#lib/mathex/physical.schemas.js";
   import { ArrowLeft, Check, CircleMinus, LayoutGrid, RotateCcw, ShieldCheck, Target, X } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { onMount } from "svelte";

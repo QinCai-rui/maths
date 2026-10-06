@@ -68,7 +68,13 @@ describe("online room state", () => {
   });
   test("no correct answers sorts by name", () => {
     const alice = player({ correctCount: 0, questionsCompleted: 0, correctReachedAtMs: null });
-    const bob = player({ playerId: "b", name: "Bob", correctCount: 0, questionsCompleted: 0, correctReachedAtMs: null });
+    const bob = player({
+      playerId: "b",
+      name: "Bob",
+      correctCount: 0,
+      questionsCompleted: 0,
+      correctReachedAtMs: null
+    });
     expect(buildLeaderboard(room([bob, alice])).map((entry) => entry.playerId)).toEqual(["a", "b"]);
   });
   test("historical host finish does not imply completion", () => {
