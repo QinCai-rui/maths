@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { Confetti } from "svelte-confetti";
   import { toast } from "svelte-sonner";
@@ -85,25 +85,47 @@
 
   const WIN_MESSAGES = ["Genius", "Magnificent", "Impressive", "Splendid", "Great", "Phew"];
 
+  const REVEAL_DURATION = (LENGTH - 1) * 300 + 1000; // last tile finishes flipping (2.2s)
+  const BOUNCE_DURATION = 2400 + (LENGTH - 1) * 120 + 650; // win bounce finishes (3.53s)
+
   let mode = $state<"daily" | "practice">("daily");
-  let day = $state(todayKey());
+  let day = $state("");
   let target = $state("00000");
   let rows = $state<string[]>([]);
   let status = $state<Status>("playing");
   let current = $state("");
   let stats = $state<Stats>(emptyStats());
   let lockInput = $state(false);
-  const winDelay =
-    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 2400;
+  let celebrating = $state(false);
+  let animatedFrom = $state(0);
   let showHelp = $state(false);
   let showResult = $state(false);
   let showConfetti = $state(false);
   let shaking = $state(false);
   let now = $state(Date.now());
+  let helpDialog = $state<HTMLDivElement>();
+  let resultDialog = $state<HTMLDivElement>();
+  let timers: ReturnType<typeof setTimeout>[] = [];
+
+  function prefersReducedMotion(): boolean {
+    return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function schedule(callback: () => void, delay: number) {
+    const id = setTimeout(() => {
+      timers = timers.filter((timer) => timer !== id);
+      callback();
+    }, delay);
+    timers.push(id);
+  }
+
+  function clearTimers() {
+    for (const timer of timers) clearTimeout(timer);
+    timers = [];
+  }
 
   const marks = $derived(rows.map((row) => evaluate(row, target)));
-  const done = $derived(status !== "playing");
-  const winRow = $derived(status === "won" ? rows.length - 1 : -1);
+  const winRow = $derived(celebrating ? rows.length - 1 : -1);
 
   function keyStatus(digit: string): Mark | "empty" {
     let found: Mark | "empty" = "empty";
@@ -166,12 +188,52 @@
     }
   }
 
+  function focusDialog(dialog: HTMLDivElement | undefined) {
+    tick().then(() => {
+      const focusable = dialog?.querySelector<HTMLElement>(
+        "button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
+      );
+      (focusable ?? dialog)?.focus();
+    });
+  }
+
+  function trapFocus(event: KeyboardEvent, dialog: HTMLDivElement | undefined) {
+    if (event.key !== "Tab" || !dialog) return;
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        "button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
+      )
+    ).filter((element) => element.offsetParent !== null);
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function markLabel(digit: string, mark: Mark | undefined): string {
+    if (!mark) return digit === "" ? "empty" : `digit ${digit}`;
+    if (mark === "correct") return `${digit}, correct position`;
+    if (mark === "present") return `${digit}, present but wrong position`;
+    return `${digit}, not in the number`;
+  }
+
   function startDaily(restore: boolean) {
+    clearTimers();
+    lockInput = false;
+    celebrating = false;
+    shaking = false;
     mode = "daily";
     day = todayKey();
     target = dailyTarget(day);
     current = "";
     showConfetti = false;
+    animatedFrom = 0;
     if (restore) {
       try {
         const raw = localStorage.getItem(dailyKey(day));
@@ -184,6 +246,7 @@
             rows = [];
             status = "playing";
           }
+          animatedFrom = rows.length;
           showResult = false;
           return;
         }
@@ -197,6 +260,10 @@
   }
 
   function startPractice() {
+    clearTimers();
+    lockInput = false;
+    celebrating = false;
+    shaking = false;
     mode = "practice";
     target = randomTarget();
     rows = [];
@@ -204,6 +271,7 @@
     status = "playing";
     showConfetti = false;
     showResult = false;
+    animatedFrom = 0;
   }
 
   function recordResult() {
@@ -224,28 +292,35 @@
     if (status !== "playing" || showHelp || showResult || lockInput) return;
     if (current.length !== LENGTH) {
       shaking = true;
-      setTimeout(() => (shaking = false), 550);
+      schedule(() => (shaking = false), 550);
       toast.info("Not enough digits");
       return;
     }
     rows = [...rows, current];
     current = "";
+    const motion = !prefersReducedMotion();
     if (rows[rows.length - 1] === target) {
-      // Hold the win feedback until the last tile finishes revealing.
+      // Flag the win now so the bounce animation is attached from the row's
+      // first render; only the results dialog waits for the celebration.
       lockInput = true;
-      setTimeout(() => {
-        status = "won";
-        recordResult();
-        persistDaily();
-        showConfetti = true;
-        setTimeout(() => (showConfetti = false), 5000);
-        setTimeout(() => (showResult = true), 1000);
-      }, winDelay);
+      celebrating = true;
+      status = "won";
+      recordResult();
+      persistDaily();
+      if (motion) {
+        schedule(() => {
+          showConfetti = true;
+          schedule(() => (showConfetti = false), 5000);
+        }, REVEAL_DURATION);
+        schedule(() => (showResult = true), Math.max(REVEAL_DURATION, BOUNCE_DURATION) + 100);
+      } else {
+        showResult = true;
+      }
     } else if (rows.length >= ATTEMPTS) {
       status = "lost";
       recordResult();
       persistDaily();
-      setTimeout(() => (showResult = true), 2600);
+      schedule(() => (showResult = true), motion ? REVEAL_DURATION + 400 : 0);
     } else {
       persistDaily();
     }
@@ -308,10 +383,39 @@
     }
     startDaily(true);
     const id = setInterval(() => {
+      if (mode !== "daily") return;
       now = Date.now();
-      if (mode === "daily" && todayKey() !== day && status === "playing") startDaily(false);
+      if (todayKey() !== day) startDaily(false);
     }, 1000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      clearTimers();
+    };
+  });
+
+  // Move focus into whichever dialog is open, trap Tab, and restore on close.
+  $effect(() => {
+    if (!showHelp) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    focusDialog(helpDialog);
+    return () => previous?.focus();
+  });
+
+  $effect(() => {
+    if (!showResult) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    focusDialog(resultDialog);
+    return () => previous?.focus();
+  });
+
+  // Lock background scrolling while a dialog is open.
+  $effect(() => {
+    if (!showHelp && !showResult) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
   });
 </script>
 
@@ -323,6 +427,13 @@
 <svelte:window
   onkeydown={(event) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest("button, a, input, textarea, select, [contenteditable]") &&
+      (event.key === "Enter" || event.key === " ")
+    ) {
+      return;
+    }
     if (event.key === "Enter" || event.key === "Backspace" || event.key === "Escape" || /^\d$/.test(event.key)) {
       event.preventDefault();
       press(event.key);
@@ -347,16 +458,11 @@
     </Button>
   </header>
 
-  <div class="digitle-modes" role="tablist" aria-label="Game mode">
-    <button
-      role="tab"
-      aria-selected={mode === "daily"}
-      class:active={mode === "daily"}
-      onclick={() => startDaily(true)}
-    >
+  <div class="digitle-modes" role="group" aria-label="Game mode">
+    <button aria-pressed={mode === "daily"} class:active={mode === "daily"} onclick={() => startDaily(true)}>
       Daily · {day}
     </button>
-    <button role="tab" aria-selected={mode === "practice"} class:active={mode === "practice"} onclick={startPractice}>
+    <button aria-pressed={mode === "practice"} class:active={mode === "practice"} onclick={startPractice}>
       Practice
     </button>
   </div>
@@ -371,7 +477,7 @@
     {/if}
   </p>
 
-  <div class="digitle-board" role="grid" aria-label="Guesses">
+  <div class="digitle-board" role="grid" aria-label="Guesses" aria-rowcount={ATTEMPTS} aria-colcount={LENGTH}>
     {#each Array.from({ length: ATTEMPTS }, (_, r) => r) as r}
       {@const submitted = rows[r]}
       {@const active = !submitted && r === rows.length && status === "playing"}
@@ -381,13 +487,16 @@
         {#each Array.from({ length: LENGTH }, (_, i) => i) as i}
           {@const digit = letters[i] ?? ""}
           {@const mark = rowMarks?.[i]}
-          {@const isWinRow = r === winRow}
+          {@const isSettled = r < animatedFrom}
+          {@const isWinRow = !isSettled && r === winRow}
           <div
             role="gridcell"
+            aria-label={markLabel(digit, mark)}
             class="digitle-tile"
-            class:reveal={mark !== undefined}
+            class:settled={isSettled}
+            class:reveal={!isSettled && mark !== undefined}
             class:win={isWinRow}
-            style={mark
+            style={!isSettled && mark
               ? isWinRow
                 ? `animation-delay:${i * 0.3}s, ${2.4 + i * 0.12}s`
                 : `animation-delay:${i * 0.3}s`
@@ -487,7 +596,15 @@
       if (event.key === "Escape") closeHelp();
     }}
   >
-    <div class="digitle-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-label="How to play">
+    <div
+      class="digitle-dialog"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="How to play"
+      bind:this={helpDialog}
+      onkeydown={(event) => trapFocus(event, helpDialog)}
+    >
       <div class="digitle-dialog-head">
         <h2>How to play</h2>
         <button class="digitle-icon-button" onclick={() => closeHelp()} aria-label="Close help"
@@ -535,7 +652,15 @@
       if (event.key === "Escape") showResult = false;
     }}
   >
-    <div class="digitle-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-label="Results">
+    <div
+      class="digitle-dialog"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="Results"
+      bind:this={resultDialog}
+      onkeydown={(event) => trapFocus(event, resultDialog)}
+    >
       <div class="digitle-dialog-head">
         <h2>{status === "won" ? WIN_MESSAGES[Math.min(rows.length - 1, 5)] : "Out of tries"}</h2>
         <button class="digitle-icon-button" onclick={() => (showResult = false)} aria-label="Close results">
