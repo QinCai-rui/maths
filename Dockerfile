@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package.json bun.lock .npmrc ./
 RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile
 
-COPY svelte.config.js vite.config.ts tsconfig.json components.json ./
+COPY vite.config.ts tsconfig.json components.json ./
 COPY src/ src/
 COPY static/ static/
 ARG GIT_COMMIT
