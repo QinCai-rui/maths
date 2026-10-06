@@ -15,7 +15,7 @@
       <div class="mt-8 flex justify-center">
         <Button href="/mathex/app" class="gap-2">
           <Calculator class="h-4 w-4" />
-          Let's go!
+          Open the competition app
         </Button>
       </div>
     </div>

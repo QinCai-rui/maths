@@ -53,7 +53,8 @@
     return snapshot.elapsedMs + (snapshot.state === "running" ? now - receivedAt : 0);
   });
   const clock = $derived(msToMinutesAndSeconds(remainingMs ?? elapsedMs));
-  const clockLabel = $derived(remainingMs === null ? "Elapsed time" : "Time remaining");
+  const overtime = $derived(remainingMs !== null && remainingMs < 0);
+  const clockLabel = $derived(remainingMs === null ? "Elapsed time" : overtime ? "Overtime" : "Time remaining");
   const ranked = $derived.by(() => snapshot?.teams || []);
   const groups = $derived.by(() => {
     const names = [...new Set(ranked.map((team) => team.group || "All teams"))];
@@ -75,7 +76,7 @@
           ><Radio class="h-4 w-4" />{connected ? snapshot?.state || "Live" : "Reconnecting"}</span
         >
         <div
-          class="flex items-center gap-3 border px-4 py-2 {remainingMs !== null && remainingMs < 0
+          class="flex items-center gap-3 border px-4 py-2 {overtime
             ? 'border-destructive/50 bg-destructive/10 text-destructive'
             : 'border-border bg-muted/50'}"
         >
@@ -105,7 +106,7 @@
                     >{team.rank}</span
                   >
                   <div class="min-w-0">
-                    <h3 class="truncate text-xl font-semibold sm:text-3xl">{team.name}</h3>
+                    <h3 class="truncate text-xl font-semibold sm:text-3xl" title={team.name}>{team.name}</h3>
                     {#if team.group}<p class="truncate text-xs text-muted-foreground sm:hidden">{team.group}</p>{/if}
                   </div>
                   <div class="hidden text-center sm:block">
@@ -165,23 +166,32 @@
                     >
                   </div>
                   <div
-                    class="col-span-3 flex h-1.5 gap-px overflow-hidden rounded-full sm:col-span-5"
+                    class={team.questions.length > 60
+                      ? "col-span-3 sm:col-span-5"
+                      : "col-span-3 flex h-1.5 gap-px overflow-hidden rounded-full sm:col-span-5"}
                     aria-label="{team.name} question progress"
                   >
-                    {#each team.questions as question}
-                      <span
-                        title="Q{question.questionNumber}: {question.outcome}{question.incorrect
-                          ? `, ${question.incorrect} wrong`
-                          : ''}"
-                        class="min-w-0 flex-1 {question.outcome === 'correct'
-                          ? 'bg-emerald-500'
-                          : question.outcome === 'skipped'
-                            ? 'bg-amber-500'
-                            : question.questionNumber === team.currentQuestion
-                              ? 'bg-primary'
-                              : 'bg-muted'}"
-                      ></span>
-                    {/each}
+                    {#if team.questions.length > 60}
+                      <span class="text-xs font-semibold text-muted-foreground">
+                        {team.questions.filter((question) => question.outcome === "correct").length}/{team.questions
+                          .length} correct
+                      </span>
+                    {:else}
+                      {#each team.questions as question}
+                        <span
+                          title="Q{question.questionNumber}: {question.outcome}{question.incorrect
+                            ? `, ${question.incorrect} wrong`
+                            : ''}"
+                          class="min-w-0 flex-1 {question.outcome === 'correct'
+                            ? 'bg-emerald-500'
+                            : question.outcome === 'skipped'
+                              ? 'bg-amber-500'
+                              : question.questionNumber === team.currentQuestion
+                                ? 'bg-primary'
+                                : 'bg-muted'}"
+                        ></span>
+                      {/each}
+                    {/if}
                   </div>
                 </article>
               {/each}

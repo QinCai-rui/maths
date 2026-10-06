@@ -874,7 +874,8 @@
     const set = await validatedSet();
     if (!set) return;
     localStorage.setItem(ROOM_SET_KEY, JSON.stringify(set));
-    window.open("/mathex/app/create", "_blank", "noopener");
+    const opened = window.open("/mathex/app/create", "_blank", "noopener");
+    if (!opened) toast.error("Allow pop-ups to open the room creator, or open /mathex/app/create yourself");
   }
 
   async function copySessionLink() {
@@ -1277,7 +1278,9 @@
           {/if}
 
           {#if sessionStatus === "ended"}
-            <div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div
+              class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300"
+            >
               This collaboration has ended and is now view-only.
             </div>
           {/if}

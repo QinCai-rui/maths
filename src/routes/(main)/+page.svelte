@@ -3,7 +3,8 @@
   import { ArrowUpRight, Calculator, Gamepad2, Hash } from "@lucide/svelte/icons";
 
   const today = new Date();
-  const featuredNumber = getNumberOfTheDay(today);
+  const utcDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const featuredNumber = getNumberOfTheDay(utcDay);
   const facts = getNumberFacts(featuredNumber);
   const primeLabel = facts.isPrime ? "Prime" : facts.primeFactorisation;
   const dateLabel = new Intl.DateTimeFormat("en", {

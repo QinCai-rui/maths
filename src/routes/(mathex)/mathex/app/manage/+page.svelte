@@ -99,8 +99,6 @@
   let reducedMotion = $state(false);
   let preferencesLoaded = $state(false);
   let mobileTab = $state<"players" | "extras">("players");
-  let kickArmed = $state<string | null>(null);
-  let kickTimer: ReturnType<typeof setTimeout> | undefined;
   const preferencesKey = "mathex-host-settings-v1";
   $effect(() => {
     try {
@@ -129,16 +127,15 @@
     if (!showExtras) mobileTab = "players";
   });
   const motionDuration = $derived(reducedMotion ? 0 : 200);
-  function askKick(id: string | null) {
+  let kickTarget: { id: string; name: string } | null = $state(null);
+  function askKick(id: string | null, name?: string | null) {
     if (!id) return;
-    clearTimeout(kickTimer);
-    if (kickArmed === id) {
-      kickArmed = null;
-      socket.emit("kick", id);
-    } else {
-      kickArmed = id;
-      kickTimer = setTimeout(() => (kickArmed = null), 4000);
-    }
+    kickTarget = { id, name: name?.trim() ? name.trim() : "this player" };
+  }
+  function confirmKick() {
+    if (!kickTarget) return;
+    socket.emit("kick", kickTarget.id);
+    kickTarget = null;
   }
   let chat = $state<ChatMessage[]>([]);
   socket.on("chatHistory", (messages) => (chat = messages));
@@ -176,7 +173,6 @@
     }, 1000);
     return () => {
       clearInterval(timer);
-      clearTimeout(kickTimer);
       clearTimeout(alertTimer);
       clearTimeout(roundBusyTimer);
       socket.disconnect();
@@ -230,12 +226,20 @@
 
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Exported ${exportFormat.toUpperCase()} results!`);
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      // Give the browser a tick to start the download before releasing the URL.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success(`Exported ${exportFormat.toUpperCase()} results!`);
+    } catch {
+      URL.revokeObjectURL(url);
+      toast.error("Could not download the export. Allow downloads and try again.");
+    }
   }
 
   async function copyRoomCode() {
@@ -274,10 +278,15 @@
                 ><Hourglass class="h-4 w-4" /></span
               >
               <div>
-                <p class="text-xl font-bold tabular-nums sm:text-2xl" role="timer">
-                  {msToMinutesAndSeconds(Math.max(0, endsAt - nowMs))}
+                <p
+                  class="text-xl font-bold tabular-nums sm:text-2xl {endsAt - nowMs < 0 ? 'text-destructive' : ''}"
+                  role="timer"
+                >
+                  {msToMinutesAndSeconds(endsAt - nowMs)}
                 </p>
-                <p class="text-xs font-medium text-muted-foreground">Time left</p>
+                <p class="text-xs font-medium text-muted-foreground">
+                  {endsAt - nowMs < 0 ? "Overtime" : "Time left"}
+                </p>
               </div>
             </div>
           {/if}
@@ -416,12 +425,9 @@
                         >{/if}
                       <Button
                         size="sm"
-                        variant={kickArmed === player.playerId ? "destructive" : "ghost"}
-                        onclick={() => askKick(player.playerId)}
-                        aria-label="Remove {player.name}"
-                        ><UserX class="h-3.5 w-3.5" />{kickArmed === player.playerId
-                          ? "Confirm removal"
-                          : "Remove"}</Button
+                        variant="ghost"
+                        onclick={() => askKick(player.playerId, player.name)}
+                        aria-label="Remove {player.name}"><UserX class="h-3.5 w-3.5" />Remove</Button
                       >
                     </div>
                   </div>
@@ -500,7 +506,7 @@
                   <Select.Trigger class="w-full sm:w-[180px]" aria-label="Alert type">
                     {alertType
                       ? alertType.charAt(0).toUpperCase() + alertType.substring(1).toLowerCase()
-                      : "Alert Type"}
+                      : "Alert type"}
                   </Select.Trigger>
                   <Select.Content>
                     {#each alertTypes as type}
@@ -510,7 +516,7 @@
                     {/each}
                   </Select.Content>
                 </Select.Root>
-                <Input bind:value={alertText} class="flex-1" placeholder="Alert Text" />
+                <Input bind:value={alertText} class="flex-1" placeholder="Alert text" />
                 <Button type="submit" disabled={sendingAlert || alertType === undefined || !alertText.trim()}
                   >{sendingAlert ? "Sending…" : "Send"}</Button
                 >
@@ -635,7 +641,7 @@
 
       {#if currentState !== "finished"}
         <Button onclick={startOrFinish} disabled={roundBusy} class="w-full sm:w-auto" size="lg"
-          >{roundBusy ? "Working…" : currentState === "lobby" ? "Start Game" : "Finish Game"}</Button
+          >{roundBusy ? "Working…" : currentState === "lobby" ? "Start round" : "Finish round"}</Button
         >
         <AlertDialog.Root bind:open={finishConfirmOpen}>
           <AlertDialog.Content>
@@ -647,11 +653,25 @@
             </AlertDialog.Header>
             <AlertDialog.Footer>
               <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-              <AlertDialog.Action onclick={confirmFinish}>Finish game</AlertDialog.Action>
+              <AlertDialog.Action onclick={confirmFinish}>Finish round</AlertDialog.Action>
             </AlertDialog.Footer>
           </AlertDialog.Content>
         </AlertDialog.Root>
       {/if}
+      <AlertDialog.Root open={kickTarget !== null} onOpenChange={(open) => !open && (kickTarget = null)}>
+        <AlertDialog.Content>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Remove {kickTarget?.name ?? "this player"}?</AlertDialog.Title>
+            <AlertDialog.Description>
+              They leave the room now. They can rejoin if late join is on.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+            <AlertDialog.Action onclick={confirmKick}>Remove player</AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </main>
   </div>
 {/if}

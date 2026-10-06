@@ -55,6 +55,7 @@
   let gameState: State = $state("connecting");
   let kicked = $state(false);
   let connectionError = $state(false);
+  let sessionNotice = $state<string | null>(null);
 
   let name: string = $state("");
   let playerId = $state("");
@@ -118,8 +119,13 @@
   socket.on("joinDenied", (reason) => {
     joining = false;
     clearTimeout(joinTimer);
+    try {
+      localStorage.removeItem(sessionKey);
+    } catch {
+      /* Storage is optional. */
+    }
+    sessionNotice = reason;
     gameState = "choose-name";
-    toast.error(reason);
   });
 
   $effect(() => {
@@ -333,9 +339,10 @@
     if (joining) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
-      toast.error("Enter a username");
+      toast.error("Enter a display name");
       return;
     }
+    sessionNotice = null;
     joining = true;
     name = trimmedName;
     kicked = false;
@@ -413,6 +420,9 @@
         <p class="mathex-kicker">Join the competition</p>
         <Header size="h1" class="mt-2 text-3xl tracking-[-0.04em]">Choose a display name</Header>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">Your name will appear on the leaderboard.</p>
+        {#if sessionNotice}
+          <p class="mt-3 border border-border bg-muted/40 p-3 text-sm leading-6" role="alert">{sessionNotice}</p>
+        {/if}
         <form
           class="flex flex-col items-center"
           onsubmit={(e) => {
@@ -455,11 +465,15 @@
           >
           <div>
             {#if endsAt !== null}
-              <p class="text-xl font-bold tabular-nums sm:text-2xl" role="timer">
-                {msToMinutesAndSeconds(Math.max(0, endsAt - clockNow))}
+              {@const remaining = endsAt - clockNow}
+              <p
+                class="text-xl font-bold tabular-nums sm:text-2xl {remaining < 0 ? 'text-destructive' : ''}"
+                role="timer"
+              >
+                {msToMinutesAndSeconds(remaining)}
               </p>
               <p class="text-xs font-medium text-muted-foreground">
-                Time left · {msToMinutesAndSeconds(timePassed)} elapsed
+                {remaining < 0 ? "Overtime" : "Time left"} · {msToMinutesAndSeconds(timePassed)} elapsed
               </p>
             {:else}
               <p class="text-xl font-bold tabular-nums sm:text-2xl">{msToMinutesAndSeconds(timePassed)}</p>
