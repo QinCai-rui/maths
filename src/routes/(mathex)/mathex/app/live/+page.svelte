@@ -38,13 +38,20 @@
   ]);
 
   const validTeams = $derived(teams.filter((team) => team.name.trim()));
+  const duplicateTeamName = $derived.by(() => {
+    const names = validTeams.map((team) => team.name.trim());
+    const lowered = names.map((name) => name.toLocaleLowerCase());
+    const clash = lowered.find((name, index) => lowered.indexOf(name) !== index);
+    return clash === undefined ? null : (names[lowered.indexOf(clash)] ?? clash);
+  });
   const canCreate = $derived(
     name.trim().length >= 3 &&
       questionCount >= 1 &&
       questionCount <= 200 &&
       (!timerEnabled || timerMinutes >= 1) &&
-      /^[A-Z0-9]{8}$/.test(markerPin) &&
+      /^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin) &&
       validTeams.length > 0 &&
+      duplicateTeamName === null &&
       !creating
   );
 
@@ -146,22 +153,25 @@
               <Input
                 id="marker-pin"
                 class="mt-2 h-11 font-mono tracking-[0.25em]"
-                type="password"
+                type="text"
                 autocapitalize="characters"
-                pattern={"[A-Z0-9]{8}"}
-                maxlength={8}
+                autocomplete="one-time-code"
+                inputmode="text"
+                pattern={"(?:[A-Z0-9]{8}|\\d{4,12})"}
+                maxlength={12}
                 bind:value={markerPin}
                 oninput={() =>
                   (markerPin = markerPin
                     .toUpperCase()
                     .replace(/[^A-Z0-9]/g, "")
-                    .slice(0, 8))}
+                    .slice(0, 12))}
               />
               <button
                 type="button"
                 class="mt-2 text-xs font-semibold text-primary hover:underline"
                 onclick={() => (markerPin = createMarkerPin())}>Generate a new PIN</button
               >
+              <p class="mt-2 text-xs text-muted-foreground">8 letters or digits, or 4 to 12 digits.</p>
             </div>
           </div>
           <div class="mt-5 border border-border bg-background p-4">
@@ -201,6 +211,11 @@
             </div>
             <span class="text-sm tabular-nums text-muted-foreground">{validTeams.length} ready</span>
           </div>
+          {#if duplicateTeamName !== null}
+            <p class="mt-3 text-sm text-destructive" role="alert">
+              Team names must be unique. “{duplicateTeamName}” appears more than once.
+            </p>
+          {/if}
           <TeamEditor bind:teams disabled={creating} />
         </section>
 

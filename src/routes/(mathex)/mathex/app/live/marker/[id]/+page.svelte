@@ -16,18 +16,21 @@
   import { flip } from "svelte/animate";
   import { toast } from "svelte-sonner";
 
-  const id = page.params.id;
+  const id = page.params.id ?? "";
   const sessionKey = `mathex-live-marker-${id}`;
+  const validCode = /^[0-9]{6}$/.test(id);
   const socket: Socket<PhysicalMarkerServerToClientEvents, PhysicalMarkerClientToServerEvents> = io(
     `/physical-marker-${id}`,
     { autoConnect: false, forceNew: true }
   );
 
   let snapshot: PhysicalMarkerSnapshot | null = $state(null);
-  let pin = $state(typeof sessionStorage === "undefined" ? "" : sessionStorage.getItem(sessionKey) || "");
+  const initialPin = typeof sessionStorage === "undefined" ? "" : (sessionStorage.getItem(sessionKey) ?? "");
+  let pin = $state(initialPin);
   let authenticated = $state(false);
   let connected = $state(false);
   let checkingPin = $state(false);
+  let pinInvalid = $state(false);
   let group = $state("all");
   let focusedTeamId = $state<string | null>(null);
   let busyTeams = $state(new Set<string>());
@@ -55,6 +58,8 @@
     connected = false;
     authenticated = false;
     checkingPin = false;
+    // Invalid URL codes never reach a connection attempt, so any auth
+    // refusal here means the PIN itself was wrong.
     if (error.message === "Unauthorized") {
       sessionStorage.removeItem(sessionKey);
       toast.error("Incorrect marker PIN");
@@ -64,12 +69,15 @@
   });
   socket.on("disconnect", () => {
     connected = false;
-    busyTeams = new Set();
+    if (snapshot) busyTeams = new Set();
   });
   socket.on("error", (message) => toast.error(message));
-  socket.on("snapshot", (next) => (snapshot = next));
+  socket.on("snapshot", (next) => {
+    snapshot = next;
+  });
 
   function unlock() {
+    if (checkingPin) return;
     if (!/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(pin)) return;
     checkingPin = true;
     socket.auth = { code: id, pin };
@@ -106,6 +114,10 @@
   }
 
   onMount(() => {
+    if (!validCode) {
+      pinInvalid = true;
+      return () => socket.disconnect();
+    }
     if (pin) unlock();
     return () => socket.disconnect();
   });
@@ -114,13 +126,24 @@
 <svelte:head><title>{snapshot?.name || "Mathex Live"} - Marker</title></svelte:head>
 
 <div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
-  {#if !authenticated}
+  {#if !authenticated && pinInvalid}
+    <main class="mx-auto grid min-h-[80vh] max-w-md place-items-center">
+      <div class="mathex-panel w-full p-6 text-center sm:p-8" role="alert">
+        <p class="mathex-kicker">Invalid link</p>
+        <Header size="h2" class="mt-2 text-2xl">This event code is not valid</Header>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+          Live codes are six digits. Enter the current event code.
+        </p>
+        <Button href="/mathex/app/live/marker" class="mt-5 w-full">Enter a different code</Button>
+      </div>
+    </main>
+  {:else if !authenticated}
     <main class="mx-auto grid min-h-[80vh] max-w-md place-items-center">
       <form
         class="mathex-panel w-full p-6 sm:p-8"
         onsubmit={(event) => {
           event.preventDefault();
-          unlock();
+          if (!checkingPin) unlock();
         }}
       >
         <span class="flex h-12 w-12 items-center justify-center bg-primary/10 text-primary"
@@ -135,8 +158,10 @@
           <Label for="marker-pin">PIN</Label><Input
             id="marker-pin"
             class="mt-2 h-12 text-center font-mono text-xl tracking-[0.35em]"
-            type="password"
+            type="text"
             autocapitalize="characters"
+            autocomplete="one-time-code"
+            inputmode="text"
             pattern={"(?:[A-Z0-9]{8}|[0-9]{4,12})"}
             maxlength={12}
             bind:value={pin}
@@ -148,6 +173,7 @@
             autofocus
           />
         </div>
+        <p class="mt-2 text-xs text-muted-foreground">8 letters or digits, or 4 to 12 digits.</p>
         <Button type="submit" class="mt-4 h-11 w-full" disabled={checkingPin || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(pin)}
           >{checkingPin ? "Checking..." : "Open marker desk"}</Button
         >

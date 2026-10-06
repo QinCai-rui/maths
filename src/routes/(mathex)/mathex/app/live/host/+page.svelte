@@ -15,6 +15,7 @@
   import { toast } from "svelte-sonner";
   import { flip } from "svelte/animate";
   import TeamEditor, { type EditableTeam } from "../TeamEditor.svelte";
+  import * as AlertDialog from "$lib/components/ui/alert-dialog";
 
   const motionDuration = $derived(
     typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
@@ -32,6 +33,7 @@
   let connected = $state(false);
   let saving = $state(false);
   let loadError = $state(false);
+  let finishConfirmOpen = $state(false);
   let markerPin = $state("");
   let snapshotReceivedAt = $state(Date.now());
 
@@ -98,15 +100,27 @@
   const clock = $derived(msToMinutesAndSeconds(remainingMs ?? liveElapsedMs));
 
   function act(action: "start" | "pause" | "resume" | "finish") {
-    if (action === "finish" && !confirm("Finish this competition? Markers will no longer be able to record results."))
+    if (action === "finish") {
+      finishConfirmOpen = true;
       return;
+    }
     if (action === "start") socket.emit("start", showResult);
     else if (action === "pause") socket.emit("pause", showResult);
-    else if (action === "resume") socket.emit("resume", showResult);
-    else socket.emit("finish", showResult);
+    else socket.emit("resume", showResult);
   }
 
   function saveTeams() {
+    const blank = teams.length - teams.filter((team) => team.name.trim()).length;
+    if (blank > 0) {
+      toast.error(
+        teams.length === 1
+          ? "The team row is blank. Fill it in to save."
+          : blank === 1
+            ? "One team row is blank. Fill it in or delete it."
+            : `${blank} team rows are blank.`
+      );
+      return;
+    }
     const cleaned = teams
       .filter((team) => team.name.trim())
       .map((team) => ({ ...team, name: team.name.trim(), group: team.group.trim() }));
@@ -129,7 +143,7 @@
   }
 
   function resetMarkerPin() {
-    if (!/^[A-Z0-9]{8}$/.test(markerPin)) return;
+    if (!/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)) return;
     socket.emit("configure", { markerPin }, (result) => {
       if (!result.ok) {
         toast.error(result.error);
@@ -216,6 +230,25 @@
               This competition is finished. The public scoreboard remains available.
             </div>
           {/if}
+          <AlertDialog.Root bind:open={finishConfirmOpen}>
+            <AlertDialog.Content>
+              <AlertDialog.Header>
+                <AlertDialog.Title>Finish this competition?</AlertDialog.Title>
+                <AlertDialog.Description>
+                  Markers will no longer be able to record results. This cannot be undone.
+                </AlertDialog.Description>
+              </AlertDialog.Header>
+              <AlertDialog.Footer>
+                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+                <AlertDialog.Action
+                  onclick={() => {
+                    finishConfirmOpen = false;
+                    socket.emit("finish", showResult);
+                  }}>Finish competition</AlertDialog.Action
+                >
+              </AlertDialog.Footer>
+            </AlertDialog.Content>
+          </AlertDialog.Root>
         </div>
 
         <div class="mathex-panel p-5 sm:p-7">
@@ -251,21 +284,23 @@
               <div class="mt-3 flex gap-2">
                 <Input
                   aria-label="New marker PIN"
-                  type="password"
+                  type="text"
                   autocapitalize="characters"
-                  maxlength={8}
-                  placeholder="New 8-char PIN"
+                  autocomplete="one-time-code"
+                  inputmode="text"
+                  maxlength={12}
+                  placeholder="8 letters/digits or 4-12 digits"
                   bind:value={markerPin}
                   oninput={() =>
                     (markerPin = markerPin
                       .toUpperCase()
                       .replace(/[^A-Z0-9]/g, "")
-                      .slice(0, 8))}
+                      .slice(0, 12))}
                 /><Button
                   size="sm"
                   variant="outline"
                   onclick={resetMarkerPin}
-                  disabled={!connected || !/^[A-Z0-9]{8}$/.test(markerPin)}>Set</Button
+                  disabled={!connected || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)}>Set</Button
                 >
               </div>
             </div>

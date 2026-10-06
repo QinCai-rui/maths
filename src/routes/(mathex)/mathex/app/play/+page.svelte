@@ -15,7 +15,7 @@
   description="Your host has a 6-digit access code. Enter it below to join the competition lobby."
   fieldLabel="Six-digit room code"
   hint="You will choose a display name next."
-  errorMessage="That room does not exist! Try typing the room ID again."
+  errorMessage="That room does not exist! Try typing the room code again."
 >
   {#snippet icon()}<KeyRound class="h-6 w-6" />{/snippet}
   {#snippet hintIcon()}<UsersRound class="h-4 w-4 text-primary" />{/snippet}
