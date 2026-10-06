@@ -444,8 +444,7 @@
               event.currentTarget.blur();
               selected = null;
             }
-          }}
-        ></textarea>
+          }}></textarea>
         <button
           type="button"
           class="absolute -bottom-2 -right-2 h-5 w-5 bg-primary touch-none"
