@@ -1,5 +1,5 @@
 <script lang="ts">
-  import RoomCodeEntry from "$lib/mathex/RoomCodeEntry.svelte";
+  import RoomCodeEntry from "#lib/mathex/RoomCodeEntry.svelte";
   import { KeyRound, ShieldCheck } from "@lucide/svelte/icons";
 </script>
 

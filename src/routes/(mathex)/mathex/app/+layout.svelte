@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import SiteNav from "$lib/components/SiteNav.svelte";
-  import SiteFooter from "$lib/components/SiteFooter.svelte";
-  import DisclaimerDialog from "$lib/components/DisclaimerDialog.svelte";
-  import { Toaster } from "$lib/components/ui/sonner";
-  import ThemeToggle from "$lib/components/ui/theme-toggle/theme-toggle.svelte";
+  import SiteNav from "#lib/components/SiteNav.svelte";
+  import SiteFooter from "#lib/components/SiteFooter.svelte";
+  import DisclaimerDialog from "#lib/components/DisclaimerDialog.svelte";
+  import { Toaster } from "#lib/components/ui/sonner/index.js";
+  import ThemeToggle from "#lib/components/ui/theme-toggle/theme-toggle.svelte";
   import { ModeWatcher } from "mode-watcher";
   import "../../../../app.css";
   import "quill/dist/quill.snow.css";

@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { goto, pushState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { Button } from "$lib/components/ui/button";
-  import Quill from "$lib/components/Quill.svelte";
-  import { Header } from "$lib/components/ui/header";
-  import { copyText } from "$lib/utils";
-  import { QuestionSet } from "$lib/mathex/schemas";
-  import { stripTags } from "$lib/mathex/content";
-  import { downloadAnswerSet, downloadQuestionSet, previewAnswerSet, previewQuestionSet } from "$lib/mathex/print";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import Quill from "#lib/components/Quill.svelte";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { copyText } from "#lib/utils.js";
+  import { QuestionSet } from "#lib/mathex/schemas.js";
+  import { stripTags } from "#lib/mathex/content.js";
+  import { downloadAnswerSet, downloadQuestionSet, previewAnswerSet, previewQuestionSet } from "#lib/mathex/print.js";
   import type {
     CollaborativeQuestionValue,
     CollaborativeSetClientToServerEvents,
@@ -17,7 +17,7 @@
     CollaboratorPresence,
     DraftQuestionValue,
     QuestionLock
-  } from "$lib/mathex/collaborative-set.schemas";
+  } from "#lib/mathex/collaborative-set.schemas.js";
   import {
     ArrowDown,
     ArrowLeft,
@@ -133,8 +133,8 @@
     target: ApplyClientHistoryTarget;
     summary: string;
   } | null = null;
-  let applyingLocalHistory = false;
 
+  let applyingLocalHistory = false;
   let isHost = $derived(hostSession);
   let canUndo = $derived(undoHistory.some((entry) => entry.status === "applied"));
   let canRedo = $derived(undoHistory.some((entry) => entry.status === "undone"));
@@ -287,8 +287,10 @@
     if (!currentQuestionId || !questions.some(({ id }) => id === currentQuestionId)) {
       currentQuestionId = questions[0]?.id || null;
     }
+
     if (sessionToken) liveHistoryBaseline = editorSnapshot();
     else localBaseline = editorSnapshot();
+
     queueMicrotask(() => (applyingLocalHistory = false));
   }
 
@@ -355,6 +357,7 @@
         const added = questions.find(
           ({ id }) => !liveTransaction!.before.questions.some((question) => question.id === id)
         );
+
         if (added) liveTransaction.target.questionId = added.id;
       }
       commitLiveTransaction();
@@ -399,7 +402,7 @@
     if (!sessionToken || questionHash === questionId) return;
     const url = new URL(window.location.href);
     url.hash = questionId;
-    pushState(url, page.state);
+    goto(url, { shallow: true, state: page.state });
     questionHash = questionId;
   }
 
@@ -676,7 +679,16 @@
   async function duplicateQuestion(question: CollaborativeQuestionValue) {
     if (sessionToken) {
       if (!(await loadAllQuestions())) return;
-      beginLiveTransaction({ type: "structure", action: "duplicate", questionId: question.id }, "Duplicated question");
+
+      beginLiveTransaction(
+        {
+          type: "structure",
+          action: "duplicate",
+          questionId: question.id
+        },
+        "Duplicated question"
+      );
+
       socket?.emit("duplicateQuestion", { questionId: question.id }, handleStructuralOperation);
       return;
     }
@@ -1055,9 +1067,10 @@
             ><Link2 class="size-4" /><span class="hidden sm:inline">Share</span></Button
           >
         {:else}
-          <Button class="gap-2" size="sm" onclick={() => (goLiveOpen = true)}
-            ><Radio class="size-4" /><span class="hidden sm:inline">Go live</span></Button
-          >
+          <Button class="gap-2" size="sm" onclick={() => (goLiveOpen = true)}>
+            <Radio class="size-4" />
+            <span class="hidden sm:inline">Go live</span>
+          </Button>
         {/if}
         <div class="relative">
           <button
@@ -1101,9 +1114,11 @@
         {#if !sessionToken || isHost}
           <button class="toolbar-button" onclick={addQuestion}><Plus /> Add question</button>
         {/if}
+
         <button class="toolbar-button" onclick={() => (detailsOpen = !detailsOpen)}
-          ><Settings2 /> Set details <ChevronDown /></button
+          ><Settings2 />Set details <ChevronDown /></button
         >
+
         <span class="mx-1 h-5 border-l"></span>
         <button
           class="toolbar-button"
@@ -1135,6 +1150,7 @@
       >
         <div class="mb-2 flex items-center justify-between px-2">
           <span class="text-xs font-semibold text-muted-foreground">Question list</span>
+
           <button class="rounded p-1 hover:bg-accent lg:hidden" onclick={() => (mobileOutlineOpen = false)}
             ><X class="size-4" /></button
           >
@@ -1212,6 +1228,7 @@
                   <h2 class="font-semibold">Set details</h2>
                   <p class="text-xs text-muted-foreground">Cover instructions and print layout</p>
                 </div>
+
                 <button class="rounded-lg p-2 hover:bg-accent" onclick={() => (detailsOpen = false)}
                   ><X class="size-4" /></button
                 >
@@ -1451,6 +1468,7 @@
       </p>
       <div class="mt-6 flex justify-end gap-2">
         <Button variant="outline" onclick={() => (pendingDeleteQuestion = null)}>Cancel</Button>
+
         <Button variant="destructive" onclick={confirmDeleteQuestion}>Delete question</Button>
       </div>
     </div>
@@ -1474,6 +1492,7 @@
     >
       <div class="mb-5 flex items-start justify-between">
         <div class="flex size-11 items-center justify-center bg-primary text-primary-foreground"><Radio /></div>
+
         <button class="rounded-lg p-2 hover:bg-accent" onclick={() => (goLiveOpen = false)}><X class="size-4" /></button
         >
       </div>
@@ -1492,11 +1511,12 @@
         /></label
       >
       <div class="mt-6 flex justify-end gap-2">
-        <Button variant="outline" onclick={() => (goLiveOpen = false)}>Cancel</Button><Button
-          class="gap-2"
-          onclick={createSession}
-          disabled={creating}><UsersRound /> {creating ? "Starting..." : "Start and invite"}</Button
-        >
+        <Button variant="outline" onclick={() => (goLiveOpen = false)}>Cancel</Button>
+
+        <Button class="gap-2" onclick={createSession} disabled={creating}>
+          <UsersRound />
+          {creating ? "Starting..." : "Start and invite"}
+        </Button>
       </div>
     </div>
   </div>

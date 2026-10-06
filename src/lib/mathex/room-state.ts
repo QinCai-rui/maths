@@ -38,8 +38,7 @@ export function restorePlayerCounts(player: RoomSocketData, room: Pick<Room, "lo
   const skippedQuestions = new Set(skippedLogs.map((log) => log.questionNumber));
   player.correctCount ??= correctQuestions.size;
   player.skips ??= skippedQuestions.size;
-  player.correctReachedAtMs ??=
-    correctLogs.length > 0 ? Math.max(...correctLogs.map((log) => log.timestamp)) : null;
+  player.correctReachedAtMs ??= correctLogs.length > 0 ? Math.max(...correctLogs.map((log) => log.timestamp)) : null;
   player.questionsCompleted ??= Math.min(room.questions.length, player.correctCount + player.skips);
   player.chatMuted ??= false;
 }
@@ -53,7 +52,8 @@ export function sortedPlayers(room: Room): RoomSocketData[] {
     const score = b.correctCount - a.correctCount;
     if (score) return score;
     // First to reach the score ranks higher. No correct answers sorts last.
-    if (a.correctReachedAtMs === null && b.correctReachedAtMs === null) return (a.name ?? "").localeCompare(b.name ?? "");
+    if (a.correctReachedAtMs === null && b.correctReachedAtMs === null)
+      return (a.name ?? "").localeCompare(b.name ?? "");
     if (a.correctReachedAtMs === null) return 1;
     if (b.correctReachedAtMs === null) return -1;
     const pace = a.correctReachedAtMs - b.correctReachedAtMs;

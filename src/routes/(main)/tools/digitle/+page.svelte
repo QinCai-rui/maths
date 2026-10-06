@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { Button } from "$lib/components/ui/button";
+  import { Button } from "#lib/components/ui/button/index.js";
   import { Confetti } from "svelte-confetti";
   import { toast } from "svelte-sonner";
   import { Delete, Info, RefreshCw, Share2, Trophy, X } from "@lucide/svelte/icons";

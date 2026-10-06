@@ -1,14 +1,14 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { Button } from "$lib/components/ui/button";
-  import { Checkbox } from "$lib/components/ui/checkbox";
-  import { Header } from "$lib/components/ui/header";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Label } from "#lib/components/ui/label/index.js";
   import type {
     PhysicalCreateClientToServerEvents,
     PhysicalCreateServerToClientEvents
-  } from "$lib/mathex/physical.schemas";
+  } from "#lib/mathex/physical.schemas.js";
   import { ArrowLeft, Clock3, Radio, ShieldCheck, UsersRound } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { toast } from "svelte-sonner";

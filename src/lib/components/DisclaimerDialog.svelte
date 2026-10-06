@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 
   const acknowledgementKey = "disclaimer-acknowledged";
   let open = $state(false);

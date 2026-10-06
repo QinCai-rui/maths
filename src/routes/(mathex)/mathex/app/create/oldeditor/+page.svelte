@@ -1,17 +1,17 @@
 <script lang="ts">
   import { z } from "zod";
-  import { Button, buttonVariants } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import { Question, QuestionSet, SolutionItem } from "$lib/mathex/schemas";
-  import { stripTags } from "$lib/mathex/content";
-  import type { SetShareClientToServerEvents, SetShareServerToClientEvents } from "$lib/mathex/set-share.schemas";
-  import { downloadAnswerSet, downloadQuestionSet, previewAnswerSet, previewQuestionSet } from "$lib/mathex/print";
-  import { copyText } from "$lib/utils";
+  import { Button, buttonVariants } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
+  import { Question, QuestionSet, SolutionItem } from "#lib/mathex/schemas.js";
+  import { stripTags } from "#lib/mathex/content.js";
+  import type { SetShareClientToServerEvents, SetShareServerToClientEvents } from "#lib/mathex/set-share.schemas.js";
+  import { downloadAnswerSet, downloadQuestionSet, previewAnswerSet, previewQuestionSet } from "#lib/mathex/print.js";
+  import { copyText } from "#lib/utils.js";
   import { toast } from "svelte-sonner";
 
-  import QuestionEditor from "$lib/mathex/editors/QuestionEditor.svelte";
-  import Quill from "$lib/components/Quill.svelte";
+  import QuestionEditor from "#lib/mathex/editors/QuestionEditor.svelte";
+  import Quill from "#lib/components/Quill.svelte";
 
   import Plus from "@lucide/svelte/icons/plus";
   import Copy from "@lucide/svelte/icons/copy";

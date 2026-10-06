@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { Github, Menu, Sigma, X } from "@lucide/svelte/icons";
-  import ThemeToggle from "$lib/components/ui/theme-toggle/theme-toggle.svelte";
+  import ThemeToggle from "#lib/components/ui/theme-toggle/theme-toggle.svelte";
 
   const links = [
     { url: "/", text: "Home" },

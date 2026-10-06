@@ -1,9 +1,9 @@
 <script lang="ts">
   import "../../app.css";
-  import SiteNav from "$lib/components/SiteNav.svelte";
-  import SiteFooter from "$lib/components/SiteFooter.svelte";
-  import DisclaimerDialog from "$lib/components/DisclaimerDialog.svelte";
-  import { Toaster } from "$lib/components/ui/sonner";
+  import SiteNav from "#lib/components/SiteNav.svelte";
+  import SiteFooter from "#lib/components/SiteFooter.svelte";
+  import DisclaimerDialog from "#lib/components/DisclaimerDialog.svelte";
+  import { Toaster } from "#lib/components/ui/sonner/index.js";
   import { ModeWatcher } from "mode-watcher";
 
   interface Props {

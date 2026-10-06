@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { Button } from "$lib/components/ui/button";
-  import * as Select from "$lib/components/ui/select";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Label } from "#lib/components/ui/label/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
   import Plus from "@lucide/svelte/icons/plus";
   import Minus from "@lucide/svelte/icons/minus";
   import { create, all } from "mathjs";
-  import MathField from "$lib/components/MathField.svelte";
+  import MathField from "#lib/components/MathField.svelte";
 
   const math = create(all);
 

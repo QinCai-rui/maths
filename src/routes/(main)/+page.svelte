@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getNumberFacts, getNumberOfTheDay } from "$lib/number-facts";
+  import { getNumberFacts, getNumberOfTheDay } from "#lib/number-facts.js";
   import { ArrowUpRight, Calculator, Gamepad2, Hash } from "@lucide/svelte/icons";
 
   const today = new Date();

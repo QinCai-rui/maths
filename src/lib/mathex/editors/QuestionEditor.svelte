@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Label } from "$lib/components/ui/label";
-  import { Button } from "$lib/components/ui/button";
-  import { Checkbox } from "$lib/components/ui/checkbox";
-  import { Textarea } from "$lib/components/ui/textarea";
-  import Quill from "$lib/components/Quill.svelte";
+  import { Label } from "#lib/components/ui/label/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+  import { Textarea } from "#lib/components/ui/textarea/index.js";
+  import Quill from "#lib/components/Quill.svelte";
   import SolutionsEditor from "./SolutionsEditor.svelte";
 
   import type { DraftQuestionValue } from "../collaborative-set.schemas";

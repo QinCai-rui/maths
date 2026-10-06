@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import Calculator from "$lib/mathex/Calculator.svelte";
-  import RankBadge from "$lib/mathex/RankBadge.svelte";
-  import SketchPad from "$lib/mathex/SketchPad.svelte";
-  import { DEFAULT_ROOM_SETTINGS, type ChatMessage } from "$lib/mathex/schemas";
+  import Calculator from "#lib/mathex/Calculator.svelte";
+  import RankBadge from "#lib/mathex/RankBadge.svelte";
+  import SketchPad from "#lib/mathex/SketchPad.svelte";
+  import { DEFAULT_ROOM_SETTINGS, type ChatMessage } from "#lib/mathex/schemas.js";
   import {
     Calculator as CalculatorIcon,
     Pencil,
@@ -20,20 +20,20 @@
     type State,
     type LeaderboardEntry,
     Question
-  } from "$lib/mathex/schemas";
-  import { createId, msToMinutesAndSeconds } from "$lib/utils";
+  } from "#lib/mathex/schemas.js";
+  import { createId, msToMinutesAndSeconds } from "#lib/utils.js";
 
-  import Identicon from "$lib/components/Identicon.svelte";
-  import { Input } from "$lib/components/ui/input";
-  import { Button } from "$lib/components/ui/button";
-  import { Header } from "$lib/components/ui/header";
-  import { Label } from "$lib/components/ui/label";
-  import { Progress } from "$lib/components/ui/progress";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import Identicon from "#lib/components/Identicon.svelte";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Header } from "#lib/components/ui/header/index.js";
+  import { Label } from "#lib/components/ui/label/index.js";
+  import { Progress } from "#lib/components/ui/progress/index.js";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 
-  import NumberAnswer from "$lib/mathex/answers/NumberAnswer.svelte";
-  import TextAnswer from "$lib/mathex/answers/TextAnswer.svelte";
-  import ExpressionAnswer from "$lib/mathex/answers/ExpressionAnswer.svelte";
+  import NumberAnswer from "#lib/mathex/answers/NumberAnswer.svelte";
+  import TextAnswer from "#lib/mathex/answers/TextAnswer.svelte";
+  import ExpressionAnswer from "#lib/mathex/answers/ExpressionAnswer.svelte";
 
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import CircleCheckBig from "@lucide/svelte/icons/circle-check-big";
@@ -46,7 +46,7 @@
   let confetti = $state(false);
 
   import DOMPurify from "dompurify";
-  import { renderMath } from "$lib/mathex/content";
+  import { renderMath } from "#lib/mathex/content.js";
   const reduceMotion = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const roomId = page.params.id;

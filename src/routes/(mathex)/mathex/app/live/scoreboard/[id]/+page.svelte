@@ -4,11 +4,11 @@
     PhysicalScoreboardClientToServerEvents,
     PhysicalScoreboardServerToClientEvents,
     PhysicalScoreboardSnapshot
-  } from "$lib/mathex/physical.schemas";
+  } from "#lib/mathex/physical.schemas.js";
   import { Check, CircleMinus, Clock3, Radio, X } from "@lucide/svelte/icons";
   import { io, type Socket } from "socket.io-client";
   import { flip } from "svelte/animate";
-  import { msToMinutesAndSeconds } from "$lib/utils";
+  import { msToMinutesAndSeconds } from "#lib/utils.js";
 
   const motionDuration = $derived(
     typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200

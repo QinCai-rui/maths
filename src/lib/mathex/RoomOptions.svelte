@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Checkbox } from "$lib/components/ui/checkbox";
-  import { Label } from "$lib/components/ui/label";
-  import { Input } from "$lib/components/ui/input";
-  import { Button } from "$lib/components/ui/button";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+  import { Label } from "#lib/components/ui/label/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
   import { CHAT_DISCLAIMER, dismissChatDisclaimer, hasDismissedChatDisclaimer } from "./chat-disclaimer";
   import type { RoomSettings } from "./schemas";
-  import { msToMinutesAndSeconds } from "$lib/utils";
+  import { msToMinutesAndSeconds } from "#lib/utils.js";
 
   let {
     settings,

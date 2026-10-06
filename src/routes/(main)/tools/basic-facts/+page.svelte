@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button";
-  import { Progress } from "$lib/components/ui/progress";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Progress } from "#lib/components/ui/progress/index.js";
   import { RefreshCw, Timer, Zap, Maximize, Settings, X } from "@lucide/svelte/icons";
-  import { Checkbox } from "$lib/components/ui/checkbox";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
   import { onDestroy, onMount, tick } from "svelte";
 
   type Question = { text: string; answer: number; level: number; pointsMultiplier: number; label: string };

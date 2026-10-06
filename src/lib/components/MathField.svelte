@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import "mathlive/fonts.css";
-  import { expressionToLatex } from "$lib/mathex/expression";
+  import { expressionToLatex } from "#lib/mathex/expression.js";
 
   interface Props {
     value?: string;
