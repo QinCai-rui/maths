@@ -3,7 +3,8 @@
   "compilerOptions": {
     "sourceMap": true,
     "strict": true,
-    "module": "es2022"
+    "module": "es2022",
+    "types": ["bun", "$app/types"]
   },
   "include": ["src", "vite.config.ts"]
 }
