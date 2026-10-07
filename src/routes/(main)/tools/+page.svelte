@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Brain, Calculator, CircleDot, Gamepad2, Hash, Pencil, Radio, Zap } from "@lucide/svelte/icons";
+  import { Brain, Calculator, CircleDot, Gamepad2, Grid3x3, Hash, Pencil, Radio, Zap } from "@lucide/svelte/icons";
 
   const numberTools = [
     {
@@ -44,6 +44,22 @@
       action: "Find the factors",
       kind: "Divisibility",
       icon: CircleDot
+    },
+    {
+      name: "Make 24",
+      description: "Combine four numbers with +, -, ×, ÷ to make exactly 24.",
+      url: "/tools/make-24",
+      action: "Make 24",
+      kind: "Arithmetic puzzle",
+      icon: Calculator
+    },
+    {
+      name: "Crossmath",
+      description: "Fill the arithmetic crossword so every equation holds.",
+      url: "/tools/crossmath",
+      action: "Play Crossmath",
+      kind: "Arithmetic crossword",
+      icon: Grid3x3
     }
   ];
 
