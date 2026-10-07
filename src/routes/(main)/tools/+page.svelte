@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Brain, Calculator, CircleDot, Gamepad2, Hash, Pencil, Radio, Zap } from "@lucide/svelte/icons";
+  import { Brain, Calculator, CircleDot, Gamepad2, Grid3x3, Hash, Pencil, Radio, Zap } from "@lucide/svelte/icons";
 
   const numberTools = [
     {
@@ -44,6 +44,22 @@
       action: "Find the factors",
       kind: "Divisibility",
       icon: CircleDot
+    },
+    {
+      name: "Make 24",
+      description: "Combine four numbers with +, -, ×, ÷ to make exactly 24.",
+      url: "/tools/make-24",
+      action: "Make 24",
+      kind: "Arithmetic puzzle",
+      icon: Calculator
+    },
+    {
+      name: "Crossmath",
+      description: "Fill the arithmetic crossword so every equation holds.",
+      url: "/tools/crossmath",
+      action: "Play Crossmath",
+      kind: "Arithmetic crossword",
+      icon: Grid3x3
     }
   ];
 
@@ -80,10 +96,10 @@
     </p>
   </header>
 
-  <section class="site-section" id="number-facts" aria-labelledby="number-tools-heading">
+  <section class="site-section" id="explore" aria-labelledby="explore-heading">
     <div class="site-section-head">
-      <h2 id="number-tools-heading">Number facts</h2>
-      <span>Look up a whole number</span>
+      <h2 id="explore-heading">Explore</h2>
+      <span>Numbers worth poking at</span>
     </div>
     <div class="site-tool-grid">
       {#each numberTools as tool}
