@@ -53,6 +53,30 @@ describe("verifySolution", () => {
     wrong[0]![0] = 1;
     expect(verifySolution(puzzle, wrong)).toBe(false);
   });
+  test("rejects a grid that satisfies the equations but breaks the range", () => {
+    // Every line holds (0+3=3 etc.), but 0 is outside 1..2.
+    const sneaky: Puzzle = {
+      id: "sneaky",
+      difficulty: "easy",
+      size: 2,
+      maxNumber: 2,
+      rowOps: [["+"], ["+"]],
+      colOps: [["+", "+"]],
+      rowResults: [3, 3],
+      colResults: [3, 3],
+      givens: [],
+      solution: [
+        [1, 2],
+        [2, 1]
+      ]
+    };
+    expect(
+      verifySolution(sneaky, [
+        [0, 3],
+        [3, 0]
+      ])
+    ).toBe(false);
+  });
   test("rejects a grid that drops a given", () => {
     const dropped = puzzle.solution.map((row) => [...row]);
     dropped[1]![1] = 5;

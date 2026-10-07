@@ -21,6 +21,8 @@
     won: number;
     streak: number;
     maxStreak: number;
+    /** Local day string of the last completed daily, to detect skipped days. */
+    lastDay: string;
   }
 
   interface SprintResult {
@@ -43,7 +45,13 @@
   const PUZZLE_SECONDS = 90;
   const BASE_POINTS: Record<PuzzleEntry["difficulty"], number> = { easy: 100, medium: 200, hard: 300 };
 
-  const emptyStats = (): Stats => ({ played: 0, won: 0, streak: 0, maxStreak: 0 });
+  const emptyStats = (): Stats => ({ played: 0, won: 0, streak: 0, maxStreak: 0, lastDay: "" });
+
+  function yesterdayKey(date = new Date()): string {
+    const d = new Date(date);
+    d.setDate(d.getDate() - 1);
+    return todayKey(d);
+  }
 
   // Initialise to today's daily puzzle up front so the first paint already
   // shows the right cards. onMount then restores any saved progress on top.
@@ -53,6 +61,8 @@
   let entry = $state<PuzzleEntry>(pickDaily(PUZZLES, initialDay, "make24"));
   let text = $state("");
   let attempts = $state<string[]>([]);
+  /** The winning expression, kept so the result dialog survives a reload. */
+  let solution = $state("");
   let status = $state<Status>("playing");
   let stats = $state<Stats>(emptyStats());
   let best = $state(0);
@@ -127,7 +137,8 @@
         played: parsed.played || 0,
         won: parsed.won || 0,
         streak: parsed.streak || 0,
-        maxStreak: parsed.maxStreak || 0
+        maxStreak: parsed.maxStreak || 0,
+        lastDay: parsed.lastDay || ""
       };
     } catch {
       return emptyStats();
@@ -161,7 +172,7 @@
   function persistDaily() {
     if (mode !== "daily") return;
     try {
-      localStorage.setItem(dailyKey(day), JSON.stringify({ cards, attempts, status }));
+      localStorage.setItem(dailyKey(day), JSON.stringify({ cards, attempts, solution, status }));
     } catch {
       // Ignore storage failures; the round still works in memory.
     }
@@ -206,15 +217,22 @@
     day = todayKey();
     entry = pickDaily(PUZZLES, day, "make24");
     text = "";
+    solution = "";
     showConfetti = false;
     shaking = false;
     if (restore) {
       try {
         const raw = localStorage.getItem(dailyKey(day));
         if (raw) {
-          const parsed = JSON.parse(raw) as { cards?: number[]; attempts?: string[]; status?: Status };
+          const parsed = JSON.parse(raw) as {
+            cards?: number[];
+            attempts?: string[];
+            solution?: string;
+            status?: Status;
+          };
           if (parsed.cards && sameCards(parsed.cards, entry.cards)) {
             attempts = (parsed.attempts || []).filter((a) => typeof a === "string").slice(0, 50);
+            solution = typeof parsed.solution === "string" ? parsed.solution.slice(0, 100) : "";
             status = parsed.status === "won" || parsed.status === "lost" ? parsed.status : "playing";
             showResult = false;
             return;
@@ -225,6 +243,7 @@
       }
     }
     attempts = [];
+    solution = "";
     status = "playing";
     showResult = false;
   }
@@ -243,7 +262,7 @@
     const picked = [...draw("easy", 1), ...draw("medium", 2), ...draw("hard", 2)];
     for (let i = picked.length - 1; i > 0; i--) {
       const j = Math.floor(random() * (i + 1));
-      [picked[i], picked[j]] = [picked[i]!, picked[j]!];
+      [picked[i], picked[j]] = [picked[j]!, picked[i]!];
     }
     return picked;
   }
@@ -283,10 +302,13 @@
     stats.played++;
     if (won) {
       stats.won++;
-      stats.streak++;
+      // A streak only continues from yesterday; a skipped day restarts it.
+      stats.streak = stats.lastDay === yesterdayKey() ? stats.streak + 1 : 1;
+      stats.lastDay = day;
       stats.maxStreak = Math.max(stats.maxStreak, stats.streak);
     } else {
       stats.streak = 0;
+      stats.lastDay = day;
     }
     persistStats();
   }
@@ -320,6 +342,7 @@
     }
     status = "won";
     if (mode === "daily") {
+      solution = candidate;
       recordDailyResult(true);
       persistDaily();
       celebrate();
@@ -815,7 +838,7 @@
         </button>
       </div>
       {#if status === "won" && mode === "daily"}
-        <p>Your solution: <code>{text.trim() || attempts[attempts.length - 1]}</code></p>
+        <p>Your solution: <code>{solution || text.trim() || attempts[attempts.length - 1]}</code></p>
       {:else if status === "won" && mode === "sprint" && lastResult}
         <p>Solved for <strong>{lastResult.points}</strong> points ({lastResult.detail}).</p>
       {/if}

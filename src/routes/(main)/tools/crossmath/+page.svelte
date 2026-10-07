@@ -25,9 +25,24 @@
     streak: number;
     maxStreak: number;
     mistakesTotal: number;
+    /** Local day string of the last completed daily, to detect skipped days. */
+    lastDay: string;
   }
 
-  const emptyStats = (): Stats => ({ played: 0, won: 0, streak: 0, maxStreak: 0, mistakesTotal: 0 });
+  const emptyStats = (): Stats => ({
+    played: 0,
+    won: 0,
+    streak: 0,
+    maxStreak: 0,
+    mistakesTotal: 0,
+    lastDay: ""
+  });
+
+  function yesterdayKey(date = new Date()): string {
+    const d = new Date(date);
+    d.setDate(d.getDate() - 1);
+    return todayKey(d);
+  }
 
   function cellKey(r: number, c: number): string {
     return `${r},${c}`;
@@ -228,7 +243,8 @@
         won: parsed.won || 0,
         streak: parsed.streak || 0,
         maxStreak: parsed.maxStreak || 0,
-        mistakesTotal: parsed.mistakesTotal || 0
+        mistakesTotal: parsed.mistakesTotal || 0,
+        lastDay: parsed.lastDay || ""
       };
     } catch {
       return emptyStats();
@@ -414,7 +430,9 @@
     finished = true;
     stats.played++;
     stats.won++;
-    stats.streak++;
+    // A streak only continues from yesterday; a skipped day restarts it.
+    stats.streak = stats.lastDay === yesterdayKey() ? stats.streak + 1 : 1;
+    stats.lastDay = day;
     stats.maxStreak = Math.max(stats.maxStreak, stats.streak);
     stats.mistakesTotal += mistakes;
     persistStats();
@@ -425,6 +443,7 @@
     finished = true;
     stats.played++;
     stats.streak = 0;
+    stats.lastDay = day;
     stats.mistakesTotal += mistakes;
     persistStats();
   }
@@ -598,9 +617,11 @@
       const pick = (exact.length > 0 ? exact : candidates)[0]!;
       selectedTile = pick.id;
       const target = selected && blankKeys.includes(selected) ? selected : firstEmpty();
-      // Single-digit tiles (or a complete exact match) drop straight in;
-      // otherwise the tile stays selected so more digits can narrow it.
-      if (String(pick.value).length === 1 || exact.length > 0) {
+      // Drop the tile straight in only when nothing longer shares the typed
+      // prefix; otherwise keep it selected so the next digit can narrow it
+      // (e.g. typing "1" must still reach tile "12" while tile "1" remains).
+      const onlyExact = candidates.every((t) => String(t.value) === tileFilter);
+      if (onlyExact) {
         if (target) {
           placeTile(pick.id, target);
           focusCell(nextBlank(target));
@@ -702,24 +723,32 @@
   }
 
   function onCellKeydown(k: string, event: KeyboardEvent) {
+    // These keys are handled here; stop them bubbling to the window handler
+    // so a focused cell does not process the same keypress twice.
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      event.stopPropagation();
       moveSelection(k, -1, 0);
     } else if (event.key === "ArrowDown") {
       event.preventDefault();
+      event.stopPropagation();
       moveSelection(k, 1, 0);
     } else if (event.key === "ArrowLeft") {
       event.preventDefault();
+      event.stopPropagation();
       moveSelection(k, 0, -1);
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
+      event.stopPropagation();
       moveSelection(k, 0, 1);
     } else if (event.key === "Backspace" || event.key === "Enter") {
       event.preventDefault();
+      event.stopPropagation();
       selected = k;
       press(event.key);
     } else if (/^\d$/.test(event.key)) {
       event.preventDefault();
+      event.stopPropagation();
       selected = k;
       press(event.key);
     } else if (event.key === "Tab") {

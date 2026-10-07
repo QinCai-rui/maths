@@ -179,14 +179,31 @@ export function describeLeaves(found: number[], expected: number[]): string | nu
 
 export type ValidationResult = { ok: true; value: Rational } | { ok: false; reason: string; leaves?: number[] };
 
+/** Player input is a short text-field expression; anything longer cannot be
+ * legitimate play and would only deepen the recursive parse. */
+const MAX_INPUT_LENGTH = 100;
+
+function failure(err: unknown): string {
+  if (err instanceof RangeError) return "Expression is too complex";
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function validate(text: string, cards: number[]): ValidationResult {
+  if (text.length > MAX_INPUT_LENGTH) {
+    return { ok: false, reason: "Expression is too long" };
+  }
   let ast: Ast;
   try {
     ast = parse(text);
   } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+    return { ok: false, reason: failure(err) };
   }
-  const leaves = collectLeaves(ast);
+  let leaves: number[];
+  try {
+    leaves = collectLeaves(ast);
+  } catch (err) {
+    return { ok: false, reason: failure(err) };
+  }
   const mismatch = describeLeaves(leaves, cards);
   if (mismatch !== null) return { ok: false, reason: mismatch, leaves };
   let value: Rational;

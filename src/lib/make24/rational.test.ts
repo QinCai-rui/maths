@@ -22,6 +22,12 @@ describe("rational", () => {
     expect(() => div(fromInt(1), { n: 0, d: 5 })).toThrow(DivisionByZero);
   });
 
+  test("rejects values past safe-integer precision", () => {
+    expect(() => fromInt(Number.MAX_SAFE_INTEGER + 1)).toThrow(/safe integer/);
+    expect(() => mul(fromInt(Number.MAX_SAFE_INTEGER), fromInt(2))).toThrow(/precision/);
+    expect(() => add(fromInt(Number.MAX_SAFE_INTEGER), fromInt(2))).toThrow(/precision/);
+  });
+
   test("helpers", () => {
     expect(isInteger(fromInt(5))).toBe(true);
     expect(isInteger(div(fromInt(1), fromInt(2)))).toBe(false);

@@ -97,6 +97,11 @@ export function colNumbers(solution: number[][], c: number): number[] {
 export function verifySolution(puzzle: Puzzle, grid: number[][]): boolean {
   const n = puzzle.size;
   if (grid.length !== n || grid.some((row) => row.length !== n)) return false;
+  for (const row of grid) {
+    for (const v of row) {
+      if (!Number.isInteger(v) || v < 1 || v > puzzle.maxNumber) return false;
+    }
+  }
   for (const { r, c, value } of puzzle.givens) {
     if (grid[r]![c]! !== value) return false;
   }
@@ -150,7 +155,12 @@ export function countSolutions(puzzle: Puzzle, cap = 2, budget = 300_000): numbe
   const blanks = blankCells(puzzle);
   if (blanks.length === 0) return verifySolution(puzzle, puzzle.solution) ? 1 : 0;
   let nodes = 0;
-  const overBudget = () => nodes++ > budget;
+  let exhausted = false;
+  const overBudget = () => {
+    nodes++;
+    if (nodes > budget) exhausted = true;
+    return exhausted;
+  };
 
   // Per-row candidates: every way to fill this row's blanks so the row hits.
   const rowCandidates: number[][][][] = [];
@@ -183,7 +193,6 @@ export function countSolutions(puzzle: Puzzle, cap = 2, budget = 300_000): numbe
 
   // Combine rows; columns are verified once the grid is complete.
   let found = 0;
-  let exhausted = false;
   const grid: number[][] = Array.from({ length: n }, () => Array<number>(n).fill(0));
   const combine = (r: number): boolean => {
     if (overBudget()) {

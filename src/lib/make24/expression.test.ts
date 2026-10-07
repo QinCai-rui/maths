@@ -55,4 +55,13 @@ describe("expression evaluate/validate", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain("24");
   });
+
+  test("oversized input fails cleanly instead of overflowing the stack", () => {
+    const deep = "(".repeat(5000) + "1" + ")".repeat(5000);
+    const r = validate(deep, [1, 1, 1, 1]);
+    expect(r.ok).toBe(false);
+    const long = "1+".repeat(5000) + "1";
+    const r2 = validate(long, [1, 1, 1, 1]);
+    expect(r2.ok).toBe(false);
+  });
 });

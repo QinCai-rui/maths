@@ -26,6 +26,9 @@ function normalize(n: number, d: number): Rational {
   if (!Number.isInteger(n) || !Number.isInteger(d)) {
     throw new Error(`Rational requires integers, got ${n}/${d}`);
   }
+  if (!Number.isSafeInteger(n) || !Number.isSafeInteger(d)) {
+    throw new Error(`Rational overflow: ${n}/${d} exceeds safe-integer precision`);
+  }
   if (d < 0) {
     n = -n;
     d = -d;
@@ -35,7 +38,7 @@ function normalize(n: number, d: number): Rational {
 }
 
 export function fromInt(n: number): Rational {
-  if (!Number.isInteger(n)) throw new Error(`fromInt requires an integer, got ${n}`);
+  if (!Number.isSafeInteger(n)) throw new Error(`fromInt requires a safe integer, got ${n}`);
   return { n, d: 1 };
 }
 
