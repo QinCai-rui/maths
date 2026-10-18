@@ -24,11 +24,18 @@ function decodeEntities(text: string): string {
 }
 
 export function plainQuestionText(html: string): string {
-  const withoutTags = html
+  // Pull math out first so a "<" inside it is never mistaken for markup.
+  const math: string[] = [];
+  const withMathHeld = html.replace(/\$\$([\s\S]+?)\$\$/g, (_, value: string) => {
+    math.push(parseStoredMath(value).latex.trim());
+    return ` \uE000${math.length - 1}\uE001 `;
+  });
+  const withoutTags = withMathHeld
     .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, " ")
     .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]*>/g, "");
-  return decodeEntities(withoutTags.replace(/\$\$([\s\S]+?)\$\$/g, (_, value: string) => ` ${parseStoredMath(value).latex.trim()} `))
+    .replace(/<\/?[a-z][^>]*>/gi, "");
+  return decodeEntities(withoutTags)
+    .replace(/\uE000(\d+)\uE001/g, (_, index: string) => math[Number(index)])
     .replace(/\s+/g, " ")
     .trim();
 }

@@ -22,6 +22,11 @@ describe("plainQuestionText", () => {
     expect(plainQuestionText("$$[scale=1.5]x+1$$")).toBe("x+1");
   });
 
+  test("keeps comparison operators and math containing <", () => {
+    expect(plainQuestionText("<p>Find x where x < 2 and y > 1</p>")).toBe("Find x where x < 2 and y > 1");
+    expect(plainQuestionText("<p>Show $$a<b>c$$ holds</p>")).toBe("Show a<b>c holds");
+  });
+
   test("decodes entities once, including numeric spaces", () => {
     expect(plainQuestionText("<p>&#160;</p>")).toBe("");
     expect(plainQuestionText("a &amp;lt; b &quot;c&quot;")).toBe('a &lt; b "c"');

@@ -939,12 +939,19 @@
   );
   let printIssues = $derived(pdfOptionIssues(pdfOptions));
   let issueTotal = $derived(allIssues.length + (printIssues.length ? 1 : 0));
-  let unloadedCount = $state(0);
+  let unloadedCount = $derived(
+    sessionToken ? questions.filter(({ id }) => !loadedQuestionIds[id]).length : 0
+  );
+  let checksLoading = $state(false);
 
   async function openChecks() {
-    const complete = await loadAllQuestions();
-    unloadedCount = complete ? 0 : questions.filter(({ id }) => !!sessionToken && !loadedQuestionIds[id]).length;
     checksOpen = true;
+    checksLoading = true;
+    try {
+      await loadAllQuestions();
+    } finally {
+      checksLoading = false;
+    }
   }
 
   function jumpToQuestion(questionId: string) {
@@ -1608,7 +1615,9 @@
       </div>
       {#if unloadedCount > 0}
         <p class="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-          {unloadedCount} questions could not be loaded, so they were not checked.
+          {checksLoading
+            ? `Loading ${unloadedCount} more questions...`
+            : `${unloadedCount} questions could not be loaded, so they were not checked.`}
         </p>
       {/if}
       {#if printIssues.length}
