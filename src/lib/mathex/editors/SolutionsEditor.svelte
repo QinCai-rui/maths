@@ -11,6 +11,7 @@
   const math = create(all);
 
   type SolutionType = "number" | "text" | "expression";
+  const typeLabels: Record<SolutionType, string> = { number: "Number", text: "Text", expression: "Expression" };
 
   interface SolutionItem {
     type: SolutionType;
@@ -113,7 +114,7 @@
             {disabled}
           >
             <Select.Trigger class="w-[110px] shrink-0 h-9 text-xs">
-              {solutions[i].type}
+              {typeLabels[solutions[i].type]}
             </Select.Trigger>
             <Select.Content>
               <Select.Item value="number">Number</Select.Item>
@@ -166,6 +167,7 @@
             size="sm"
             class="shrink-0 h-9 w-9 p-0"
             onclick={() => removeSolution(i)}
+            aria-label="Remove solution {i + 1}"
             {disabled}
           >
             <Minus class="h-4 w-4" />
