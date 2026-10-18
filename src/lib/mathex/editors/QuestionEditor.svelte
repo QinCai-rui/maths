@@ -43,9 +43,7 @@
 
 <div class="grid w-full gap-1.5">
   <Label>Question text</Label>
-  {#key disabled}
-    <Quill bind:html={question.contents} {disabled} />
-  {/key}
+  <Quill bind:html={question.contents} {disabled} />
 </div>
 <div class="mt-4">
   <SolutionsEditor bind:solutions={question.solutions} grouped={question.requireAllSolutionGroups} {disabled} />
@@ -72,10 +70,12 @@
     </div>
   {/if}
 </div>
-<div class="flex items-center space-x-2 mt-3">
-  <Checkbox id="allowEquiv" bind:checked={question.allowEquivalent} {disabled} />
-  <Label for="allowEquiv" class="text-sm font-medium leading-none cursor-pointer">Allow equivalent expressions</Label>
-</div>
+{#if question.solutions.some((solution) => solution.type === "expression")}
+  <div class="flex items-center space-x-2 mt-3">
+    <Checkbox id="allowEquiv" bind:checked={question.allowEquivalent} {disabled} />
+    <Label for="allowEquiv" class="text-sm font-medium leading-none cursor-pointer">Allow equivalent expressions</Label>
+  </div>
+{/if}
 <div class="flex items-center space-x-2 mt-3">
   <Checkbox
     id="unskippable"
@@ -86,7 +86,7 @@
   <Label for="unskippable" class="text-sm font-medium leading-none cursor-pointer">Unskippable question</Label>
 </div>
 <div class="mt-4 grid gap-1.5">
-  <Label for="answer-comment">Marker comments</Label>
+  <Label for="answer-comment">Notes for the answer key</Label>
   <Textarea
     id="answer-comment"
     bind:value={question.answerComment}

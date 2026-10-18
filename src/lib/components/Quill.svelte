@@ -231,8 +231,10 @@
   });
 
   $effect(() => {
-    if (!quill || !quillReady) return;
-    quill.enable(!disabled);
+    const ready = quillReady;
+    const isDisabled = disabled;
+    if (!quill || !ready) return;
+    quill.enable(!isDisabled);
     // Quill can retain its disabled DOM state when it was mounted read-only.
     // Keep the underlying editable root in sync with the live lock transition.
     quill.root.contentEditable = disabled ? "false" : "true";

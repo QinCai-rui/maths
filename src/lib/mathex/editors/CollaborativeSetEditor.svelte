@@ -6,7 +6,7 @@
   import { Header } from "#lib/components/ui/header/index.js";
   import { copyText } from "#lib/utils.js";
   import { QuestionSet } from "#lib/mathex/schemas.js";
-  import { stripTags } from "#lib/mathex/content.js";
+  import { pdfOptionIssues, plainQuestionText, questionIssues } from "#lib/mathex/set-issues.js";
   import { downloadAnswerSet, downloadQuestionSet, previewAnswerSet, previewQuestionSet } from "#lib/mathex/print.js";
   import type {
     CollaborativeQuestionValue,
@@ -23,6 +23,7 @@
     ArrowLeft,
     ArrowUp,
     Check,
+    CircleAlert,
     ChevronDown,
     CircleUserRound,
     Copy,
@@ -105,6 +106,7 @@
   let creating = $state(false);
   let detailsOpen = $state(false);
   let exportOpen = $state(false);
+  let checksOpen = $state(false);
   let mobileOutlineOpen = $state(false);
   let lastServerSettings = "";
   const lastQuestionSent = new Map<string, string>();
@@ -289,7 +291,12 @@
     }
 
     if (sessionToken) liveHistoryBaseline = editorSnapshot();
-    else localBaseline = editorSnapshot();
+    else {
+      localBaseline = editorSnapshot();
+      localSaved = false;
+      if (localTimer) clearTimeout(localTimer);
+      localTimer = setTimeout(saveLocalDraft, 500);
+    }
 
     queueMicrotask(() => (applyingLocalHistory = false));
   }
@@ -911,11 +918,87 @@
 
   function questionPreview(question: CollaborativeQuestionValue) {
     if (sessionToken && !loadedQuestionIds[question.id]) return "Click to load question";
-    return stripTags(question.contents).trim().slice(0, 44) || "Untitled question";
+    return plainQuestionText(question.contents).slice(0, 44) || "Untitled question";
+  }
+
+  // Questions not yet loaded from the server are skipped, so the numbers are partial until the set is loaded.
+  let issuesById = $derived.by(() => {
+    const result = new Map<string, { errors: string[]; warnings: string[]; all: string[] }>();
+    for (const question of questions) {
+      if (sessionToken && !loadedQuestionIds[question.id]) continue;
+      const { errors, warnings } = questionIssues(question);
+      if (errors.length || warnings.length) result.set(question.id, { errors, warnings, all: [...errors, ...warnings] });
+    }
+    return result;
+  });
+  let allIssues = $derived(
+    questions.flatMap((question, index) => {
+      const found = issuesById.get(question.id);
+      return found ? [{ id: question.id, number: index + 1, ...found }] : [];
+    })
+  );
+  let printIssues = $derived(pdfOptionIssues(pdfOptions));
+  let issueTotal = $derived(allIssues.length + (printIssues.length ? 1 : 0));
+  let unloadedCount = $derived(
+    sessionToken ? questions.filter(({ id }) => !loadedQuestionIds[id]).length : 0
+  );
+  let checksLoading = $state(false);
+
+  async function openChecks() {
+    checksOpen = true;
+    checksLoading = true;
+    try {
+      await loadAllQuestions();
+    } finally {
+      checksLoading = false;
+    }
+  }
+
+  function jumpToQuestion(questionId: string) {
+    checksOpen = false;
+    selectQuestion(questionId);
+  }
+
+  function anyModalOpen() {
+    return checksOpen || goLiveOpen || !!pendingDeleteQuestion;
+  }
+
+  function onShortcut(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.isComposing || anyModalOpen()) return;
+    const mod = event.ctrlKey || event.metaKey;
+    const path = event.composedPath();
+    const inControl = path.some(
+      (node) =>
+        node instanceof HTMLElement &&
+        (node.isContentEditable ||
+          /^(INPUT|TEXTAREA|SELECT|MATH-FIELD)$/.test(node.tagName) ||
+          node.getAttribute("role") === "combobox" ||
+          node.getAttribute("role") === "listbox" ||
+          node.hasAttribute("data-select-content") ||
+          node.dataset.slot === "select-content" ||
+          node.dataset.slot === "select-trigger")
+    );
+    if (inControl) return;
+    const key = event.key.toLowerCase();
+    const historyAvailable = !sessionToken || connected;
+    if (mod && !event.altKey && (key === "z" || key === "y")) {
+      event.preventDefault();
+      if (!historyAvailable) return;
+      if (key === "y" || event.shiftKey) {
+        if (canRedo) redo();
+      } else if (canUndo) undo();
+    } else if (event.altKey && !mod && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      const next = questions[currentQuestionIndex + (event.key === "ArrowDown" ? 1 : -1)];
+      if (next) {
+        event.preventDefault();
+        selectQuestion(next.id);
+      }
+    }
   }
 
   let deleteDialog = $state<HTMLDivElement>();
   let goLiveDialog = $state<HTMLDivElement>();
+  let checksDialog = $state<HTMLDivElement>();
 
   function trapFocus(event: KeyboardEvent, dialog: HTMLDivElement | undefined) {
     if (event.key !== "Tab" || !dialog) return;
@@ -946,6 +1029,12 @@
     return () => previous?.focus();
   });
   $effect(() => {
+    if (!checksOpen) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    tick().then(() => checksDialog?.focus());
+    return () => previous?.focus();
+  });
+  $effect(() => {
     if (!goLiveOpen) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     tick().then(() => goLiveDialog?.focus());
@@ -963,9 +1052,14 @@
 </script>
 
 <svelte:window
+  onbeforeunload={(event) => {
+    if (!sessionToken && !localSaved) event.preventDefault();
+  }}
   onkeydown={(event) => {
+    onShortcut(event);
     if (event.key !== "Escape") return;
-    if (pendingDeleteQuestion) pendingDeleteQuestion = null;
+    if (checksOpen) checksOpen = false;
+    else if (pendingDeleteQuestion) pendingDeleteQuestion = null;
     else if (goLiveOpen) goLiveOpen = false;
     else if (exportOpen) exportOpen = false;
   }}
@@ -1062,6 +1156,13 @@
                 {collaborator.displayName.slice(0, 1).toUpperCase()}
               </div>
             {/each}
+            {#if collaborators.length > 5}
+              <div
+                class="flex size-8 items-center justify-center rounded-full border-2 border-background bg-muted text-xs font-bold"
+              >
+                +{collaborators.length - 5}
+              </div>
+            {/if}
           </div>
           <Button class="gap-2" size="sm" onclick={copySessionLink}
             ><Link2 class="size-4" /><span class="hidden sm:inline">Share</span></Button
@@ -1136,6 +1237,11 @@
         >
           <Redo2 /> Redo
         </button>
+        <span class="mx-1 h-5 border-l"></span>
+        <button class="toolbar-button" onclick={openChecks} title="List problems and likely mistakes in this set">
+          <CircleAlert /> Check set{#if issueTotal}
+            <span class="rounded-full bg-destructive px-1.5 text-[0.65rem] text-white">{issueTotal}</span>{/if}
+        </button>
         <span class="ml-auto text-xs text-muted-foreground">{questions.length}/100 questions</span>
       </div>
     </header>
@@ -1173,6 +1279,17 @@
                 >
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-xs font-medium">{questionPreview(question)}</span>
+                  {#if issuesById.get(question.id)}
+                    {@const found = issuesById.get(question.id)!}
+                    <span
+                      class="mt-1 flex items-center gap-1 truncate text-[0.65rem] {found.errors.length
+                        ? 'text-destructive'
+                        : 'text-amber-600 dark:text-amber-400'}"
+                      ><CircleAlert class="size-3" />{found.all[0]}{found.all.length > 1
+                        ? ` +${found.all.length - 1}`
+                        : ""}</span
+                    >
+                  {/if}
                   {#if lock}<span class="mt-1 flex items-center gap-1 truncate text-[0.65rem] text-primary"
                       ><LockKeyhole class="size-3" />
                       {lock.connectionId === socket?.id ? "You are editing" : `${lock.displayName} is editing`}</span
@@ -1471,6 +1588,71 @@
 
         <Button variant="destructive" onclick={confirmDeleteQuestion}>Delete question</Button>
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if checksOpen}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+    role="presentation"
+    onclick={(event) => event.target === event.currentTarget && (checksOpen = false)}
+  >
+    <div
+      class="max-h-[80dvh] w-full max-w-lg overflow-y-auto border bg-background p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Set check"
+      tabindex="-1"
+      bind:this={checksDialog}
+      onkeydown={(event) => trapFocus(event, checksDialog)}
+    >
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="text-xl font-semibold">Set check</h2>
+        <button class="rounded-lg p-2 hover:bg-accent" onclick={() => (checksOpen = false)} aria-label="Close"
+          ><X class="size-4" /></button
+        >
+      </div>
+      {#if unloadedCount > 0}
+        <p class="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          {checksLoading
+            ? `Loading ${unloadedCount} more questions...`
+            : `${unloadedCount} questions could not be loaded, so they were not checked.`}
+        </p>
+      {/if}
+      {#if printIssues.length}
+        <div class="mb-3 rounded-lg border border-destructive/40 p-3">
+          <p class="text-sm font-semibold">Print settings</p>
+          <p class="mt-0.5 text-xs text-muted-foreground">
+            {printIssues.join(" · ")} Open "Set details" to fix this. PDF export will fail until you do.
+          </p>
+        </div>
+      {/if}
+      {#if allIssues.length === 0 && printIssues.length === 0 && unloadedCount === 0}
+        <p class="text-sm text-muted-foreground">No problems found in {questions.length} questions.</p>
+      {:else if allIssues.length}
+        <p class="mb-3 text-sm text-muted-foreground">
+          {allIssues.length} of {questions.length} questions need attention. Red items stop export; amber ones are likely
+          mistakes.
+        </p>
+        <ul class="space-y-2">
+          {#each allIssues as entry}
+            <li>
+              <button
+                class="w-full rounded-lg border p-3 text-left hover:bg-accent"
+                onclick={() => jumpToQuestion(entry.id)}
+              >
+                <span class="text-sm font-semibold">Question {entry.number}</span>
+                <span class="mt-0.5 block text-xs">
+                  {#each entry.errors as message}<span class="mr-2 text-destructive">{message}</span>{/each}
+                  {#each entry.warnings as message}<span class="mr-2 text-amber-600 dark:text-amber-400">{message}</span
+                    >{/each}
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
   </div>
 {/if}
