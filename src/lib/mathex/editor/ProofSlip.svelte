@@ -35,10 +35,14 @@
     const measure = () => {
       if (active && content) overflow = content.scrollHeight > content.clientHeight + 1;
     };
-    requestAnimationFrame(measure);
+    const images = content ? Array.from(content.querySelectorAll("img")) : [];
+    for (const image of images) image.addEventListener("load", measure);
+    const animationFrame = requestAnimationFrame(measure);
     void document.fonts.ready.then(measure);
     return () => {
       active = false;
+      cancelAnimationFrame(animationFrame);
+      for (const image of images) image.removeEventListener("load", measure);
     };
   });
 </script>
