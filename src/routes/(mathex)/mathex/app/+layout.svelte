@@ -7,7 +7,6 @@
   import ThemeToggle from "#lib/components/ui/theme-toggle/theme-toggle.svelte";
   import { ModeWatcher } from "mode-watcher";
   import "../../../../app.css";
-  import "quill/dist/quill.snow.css";
   interface Props {
     children?: import("svelte").Snippet;
   }
@@ -16,6 +15,8 @@
 
   const siteShellRoutes = ["/mathex/app", "/mathex/app/create", "/mathex/app/play", "/mathex/app/live"];
   const usesSiteShell = $derived(siteShellRoutes.includes(page.url.pathname));
+  // The set editor has its own theme control in its masthead.
+  const hidesThemeToggle = $derived(/^\/mathex\/app\/create\/editor(\/(?!share\/)[^/]+)?\/?$/.test(page.url.pathname));
 </script>
 
 <svelte:head>
@@ -34,7 +35,9 @@
   <div class="mathex-app min-h-screen w-full bg-background text-foreground">
     {@render children?.()}
   </div>
-  <div class="fixed bottom-4 right-4 z-50">
-    <ThemeToggle />
-  </div>
+  {#if !hidesThemeToggle}
+    <div class="fixed bottom-4 right-4 z-50">
+      <ThemeToggle />
+    </div>
+  {/if}
 {/if}

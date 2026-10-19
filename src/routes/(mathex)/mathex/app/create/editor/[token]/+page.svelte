@@ -1,6 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import CollaborativeSetEditor from "#lib/mathex/editors/CollaborativeSetEditor.svelte";
+  import SetEditor from "#lib/mathex/editor/SetEditor.svelte";
 </script>
 
-<CollaborativeSetEditor sessionToken={page.params.token} />
+<svelte:head><title>Live set editor · Mathex</title></svelte:head>
+
+{#key page.params.token}
+  <SetEditor sessionToken={page.params.token} />
+{/key}

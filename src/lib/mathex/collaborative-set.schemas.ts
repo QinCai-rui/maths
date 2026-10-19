@@ -118,6 +118,8 @@ export type CollaborativeSetJoinState = z.infer<typeof CollaborativeSetJoinState
 export type CollaborativeOperationResult = { ok: true } | { ok: false; error: string };
 export type CollaborativeQuestionResult =
   { ok: true; question: CollaborativeQuestionValue } | { ok: false; error: string };
+export type CollaborativeQuestionsResult =
+  { ok: true; questions: CollaborativeQuestionValue[] } | { ok: false; error: string };
 export type CollaborativeCreateResult =
   { ok: true; sessionToken: string; hostToken: string; state: CollaborativeSetSnapshot } | { ok: false; error: string };
 export type CollaborativeJoinResult = { ok: true; state: CollaborativeSetJoinState } | { ok: false; error: string };
@@ -127,6 +129,8 @@ export interface CollaborativeSetClientToServerEvents {
   createSession: (input: unknown, callback: (result: CollaborativeCreateResult) => void) => void;
   joinSession: (input: unknown, callback: (result: CollaborativeJoinResult) => void) => void;
   getQuestion: (input: unknown, callback: (result: CollaborativeQuestionResult) => void) => void;
+  /** Loads every question in one round trip, for exports and structural edits. */
+  getQuestions: (callback: (result: CollaborativeQuestionsResult) => void) => void;
   acquireLock: (input: unknown, callback?: OperationAck) => void;
   refreshLock: (input: unknown, callback?: OperationAck) => void;
   releaseLock: (input: unknown, callback?: OperationAck) => void;
