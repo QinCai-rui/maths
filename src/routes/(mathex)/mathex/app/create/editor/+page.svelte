@@ -1,5 +1,7 @@
 <script lang="ts">
-  import CollaborativeSetEditor from "#lib/mathex/editors/CollaborativeSetEditor.svelte";
+  import SetEditor from "#lib/mathex/editor/SetEditor.svelte";
 </script>
 
-<CollaborativeSetEditor />
+<svelte:head><title>Set editor · Mathex</title></svelte:head>
+
+<SetEditor />

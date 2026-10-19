@@ -14,15 +14,30 @@ export interface StoredCollaborativeSet {
   set: CollaborativeSetSnapshot;
 }
 
+/**
+ * Durable copy of live collaborative sets.
+ *
+ * The live copy is in memory; this store only exists so sessions survive a restart. It is
+ * tuned for small boards writing to SD cards: edits are coalesced per session, written in a
+ * single transaction. Callers queue saves only for changed document content, never presence
+ * or lock heartbeats. A session that is edited continuously is still written at least every
+ * `maxDelayMs`, so a crash loses at most that much work.
+ */
 export class CollaborativeSetStore {
   private database: Database;
   private pending = new Map<string, StoredCollaborativeSet>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private firstPendingAt = 0;
   private flushDelayMs: number;
+  private maxDelayMs: number;
 
   constructor(path = process.env.MATHEX_DB_PATH || "data/mathex.sqlite") {
     mkdirSync(dirname(path), { recursive: true });
     this.database = new Database(path, { create: true });
+    // WAL appends instead of rewriting pages through a rollback journal, and NORMAL sync
+    // skips the per-commit fsync of the WAL. Both cut SD card writes substantially.
+    this.database.run("PRAGMA journal_mode = WAL");
+    this.database.run("PRAGMA synchronous = NORMAL");
     this.database.run(`
       CREATE TABLE IF NOT EXISTS mathex_collaborative_sets (
         session_token TEXT PRIMARY KEY,
@@ -32,6 +47,10 @@ export class CollaborativeSetStore {
       )
     `);
     this.flushDelayMs = envInteger("MATHEX_COLLAB_PERSIST_DELAY_MS", 30_000, 1_000, 300_000);
+    this.maxDelayMs = Math.max(
+      this.flushDelayMs,
+      envInteger("MATHEX_COLLAB_PERSIST_MAX_DELAY_MS", 120_000, 1_000, 900_000)
+    );
   }
 
   load(): Map<string, StoredCollaborativeSet> {
@@ -58,9 +77,13 @@ export class CollaborativeSetStore {
   }
 
   save(session: StoredCollaborativeSet): void {
+    const now = Date.now();
+    if (this.pending.size === 0) this.firstPendingAt = now;
     this.pending.set(session.set.sessionToken, session);
     if (this.flushTimer) clearTimeout(this.flushTimer);
-    this.flushTimer = setTimeout(() => this.flush(), this.flushDelayMs);
+    // Debounce, but never push the write past maxDelayMs from the first unsaved edit.
+    const delay = Math.max(0, Math.min(this.flushDelayMs, this.firstPendingAt + this.maxDelayMs - now));
+    this.flushTimer = setTimeout(() => this.flush(), delay);
     this.flushTimer.unref?.();
   }
 
@@ -72,7 +95,11 @@ export class CollaborativeSetStore {
   flush(): void {
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.flushTimer = null;
-    for (const session of this.pending.values()) this.write(session);
+    const sessions = [...this.pending.values()];
+    if (sessions.length === 0) return;
+    this.database.transaction(() => {
+      for (const session of sessions) this.write(session);
+    })();
     this.pending.clear();
   }
 

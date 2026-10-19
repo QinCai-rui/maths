@@ -65,8 +65,12 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
   const namespace: CollaborationNamespace = io.of(NAMESPACE);
 
   const roomName = (token: string) => `set:${token}`;
-  const reject = (ack: Ack, error: string): void => ack?.({ ok: false, error });
-  const accept = (ack: Ack): void => ack?.({ ok: true });
+  const reject = (ack: Ack, error: string): void => {
+    if (typeof ack === "function") ack({ ok: false, error });
+  };
+  const accept = (ack: Ack): void => {
+    if (typeof ack === "function") ack({ ok: true });
+  };
   const questionResult = (question: CollaborativeQuestionValue | undefined): CollaborativeQuestionResult =>
     question ? { ok: true, question } : { ok: false, error: "Question not found" };
   const errorFor = (error: { issues: { message: string }[] }, fallback: string) => error.issues[0]?.message || fallback;
@@ -182,6 +186,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
 
   namespace.on("connection", (socket) => {
     socket.on("createSession", (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const parsed = CreateCollaborativeSetInput.safeParse(rawInput);
       if (!parsed.success) return callback({ ok: false, error: errorFor(parsed.error, "Invalid set draft") });
 
@@ -203,6 +208,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
     });
 
     socket.on("joinSession", async (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const parsed = JoinCollaborativeSetInput.safeParse(rawInput);
       if (!parsed.success) return callback({ ok: false, error: errorFor(parsed.error, "Invalid join details") });
       const session = sessions.get(parsed.data.sessionToken);
@@ -230,11 +236,19 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
     });
 
     socket.on("getQuestion", (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const parsed = QuestionLockInput.safeParse(rawInput);
       if (!parsed.success) return callback({ ok: false, error: "Invalid question ID" });
       const session = joinedSession(socket, undefined);
       if (!session) return callback({ ok: false, error: "Join the collaborative set first" });
       callback(questionResult(session.set.questions[questionIndex(session.set, parsed.data.questionId)]));
+    });
+
+    socket.on("getQuestions", (callback) => {
+      if (typeof callback !== "function") return;
+      const session = joinedSession(socket, undefined);
+      if (!session) return callback({ ok: false, error: "Join the collaborative set first" });
+      callback({ ok: true, questions: session.set.questions });
     });
 
     socket.on("acquireLock", (rawInput, ack) => {
@@ -269,8 +283,8 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       expireLocks(session.set.sessionToken);
       const lock = locks.get(session.set.sessionToken)?.get(parsed.data.questionId);
       if (!lock || lock.connectionId !== socket.id) return reject(ack, "You do not hold this question lock");
+      // Expiry is enforced here, so peers do not need a broadcast for every heartbeat.
       lock.expiresAt = Date.now() + LOCK_TTL_MS;
-      namespace.to(roomName(session.set.sessionToken)).emit("lockChanged", lock.questionId, lock);
       accept(ack);
     });
 
@@ -299,12 +313,15 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       const lock = locks.get(session.set.sessionToken)?.get(parsed.data.questionId);
       if (!lock || lock.connectionId !== socket.id) return reject(ack, "Acquire this question lock before updating it");
       const question: CollaborativeQuestionValue = { id: parsed.data.questionId, ...parsed.data.question };
+      if (sameJson(session.set.questions[index], question)) {
+        lock.expiresAt = Date.now() + LOCK_TTL_MS;
+        return accept(ack);
+      }
       session.set.questions[index] = question;
       session.set.updatedAt = Date.now();
       lock.expiresAt = Date.now() + LOCK_TTL_MS;
       store.save(session);
       socket.to(roomName(session.set.sessionToken)).emit("questionUpdated", question);
-      namespace.to(roomName(session.set.sessionToken)).emit("lockChanged", lock.questionId, lock);
       accept(ack);
     });
 
@@ -313,6 +330,8 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       if (!parsed.success) return reject(ack, "Invalid set metadata");
       const session = hostSession(socket, ack);
       if (!session) return;
+      if (session.set.name === parsed.data.name && session.set.instructions === parsed.data.instructions)
+        return accept(ack);
       session.set.name = parsed.data.name;
       session.set.instructions = parsed.data.instructions;
       session.set.updatedAt = Date.now();
@@ -326,6 +345,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       if (!parsed.success) return reject(ack, "Invalid PDF options");
       const session = hostSession(socket, ack);
       if (!session) return;
+      if (sameJson(session.set.pdfOptions, parsed.data.pdfOptions)) return accept(ack);
       session.set.pdfOptions = parsed.data.pdfOptions;
       session.set.updatedAt = Date.now();
       store.save(session);
@@ -417,6 +437,10 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
         return reject(ack, "Cannot apply this operation: this section has changed");
       }
       applyTarget(session.set, desired, target);
+      if (target.type === "question") {
+        const question = session.set.questions.find(({ id }) => id === target.questionId);
+        if (question) namespace.to(roomName(session.set.sessionToken)).emit("questionUpdated", question);
+      }
       if (target.type === "structure" && questionIndex(session.set, target.questionId) < 0) {
         locks.get(session.set.sessionToken)?.delete(target.questionId);
         namespace.to(roomName(session.set.sessionToken)).emit("lockChanged", target.questionId, null);

@@ -269,78 +269,81 @@
 .mathex-app .mathex-panel.rounded-2xl {
   border-radius: 4px;
 }
+/* Original Mathex colours, scoped to the set editor's authoring controls. */
 .mathex-editor {
-  --background: #f3f4ee;
-  --foreground: #191c16;
-  --muted: #e7e9e0;
-  --muted-foreground: #62695f;
-  --popover: #f8f9f4;
-  --popover-foreground: #191c16;
-  --card: #f8f9f4;
-  --card-foreground: #191c16;
-  --border: #d2d7ca;
-  --input: #aeb5a0;
-  --primary: #1f6b57;
-  --primary-foreground: #ffffff;
-  --secondary: #e4e8df;
-  --secondary-foreground: #191c16;
-  --accent: #dce9e2;
-  --accent-foreground: #0c4234;
-  --ring: #1f6b57;
-  --competition-paper: #f3f4ee;
-  --competition-viridian: #1f6b57;
+  --mx-bg: #f3f4ee;
+  --mx-surface: #f8f9f4;
+  --mx-subtle: #e7e9e0;
+  --mx-secondary: #e4e8df;
+  --mx-line: #d2d7ca;
+  --mx-line-strong: #aeb5a0;
+  --mx-text: #191c16;
+  --mx-text-soft: #3c423a;
+  --mx-muted: #62695f;
+  --mx-accent: #1f6b57;
+  --mx-accent-hover: #0c4234;
+  --mx-accent-fg: #ffffff;
+  --mx-accent-soft: #dce9e2;
+  --mx-accent-text: #0c4234;
+  --mx-danger: #b0472e;
+  --mx-danger-fg: #ffffff;
+  --mx-warn: #8b5f04;
+  --mx-warn-soft: color-mix(in srgb, #e3a21a 12%, var(--mx-surface));
+  --mx-shadow: 0 1px 2px rgb(25 28 22 / 6%);
+  --mx-shadow-pop: 0 12px 32px -12px rgb(25 28 22 / 28%);
+  --mx-radius: 6px;
+  --background: var(--mx-bg);
+  --foreground: var(--mx-text);
+  --muted: var(--mx-subtle);
+  --muted-foreground: var(--mx-muted);
+  --popover: var(--mx-surface);
+  --popover-foreground: var(--mx-text);
+  --card: var(--mx-surface);
+  --card-foreground: var(--mx-text);
+  --border: var(--mx-line);
+  --input: var(--mx-line-strong);
+  --primary: var(--mx-accent);
+  --primary-foreground: var(--mx-accent-fg);
+  --secondary: var(--mx-secondary);
+  --secondary-foreground: var(--mx-text);
+  --accent: var(--mx-accent-soft);
+  --accent-foreground: var(--mx-accent-text);
+  --ring: var(--mx-accent);
+  --destructive: var(--mx-danger);
+  --destructive-foreground: var(--mx-danger-fg);
   color-scheme: light;
-  font-family: "Hanken Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  color: var(--mx-text);
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
 }
 .dark .mathex-editor {
-  --background: #171b17;
-  --foreground: #edf0e8;
-  --muted: #262c26;
-  --muted-foreground: #adb6a8;
-  --popover: #202720;
-  --popover-foreground: #edf0e8;
-  --card: #202720;
-  --card-foreground: #edf0e8;
-  --border: #394239;
-  --input: #596557;
-  --primary: #74bea1;
-  --primary-foreground: #10241b;
-  --secondary: #29332c;
-  --secondary-foreground: #edf0e8;
-  --accent: #263d33;
-  --accent-foreground: #d5eee1;
-  --ring: #74bea1;
-  --competition-paper: #171b17;
-  --competition-viridian: #74bea1;
-  --competition-viridian-deep: #b7e3ce;
+  --mx-bg: #171b17;
+  --mx-surface: #202720;
+  --mx-subtle: #262c26;
+  --mx-secondary: #29332c;
+  --mx-line: #394239;
+  --mx-line-strong: #596557;
+  --mx-text: #edf0e8;
+  --mx-text-soft: #c4ccc0;
+  --mx-muted: #adb6a8;
+  --mx-accent: #74bea1;
+  --mx-accent-hover: #b7e3ce;
+  --mx-accent-fg: #10241b;
+  --mx-accent-soft: #263d33;
+  --mx-accent-text: #d5eee1;
+  --mx-danger: #ef9279;
+  --mx-danger-fg: #24110d;
+  --mx-warn: #f2c45c;
+  --mx-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+  --mx-shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 60%);
   color-scheme: dark;
 }
 .mathex-editor :is(button, input, textarea, select) {
   font-family: inherit;
 }
-.mathex-editor :is(button, input, textarea, select):focus-visible {
-  outline: 3px solid var(--competition-viridian, #1f6b57);
-  outline-offset: 3px;
-}
-.mathex-editor .menu-item:hover {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-.mathex-editor .document-page {
-  border-radius: 4px;
-}
-.mathex-editor :is(.rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg, .rounded-md) {
-  border-radius: 4px;
-}
-.mathex-editor :is(.shadow-xl, .shadow-2xl, .shadow-lg, .shadow-md, .shadow-sm) {
-  box-shadow: 0 1px 2px rgb(25 28 22 / 7%);
-}
-.mathex-editor .bg-emerald-500,
-.mathex-editor .bg-emerald-600 {
-  background-color: var(--competition-viridian);
-}
-.mathex-editor .text-emerald-600 {
-  color: var(--competition-viridian);
+.mathex-editor :is(button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--mx-accent);
+  outline-offset: 2px;
 }
 .mathex-scoreboard {
   --background: #f3f4ee;
