@@ -15,17 +15,29 @@
   const homeHref = $derived(isMathex ? "/mathex/app" : "/");
   const homeLabel = $derived(isMathex ? "Mathex home" : "Go home");
 
-  const eyebrow = $derived(isNotFound ? "Undefined here" : isServerError ? "Calculation failed" : "Request problem");
+  const eyebrow = $derived(
+    isNotFound
+      ? isMathex
+        ? "Photocopier incident"
+        : "Undefined here"
+      : isServerError
+        ? "Calculation failed"
+        : "Request problem"
+  );
   const title = $derived(
     isNotFound
-      ? "This page is not on the number line"
+      ? isMathex
+        ? "Your question slip was eaten"
+        : "This page is not on the number line"
       : isServerError
         ? "Our working went wrong"
         : "This request did not add up"
   );
   const lead = $derived(
     isNotFound
-      ? "We checked every factor and this page is not among them. It may have moved, or the link may have a typo."
+      ? isMathex
+        ? "The photocopier ate this page on the way to the answer sheet. We have asked it to stop. Check the link, or head back to Mathex and try again."
+        : "We checked every factor and this page is not among them. It may have moved, or the link may have a typo."
       : isServerError
         ? "Something broke on our side. Refresh and try again. If it keeps happening, tell us what you were doing."
         : (page.error?.message ?? "Check the link or the number you entered and try again.")
