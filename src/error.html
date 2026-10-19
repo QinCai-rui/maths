@@ -13,6 +13,7 @@
         --line-strong: #aeb5a0;
         --viridian: #1f6b57;
         --viridian-deep: #0c4234;
+        --on-viridian: #ffffff;
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -22,6 +23,7 @@
           --line-strong: #596557;
           --viridian: #74bea1;
           --viridian-deep: #10241b;
+          --on-viridian: #10241b;
         }
       }
       body {
@@ -34,6 +36,7 @@
         -webkit-font-smoothing: antialiased;
       }
       main {
+        box-sizing: border-box;
         width: min(1120px, 100%);
         margin-inline: auto;
         padding: clamp(3rem, 9vw, 7rem) clamp(1rem, 4vw, 2.5rem);
@@ -80,12 +83,13 @@
         border: 1px solid var(--viridian-deep);
         border-radius: 3px;
         background: var(--viridian);
-        color: #ffffff;
+        color: var(--on-viridian);
         font-weight: 600;
         text-decoration: none;
       }
       a:hover {
         background: var(--viridian-deep);
+        color: #ffffff;
       }
     </style>
   </head>

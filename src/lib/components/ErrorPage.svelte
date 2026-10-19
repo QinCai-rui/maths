@@ -40,7 +40,7 @@
         : "We checked every factor and this page is not among them. It may have moved, or the link may have a typo."
       : isServerError
         ? "Something broke on our side. Refresh and try again. If it keeps happening, tell us what you were doing."
-        : (page.error?.message ?? "Check the link or the number you entered and try again.")
+        : page.error?.message || "Check the link or the number you entered and try again."
   );
 </script>
 
