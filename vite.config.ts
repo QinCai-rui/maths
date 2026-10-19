@@ -30,11 +30,19 @@ const webSocketServer = {
     // Vite project root (not the launch directory) and converted to a file
     // URL so it works across platforms.
     const wsEntry = pathToFileURL(`${server.config.root}/src/ws/index.server.ts`).href;
-    const { createWSServer } = (await import(wsEntry)) as typeof import("./src/ws/index.server.js");
-    const realtime = createWSServer(server.httpServer);
-    server.httpServer.once("close", () => {
-      realtime.dispose();
-      realtime.flush();
+    const httpServer = server.httpServer;
+    // Load after Vite starts listening so socket.io and the Mathex server modules do not delay startup.
+    httpServer.once("listening", async () => {
+      try {
+        const { createWSServer } = (await import(wsEntry)) as typeof import("./src/ws/index.server.js");
+        const realtime = createWSServer(httpServer);
+        httpServer.once("close", () => {
+          realtime.dispose();
+          realtime.flush();
+        });
+      } catch (error) {
+        server.config.logger.error(`websocket server failed to start: ${error}`);
+      }
     });
   }
 };
