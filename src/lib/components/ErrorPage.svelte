@@ -1,112 +1,76 @@
 <script lang="ts">
   import "../../app.css";
   import { page } from "$app/state";
-  import { Button } from "#lib/components/ui/button/index.js";
-  import { Header } from "#lib/components/ui/header/index.js";
   import SiteNav from "#lib/components/SiteNav.svelte";
   import SiteFooter from "#lib/components/SiteFooter.svelte";
   import { reportIssueUrl } from "#lib/utils.js";
+
+  let { chrome = true }: { chrome?: boolean } = $props();
 
   const isMathex = $derived(page.url.pathname.startsWith("/mathex"));
   const isNotFound = $derived(page.status === 404);
   const isServerError = $derived(page.status >= 500);
   const issueUrl = $derived(reportIssueUrl(page.status, page.url.href, page.error?.message));
 
-  const eyebrow = $derived(
-    isNotFound
-      ? isMathex
-        ? "Off the scoreboard"
-        : "Undefined here"
-      : isServerError
-        ? "Calculation failed"
-        : "Request problem"
-  );
+  const homeHref = $derived(isMathex ? "/mathex/app" : "/");
+  const homeLabel = $derived(isMathex ? "Mathex home" : "Go home");
+
+  const eyebrow = $derived(isNotFound ? "Undefined here" : isServerError ? "Calculation failed" : "Request problem");
   const title = $derived(
     isNotFound
-      ? isMathex
-        ? "No such round in this competition"
-        : "This page is not on the number line"
+      ? "This page is not on the number line"
       : isServerError
-        ? isMathex
-          ? "The scoreboard froze"
-          : "Our working went wrong"
-        : (page.error?.message ?? "Something went wrong")
+        ? "Our working went wrong"
+        : "This request did not add up"
   );
   const lead = $derived(
     isNotFound
-      ? isMathex
-        ? "That Mathex page does not exist. Check the link, or head back to the competition hub."
-        : "We checked every factor and this page is not among them. It may have moved, or the link may have a typo."
+      ? "We checked every factor and this page is not among them. It may have moved, or the link may have a typo."
       : isServerError
         ? "Something broke on our side. Refresh and try again. If it keeps happening, tell us what you were doing."
-        : "Check the link or the number you entered and try again."
+        : (page.error?.message ?? "Check the link or the number you entered and try again.")
   );
 </script>
 
-<svelte:head><title>{page.status} · {isMathex ? "Mathex" : "Raymont's Maths"}</title></svelte:head>
+<svelte:head><title>{page.status} · Raymont's Maths</title></svelte:head>
 
-<div class="public-site flex min-h-screen flex-col" class:mathex-app={isMathex}>
-  <SiteNav />
+<div class={chrome ? "public-site flex min-h-screen flex-col" : "flex flex-1 flex-col"}>
+  {#if chrome}<SiteNav />{/if}
 
   <main class="flex-1">
-    {#if isMathex}
-      <div class="mathex-shell flex min-h-[60vh] items-center justify-center px-3 py-16 sm:px-6">
-        <section class="mathex-panel w-full max-w-md p-6 text-center sm:p-8">
-          <p class="mathex-kicker">{eyebrow}</p>
-          <p class="mt-2 font-mono text-5xl font-bold text-primary">{page.status}</p>
-          <Header size="h2" class="mt-4 text-2xl">{title}</Header>
-          <p class="mt-2 text-sm leading-6 text-muted-foreground">{lead}</p>
-          {#if isServerError}
-            <div class="mt-6 flex flex-col gap-2">
-              <Button onclick={() => location.reload()} class="w-full">Refresh</Button>
-              <Button href={issueUrl} target="_blank" rel="noreferrer" variant="outline" class="w-full"
-                >Report an issue</Button
-              >
-              <Button href="/mathex/app" variant="ghost" class="w-full">Mathex home</Button>
-            </div>
-          {:else if isNotFound}
-            <div class="mt-6 flex flex-col gap-2">
-              <Button href="/mathex/app" class="w-full">Mathex home</Button>
-              <Button href="/" variant="outline" class="w-full">Site home</Button>
-            </div>
+    <section class="site-wrap error-page">
+      <p class="error-code" aria-hidden="true">{page.status}</p>
+      <p class="site-eyebrow">{eyebrow}</p>
+      <h1 class="site-title">{title}</h1>
+      <p class="site-lead">{lead}</p>
+      {#if isServerError}
+        <div class="site-actions">
+          <button type="button" class="site-button site-button-primary" onclick={() => location.reload()}
+            >Refresh</button
+          >
+          <a class="site-button site-button-secondary" href={issueUrl} target="_blank" rel="noreferrer"
+            >Report an issue</a
+          >
+          <a class="site-button site-button-secondary" href={homeHref}>{homeLabel}</a>
+        </div>
+      {:else if isNotFound}
+        <div class="site-actions">
+          <a class="site-button site-button-primary" href={homeHref}>{homeLabel}</a>
+          {#if isMathex}
+            <a class="site-button site-button-secondary" href="/">Site home</a>
           {:else}
-            <div class="mt-6 flex flex-col gap-2">
-              <Button href="/mathex/app" class="w-full">Mathex home</Button>
-            </div>
-          {/if}
-        </section>
-      </div>
-    {:else}
-      <section class="site-wrap error-page">
-        <p class="error-code" aria-hidden="true">{page.status}</p>
-        <p class="site-eyebrow">{eyebrow}</p>
-        <h1 class="site-title">{title}</h1>
-        <p class="site-lead">{lead}</p>
-        {#if isServerError}
-          <div class="site-actions">
-            <button type="button" class="site-button site-button-primary" onclick={() => location.reload()}
-              >Refresh</button
-            >
-            <a class="site-button site-button-secondary" href={issueUrl} target="_blank" rel="noreferrer"
-              >Report an issue</a
-            >
-            <a class="site-button site-button-secondary" href="/">Go home</a>
-          </div>
-        {:else if isNotFound}
-          <div class="site-actions">
-            <a class="site-button site-button-primary" href="/">Go home</a>
             <a class="site-button site-button-secondary" href="/tools">Explore the tools</a>
-          </div>
-        {:else}
-          <div class="site-actions">
-            <a class="site-button site-button-primary" href="/">Go home</a>
-          </div>
-        {/if}
-      </section>
-    {/if}
+          {/if}
+        </div>
+      {:else}
+        <div class="site-actions">
+          <a class="site-button site-button-primary" href={homeHref}>{homeLabel}</a>
+        </div>
+      {/if}
+    </section>
   </main>
 
-  <SiteFooter />
+  {#if chrome}<SiteFooter />{/if}
 </div>
 
 <style>

@@ -2,4 +2,4 @@
   import ErrorPage from "#lib/components/ErrorPage.svelte";
 </script>
 
-<ErrorPage />
+<ErrorPage chrome={false} />
