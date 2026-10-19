@@ -269,28 +269,28 @@
 .mathex-app .mathex-panel.rounded-2xl {
   border-radius: 4px;
 }
-/* The set editor is a neutral authoring workspace with one blue interaction accent.
-   It deliberately does not share the public site's green editorial palette. */
+/* Original Mathex colours, scoped to the set editor's authoring controls. */
 .mathex-editor {
-  --mx-bg: #f5f6f8;
-  --mx-surface: #ffffff;
-  --mx-subtle: #f0f2f5;
-  --mx-line: #e2e5ea;
-  --mx-line-strong: #c8cdd5;
-  --mx-text: #17191e;
-  --mx-text-soft: #3e444e;
-  --mx-muted: #6a717c;
-  --mx-accent: #2f5bd0;
-  --mx-accent-hover: #244aae;
+  --mx-bg: #f3f4ee;
+  --mx-surface: #f8f9f4;
+  --mx-subtle: #e7e9e0;
+  --mx-secondary: #e4e8df;
+  --mx-line: #d2d7ca;
+  --mx-line-strong: #aeb5a0;
+  --mx-text: #191c16;
+  --mx-text-soft: #3c423a;
+  --mx-muted: #62695f;
+  --mx-accent: #1f6b57;
+  --mx-accent-hover: #0c4234;
   --mx-accent-fg: #ffffff;
-  --mx-accent-soft: #e9eefb;
-  --mx-accent-text: #1f428f;
-  --mx-danger: #c03f2c;
+  --mx-accent-soft: #dce9e2;
+  --mx-accent-text: #0c4234;
+  --mx-danger: #b0472e;
   --mx-danger-fg: #ffffff;
-  --mx-warn: #9a5b00;
-  --mx-warn-soft: #fcf3e2;
-  --mx-shadow: 0 1px 2px rgb(15 20 30 / 6%);
-  --mx-shadow-pop: 0 12px 32px -12px rgb(15 20 30 / 28%);
+  --mx-warn: #8b5f04;
+  --mx-warn-soft: color-mix(in srgb, #e3a21a 12%, var(--mx-surface));
+  --mx-shadow: 0 1px 2px rgb(25 28 22 / 6%);
+  --mx-shadow-pop: 0 12px 32px -12px rgb(25 28 22 / 28%);
   --mx-radius: 6px;
   --background: var(--mx-bg);
   --foreground: var(--mx-text);
@@ -304,10 +304,10 @@
   --input: var(--mx-line-strong);
   --primary: var(--mx-accent);
   --primary-foreground: var(--mx-accent-fg);
-  --secondary: var(--mx-subtle);
+  --secondary: var(--mx-secondary);
   --secondary-foreground: var(--mx-text);
-  --accent: var(--mx-subtle);
-  --accent-foreground: var(--mx-text);
+  --accent: var(--mx-accent-soft);
+  --accent-foreground: var(--mx-accent-text);
   --ring: var(--mx-accent);
   --destructive: var(--mx-danger);
   --destructive-foreground: var(--mx-danger-fg);
@@ -317,23 +317,23 @@
   font-feature-settings: "cv11", "ss01";
 }
 .dark .mathex-editor {
-  --mx-bg: #111318;
-  --mx-surface: #181b21;
-  --mx-subtle: #20242c;
-  --mx-line: #2a2f38;
-  --mx-line-strong: #3b414c;
-  --mx-text: #e7e9ed;
-  --mx-text-soft: #c2c7cf;
-  --mx-muted: #8d949f;
-  --mx-accent: #7c9ff2;
-  --mx-accent-hover: #9cb7f6;
-  --mx-accent-fg: #0c1426;
-  --mx-accent-soft: #1d2740;
-  --mx-accent-text: #bccdfa;
-  --mx-danger: #f08a78;
-  --mx-danger-fg: #26100c;
-  --mx-warn: #e2b25a;
-  --mx-warn-soft: #2a2314;
+  --mx-bg: #171b17;
+  --mx-surface: #202720;
+  --mx-subtle: #262c26;
+  --mx-secondary: #29332c;
+  --mx-line: #394239;
+  --mx-line-strong: #596557;
+  --mx-text: #edf0e8;
+  --mx-text-soft: #c4ccc0;
+  --mx-muted: #adb6a8;
+  --mx-accent: #74bea1;
+  --mx-accent-hover: #b7e3ce;
+  --mx-accent-fg: #10241b;
+  --mx-accent-soft: #263d33;
+  --mx-accent-text: #d5eee1;
+  --mx-danger: #ef9279;
+  --mx-danger-fg: #24110d;
+  --mx-warn: #f2c45c;
   --mx-shadow: 0 1px 2px rgb(0 0 0 / 30%);
   --mx-shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 60%);
   color-scheme: dark;

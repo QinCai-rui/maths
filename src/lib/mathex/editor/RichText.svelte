@@ -70,9 +70,10 @@
   // Stored content keeps maths as `$$latex$$` text. Turn it into placeholder spans that the
   // clipboard matcher below converts into equation embeds.
   function prepare(source: string) {
-    const container = document.createElement("div");
-    container.innerHTML = source;
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    // Template contents are inert: resource handlers cannot run before Quill sanitizes them.
+    const template = document.createElement("template");
+    template.innerHTML = source;
+    const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
     const nodes: Text[] = [];
     while (walker.nextNode()) nodes.push(walker.currentNode as Text);
     for (const node of nodes) {
@@ -92,7 +93,7 @@
       fragment.append(document.createTextNode(node.data.slice(offset)));
       node.replaceWith(fragment);
     }
-    return container.innerHTML;
+    return template.innerHTML;
   }
 
   function load(source: string) {

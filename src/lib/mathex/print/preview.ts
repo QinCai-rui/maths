@@ -146,7 +146,9 @@ export function previewQuestionSet(set: QuestionSetValue) {
       `<section class="slip" data-name="${escapeHtml(slip.name)}" data-size="${options.questionTextSize}" data-image-height="${options.imageHeight}">` +
       `<div class="frame"><div class="label">${escapeHtml(slip.label)}</div>` +
       `<div class="content" style="font-size:${options.questionTextSize}pt">${slip.html}</div></div>` +
-      (showFooter ? `<div class="strip"><div>${escapeHtml(title)}</div><div>${escapeHtml(slip.footer)}</div></div>` : "") +
+      (showFooter
+        ? `<div class="strip"><div>${escapeHtml(title)}</div><div>${escapeHtml(slip.footer)}</div></div>`
+        : "") +
       (options.cutMargin > 0 ? `<div class="cut"></div>` : "") +
       `</section>`
   );
@@ -168,6 +170,7 @@ export function previewQuestionSet(set: QuestionSetValue) {
 .content { --image-height: ${options.imageHeight}mm; flex: 1; min-height: 0; overflow: hidden; line-height: ${TYPE.lineHeight}; overflow-wrap: anywhere; }
 .title { margin: 0 0 ${G.titleGapMm}mm; font-size: ${G.titleSizePt}pt; font-weight: 600; line-height: ${TYPE.lineHeight}; }
 .content-body > * { margin: 0; }
+.content-body :is(h1, h2, h3, h4, h5, h6) { font-size: inherit; font-weight: 600; line-height: inherit; }
 .content-body > * + * { margin-top: ${G.paragraphGapMm}mm; }
 .content p:empty::after { content: "\\200b"; }
 .content-body > p:last-child:is(:empty, :has(> br:only-child)) { display: none; }
@@ -210,7 +213,8 @@ function answerHtml(question: Item) {
       : '<span class="none">—</span>';
     return `<div class="part">${labelled ? `<div class="label small">${partName(index)}</div>` : ""}<div class="values">${values}</div></div>`;
   });
-  if (labelled && question.solutionOrderMatters) parts.push('<div class="label small order">Parts must be in order</div>');
+  if (labelled && question.solutionOrderMatters)
+    parts.push('<div class="label small order">Parts must be in order</div>');
   return parts.join("");
 }
 

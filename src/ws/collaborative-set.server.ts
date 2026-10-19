@@ -65,8 +65,12 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
   const namespace: CollaborationNamespace = io.of(NAMESPACE);
 
   const roomName = (token: string) => `set:${token}`;
-  const reject = (ack: Ack, error: string): void => ack?.({ ok: false, error });
-  const accept = (ack: Ack): void => ack?.({ ok: true });
+  const reject = (ack: Ack, error: string): void => {
+    if (typeof ack === "function") ack({ ok: false, error });
+  };
+  const accept = (ack: Ack): void => {
+    if (typeof ack === "function") ack({ ok: true });
+  };
   const questionResult = (question: CollaborativeQuestionValue | undefined): CollaborativeQuestionResult =>
     question ? { ok: true, question } : { ok: false, error: "Question not found" };
   const errorFor = (error: { issues: { message: string }[] }, fallback: string) => error.issues[0]?.message || fallback;
@@ -182,6 +186,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
 
   namespace.on("connection", (socket) => {
     socket.on("createSession", (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const parsed = CreateCollaborativeSetInput.safeParse(rawInput);
       if (!parsed.success) return callback({ ok: false, error: errorFor(parsed.error, "Invalid set draft") });
 
@@ -203,6 +208,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
     });
 
     socket.on("joinSession", async (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const parsed = JoinCollaborativeSetInput.safeParse(rawInput);
       if (!parsed.success) return callback({ ok: false, error: errorFor(parsed.error, "Invalid join details") });
       const session = sessions.get(parsed.data.sessionToken);
@@ -230,6 +236,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
     });
 
     socket.on("getQuestion", (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const parsed = QuestionLockInput.safeParse(rawInput);
       if (!parsed.success) return callback({ ok: false, error: "Invalid question ID" });
       const session = joinedSession(socket, undefined);
@@ -238,6 +245,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
     });
 
     socket.on("getQuestions", (callback) => {
+      if (typeof callback !== "function") return;
       const session = joinedSession(socket, undefined);
       if (!session) return callback({ ok: false, error: "Join the collaborative set first" });
       callback({ ok: true, questions: session.set.questions });

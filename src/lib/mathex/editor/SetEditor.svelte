@@ -1489,9 +1489,7 @@
                     {/if}
                     {#if lock}
                       <small class="lock" style:--who={colourFor(lock.connectionId)}>
-                        <LockKeyhole class="size-3" />{lock.connectionId === socket?.id
-                          ? "You"
-                          : lock.displayName}
+                        <LockKeyhole class="size-3" />{lock.connectionId === socket?.id ? "You" : lock.displayName}
                       </small>
                     {/if}
                   </span>
@@ -1763,7 +1761,12 @@
         <details class="mx-proof-inline">
           <summary>Print proof</summary>
           {#if coverOpen}
-            <ProofSlip html={instructions} label="Cover · {questions.length} question{questions.length === 1 ? '' : 's'}" title={setName} {pdfOptions} />
+            <ProofSlip
+              html={instructions}
+              label="Cover · {questions.length} question{questions.length === 1 ? '' : 's'}"
+              title={setName}
+              {pdfOptions}
+            />
           {:else if currentQuestion}
             <ProofSlip html={currentQuestion.contents} label="Question {currentQuestionIndex + 1}" {pdfOptions} />
           {/if}
@@ -1826,12 +1829,7 @@
 {/if}
 
 <!-- Share -->
-<Modal
-  bind:open={shareOpen}
-  portal={root}
-  title={sessionToken ? "Invite co-authors" : "Share this set"}
-  wide
->
+<Modal bind:open={shareOpen} portal={root} title={sessionToken ? "Invite co-authors" : "Share this set"} wide>
   <div class="mx-tabs" role="tablist">
     <button
       type="button"
@@ -2082,11 +2080,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    color: #1f8a4c;
+    color: var(--mx-accent);
     font-weight: 600;
-  }
-  :global(.dark) .mx-status .live {
-    color: #6fd39a;
   }
   .mx-status .live i {
     width: 0.45rem;

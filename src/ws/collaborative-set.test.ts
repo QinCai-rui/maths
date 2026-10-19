@@ -68,6 +68,41 @@ afterAll(() => {
   else process.env.MATHEX_DB_PATH = previousPath;
 });
 
+test("missing and non-function acknowledgements do not throw or create sessions", async () => {
+  const peer = await client();
+  const countBefore = (
+    database.query("SELECT COUNT(*) AS count FROM mathex_collaborative_sets").get() as { count: number }
+  ).count;
+
+  // Socket.IO permits packets without an acknowledgement ID and with arbitrary arguments.
+  for (const name of ["createSession", "joinSession", "getQuestion"]) {
+    peer.emit(name, {});
+    peer.emit(name, {}, { invalidAck: true });
+  }
+  peer.emit("createSession", { set: draft });
+  peer.emit("createSession", { set: draft }, { invalidAck: true });
+  peer.emit("getQuestions");
+  peer.emit("getQuestions", { invalidAck: true });
+  peer.emit("acquireLock", {}, { invalidAck: true });
+  peer.emit("updateQuestion", {}, { invalidAck: true });
+
+  // This response follows all packets above, proving the connection and handler still work.
+  const result = await call(peer, "getQuestions");
+  expect(result).toEqual({ ok: false, error: "Join the collaborative set first" });
+  const countAfter = (
+    database.query("SELECT COUNT(*) AS count FROM mathex_collaborative_sets").get() as { count: number }
+  ).count;
+  expect(countAfter).toBe(countBefore);
+
+  const created = await call(peer, "createSession", { set: draft });
+  expect(created.ok).toBe(true);
+  peer.emit("joinSession", { sessionToken: created.sessionToken, displayName: "Ignored join" });
+  peer.emit("joinSession", { sessionToken: created.sessionToken, displayName: "Ignored join" }, { invalidAck: true });
+  expect((await call(peer, "getQuestions")).ok).toBe(false);
+  expect((await call(peer, "joinSession", { sessionToken: created.sessionToken, displayName: "Ben" })).ok).toBe(true);
+  expect((await call(peer, "getQuestions")).questions[0].contents).toBe(question.contents);
+});
+
 test("live locks, bulk loading and question undo preserve other authors' work without per-edit disk writes", async () => {
   const host = await client();
   const created = await call(host, "createSession", { set: draft });

@@ -82,7 +82,8 @@ function loadFonts() {
     await Promise.all(
       FONT_FILES.map(async ({ file, family, weight, style }) => {
         const response = await fetch(`/fonts/print/${file}`);
-        if (!response.ok) throw new Error(`Could not load the print font ${file}. Check your connection and try again.`);
+        if (!response.ok)
+          throw new Error(`Could not load the print font ${file}. Check your connection and try again.`);
         const buffer = await response.arrayBuffer();
         vfs[file] = toBase64(buffer);
         const face = new FontFace(family, buffer.slice(0), { weight, style });
@@ -141,14 +142,15 @@ const mathCache = new Map<string, Promise<MathBox>>();
 
 async function texToSvg(tex: string) {
   mathDocument ??= (async () => {
-    const [{ mathjax }, { TeX }, { SVG }, { liteAdaptor }, { RegisterHTMLHandler }, { AllPackages }] = await Promise.all([
-      import("mathjax-full/js/mathjax.js"),
-      import("mathjax-full/js/input/tex.js"),
-      import("mathjax-full/js/output/svg.js"),
-      import("mathjax-full/js/adaptors/liteAdaptor.js"),
-      import("mathjax-full/js/handlers/html.js"),
-      import("mathjax-full/js/input/tex/AllPackages.js")
-    ]);
+    const [{ mathjax }, { TeX }, { SVG }, { liteAdaptor }, { RegisterHTMLHandler }, { AllPackages }] =
+      await Promise.all([
+        import("mathjax-full/js/mathjax.js"),
+        import("mathjax-full/js/input/tex.js"),
+        import("mathjax-full/js/output/svg.js"),
+        import("mathjax-full/js/adaptors/liteAdaptor.js"),
+        import("mathjax-full/js/handlers/html.js"),
+        import("mathjax-full/js/input/tex/AllPackages.js")
+      ]);
     const adaptor = liteAdaptor();
     RegisterHTMLHandler(adaptor);
     const document = mathjax.document("", {
@@ -156,7 +158,10 @@ async function texToSvg(tex: string) {
       OutputJax: new SVG({ fontCache: "none" })
     });
     return (value: string) => adaptor.outerHTML(document.convert(value, { display: false }) as never);
-  })();
+  })().catch((error) => {
+    mathDocument = null;
+    throw error;
+  });
   const wrapper = (await mathDocument)(tex);
   if (/data-mjx-error|data-mml-node="merror"/.test(wrapper)) {
     const reason = /data-mjx-error="([^"]*)"/.exec(wrapper)?.[1];
@@ -173,14 +178,15 @@ function typeset(tex: string) {
   let box = mathCache.get(tex);
   if (!box) {
     box = texToSvg(tex).then((svg) => {
-      const viewBox = /viewBox="([^"]+)"/.exec(svg)?.[1].split(/[\s,]+/).map(Number);
+      const viewBox = /viewBox="([^"]+)"/
+        .exec(svg)?.[1]
+        .split(/[\s,]+/)
+        .map(Number);
       if (!viewBox || viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value)))
         throw new Error(`the equation "${tex}" could not be measured`);
       const [, minY, width, height] = viewBox;
       return {
-        svg: svg
-          .replace(/^<svg([^>]*?)\sstyle="[^"]*"/, "<svg$1")
-          .replace(/currentColor/g, INK),
+        svg: svg.replace(/^<svg([^>]*?)\sstyle="[^"]*"/, "<svg$1").replace(/currentColor/g, INK),
         width: width / 1000,
         ascent: -minY / 1000,
         descent: (height + minY) / 1000
@@ -275,7 +281,13 @@ function textProps(style: TextStyle): PdfNode {
 function lineNode(line: Line, size: number): PdfNode {
   const total = line.ascent + line.descent;
   if (!line.items.length)
-    return { text: " ", font: "Serif", fontSize: size, lineHeight: SERIF_LINE, margin: [0, 0, 0, total - size * TYPE.lineHeight] };
+    return {
+      text: " ",
+      font: "Serif",
+      fontSize: size,
+      lineHeight: SERIF_LINE,
+      margin: [0, 0, 0, total - size * TYPE.lineHeight]
+    };
   const columns = line.items.map((item, index) => {
     const next = line.items[index + 1];
     const width = next ? next.x - item.x : item.width + 4;
@@ -413,7 +425,12 @@ function filename(name: string, suffix: string) {
   return `${base}-${suffix}.pdf`;
 }
 
-function labelNode(text: string, size: number = G.label.sizePt, color: string = ACCENT, margin = [0, 0, 0, 0]): PdfNode {
+function labelNode(
+  text: string,
+  size: number = G.label.sizePt,
+  color: string = ACCENT,
+  margin = [0, 0, 0, 0]
+): PdfNode {
   return {
     text: text.toUpperCase(),
     font: "Sans",
@@ -506,7 +523,10 @@ export async function downloadQuestionSet(set: QuestionSetValue) {
     });
     if (showFooter) {
       content.push({
-        absolutePosition: { x: cutX + mm(4), y: top + slipHeight - mm(pad.bottom) - 2 * footerSize * TYPE.sansNaturalHeight },
+        absolutePosition: {
+          x: cutX + mm(4),
+          y: top + slipHeight - mm(pad.bottom) - 2 * footerSize * TYPE.sansNaturalHeight
+        },
         stack: [
           fitText(title, footerStyle, footerSize, footerWidth, measure),
           index === 0 ? "Cover" : `${index} / ${questionCount}`
@@ -572,7 +592,8 @@ export function partName(index: number) {
 export function markerNotes(question: Item) {
   const notes = question.answerComment.trim();
   // The retired editor generated these notes from the skip setting itself.
-  if ((!question.skippable && notes === "[Not skippable]") || (question.skippable && notes === "[Skippable]")) return "";
+  if ((!question.skippable && notes === "[Not skippable]") || (question.skippable && notes === "[Skippable]"))
+    return "";
   return notes;
 }
 
@@ -630,8 +651,7 @@ export async function downloadAnswerSet(set: QuestionSetValue) {
     const notes: PdfNode[] = [];
     if (!question.skippable) notes.push(labelNode("Not skippable", smallSize, WARN, [0, 1, 0, 2]));
     const comment = markerNotes(question);
-    if (comment)
-      notes.push({ text: comment, fontSize: size * 0.92, lineHeight: SERIF_LINE, color: "#3a3a3a" });
+    if (comment) notes.push({ text: comment, fontSize: size * 0.92, lineHeight: SERIF_LINE, color: "#3a3a3a" });
     if (!notes.length) notes.push({ text: "" });
 
     rows.push([

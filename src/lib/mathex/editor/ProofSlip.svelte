@@ -37,7 +37,9 @@
     };
     requestAnimationFrame(measure);
     void document.fonts.ready.then(measure);
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   });
 </script>
 
@@ -64,7 +66,9 @@
         style:margin-bottom="{SLIP_GEOMETRY.label.gapMm}mm"
         style:letter-spacing="{SLIP_GEOMETRY.label.letterSpacingEm}em"
         style:color={SLIP_GEOMETRY.label.color}
-      >{label}</div>
+      >
+        {label}
+      </div>
       <div
         class="content"
         bind:this={content}
@@ -72,7 +76,7 @@
         style:line-height={SLIP_GEOMETRY.lineHeight}
         style:--image-height="{pdfOptions.imageHeight}mm"
       >
-        {#if title !== undefined}<h1>{title || "Untitled set"}</h1>{/if}
+        {#if title !== undefined}<h1 class="cover-title">{title || "Untitled set"}</h1>{/if}
         {@html rendered}
       </div>
       {#if overflow}<div class="fade" aria-hidden="true"></div>{/if}
@@ -137,7 +141,12 @@
     overflow: hidden;
     overflow-wrap: anywhere;
   }
-  .content :global(h1) {
+  .content :global(:is(h1, h2, h3, h4, h5, h6)) {
+    font-size: inherit;
+    font-weight: 600;
+    line-height: inherit;
+  }
+  .content .cover-title {
     margin: 0 0 1.5mm;
     font-family: "Source Serif 4", Georgia, serif;
     font-size: 17pt;
@@ -167,14 +176,30 @@
     width: calc(var(--list-level, 1) * 5mm - 1.5mm);
     text-align: right;
   }
-  .content :global(li[data-level="1"]) { --list-level: 2; }
-  .content :global(li[data-level="2"]) { --list-level: 3; }
-  .content :global(li[data-level="3"]) { --list-level: 4; }
-  .content :global(li[data-level="4"]) { --list-level: 5; }
-  .content :global(li[data-level="5"]) { --list-level: 6; }
-  .content :global(li[data-level="6"]) { --list-level: 7; }
-  .content :global(li[data-level="7"]) { --list-level: 8; }
-  .content :global(li[data-level="8"]) { --list-level: 9; }
+  .content :global(li[data-level="1"]) {
+    --list-level: 2;
+  }
+  .content :global(li[data-level="2"]) {
+    --list-level: 3;
+  }
+  .content :global(li[data-level="3"]) {
+    --list-level: 4;
+  }
+  .content :global(li[data-level="4"]) {
+    --list-level: 5;
+  }
+  .content :global(li[data-level="5"]) {
+    --list-level: 6;
+  }
+  .content :global(li[data-level="6"]) {
+    --list-level: 7;
+  }
+  .content :global(li[data-level="7"]) {
+    --list-level: 8;
+  }
+  .content :global(li[data-level="8"]) {
+    --list-level: 9;
+  }
   .content :global(blockquote) {
     margin: 1mm 0;
     padding-left: 2mm;

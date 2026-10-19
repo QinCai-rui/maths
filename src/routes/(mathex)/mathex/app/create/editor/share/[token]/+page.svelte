@@ -119,7 +119,9 @@
       <p class="lede">
         {status === "same"
           ? "This set matches the draft already in your browser."
-          : `${share?.set.questions.length ?? 0} questions are now your draft in this browser.`}
+          : (share?.set.questions.length ?? 0) === 1
+            ? "1 question is now your draft in this browser."
+            : `${share?.set.questions.length ?? 0} questions are now your draft in this browser.`}
       </p>
       <p class="meta">Link expires {share ? new Date(share.expiresAt).toLocaleString() : "soon"}</p>
       <a class="mx-btn primary" href="/mathex/app/create/editor">Open in the editor</a>
