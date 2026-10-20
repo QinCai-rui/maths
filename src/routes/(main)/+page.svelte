@@ -37,7 +37,7 @@
         <p class="site-lead">Explore number facts, play maths games, or host a Mathex competition.</p>
         <div class="site-actions">
           <a class="site-button site-button-primary" href="/tools"><Gamepad2 class="h-4 w-4" /> Explore the tools</a>
-          <a class="site-button site-button-secondary" href="/mathex"><Calculator class="h-4 w-4" /> About Mathex</a>
+          <a class="site-button site-button-secondary" href="/mathex"><Calculator class="h-4 w-4" /> Open Mathex</a>
         </div>
       </div>
 
@@ -80,7 +80,7 @@
         <a class="site-way" href="/mathex">
           <h3>Live Mathex</h3>
           <p>Host a room or race your friends through a real-time maths competition.</p>
-          <span class="site-way-action">About Mathex</span>
+          <span class="site-way-action">Open Mathex</span>
         </a>
       </div>
     </section>
