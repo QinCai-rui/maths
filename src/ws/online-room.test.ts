@@ -380,6 +380,70 @@ describe("online rooms through real sockets", () => {
     expect(new RoomStore(databasePath).loadRooms().get(id)!.players.has(publicId)).toBe(false);
     void host;
   });
+  test("missing acknowledgements do not stop the server", async () => {
+    const roomsPeer = await connect("/rooms");
+    roomsPeer.emit("checkRoom", "000000");
+    roomsPeer.emit("checkRoom", "000000", {});
+    const sharePeer = await connect("/set-share");
+    sharePeer.emit("getShare", "not-a-token");
+    sharePeer.emit("getShare", "not-a-token", {});
+    const physicalPeer = await connect("/physical");
+    physicalPeer.emit("checkCompetition", "000000");
+    physicalPeer.emit("checkCompetition", "000000", {});
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(roomsPeer.connected).toBe(true);
+    expect(sharePeer.connected).toBe(true);
+    expect(physicalPeer.connected).toBe(true);
+    const exists = await new Promise<boolean>((resolve) => roomsPeer.emit("checkRoom", "000000", resolve));
+    expect(exists).toBe(false);
+  });
+
+  test("null legacy question data is rejected without stopping the server", async () => {
+    const creator = await connect("/rooms");
+    const invalid = event<string>(creator, "error");
+    creator.emit("newRoom", "Null data", [{ type: "x", data: null }], 16000, false, DEFAULT_ROOM_SETTINGS);
+    expect(await invalid).toContain("valid room name");
+    const exists = await new Promise<boolean>((resolve) => creator.emit("checkRoom", "000000", resolve));
+    expect(exists).toBe(false);
+  });
+
+  test("physical marker authentication stops after repeated failures", async () => {
+    const creator = await connect("/physical");
+    const created = await new Promise<any>((resolve) =>
+      creator.emit(
+        "createCompetition",
+        {
+          name: "Marker test",
+          markerPin: "1234",
+          questionCount: 3,
+          teams: [{ name: "Team A" }]
+        },
+        resolve
+      )
+    );
+    expect(created.ok).toBe(true);
+
+    const wrongPin = () =>
+      new Promise<Error>((resolve, reject) => {
+        const marker = io(`${base}/physical-marker-${created.code}`, {
+          autoConnect: false,
+          forceNew: true,
+          reconnection: false,
+          transports: ["websocket"],
+          auth: { code: created.code, pin: "0000" }
+        });
+        sockets.push(marker);
+        marker.on("connect_error", resolve);
+        marker.on("connect", () => reject(new Error("A wrong PIN connected")));
+        marker.connect();
+      });
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      expect((await wrongPin()).message).toBe("Unauthorized");
+    }
+    expect((await wrongPin()).message).toBe("Too many attempts");
+  }, 30000);
+
   test("stored deadlines survive reload and expired games finish on startup", async () => {
     const { host, id } = await createRoom({ gameTimerMs: 30000 });
     const alice = await join(id);
