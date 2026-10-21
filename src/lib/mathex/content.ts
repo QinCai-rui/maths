@@ -1,5 +1,5 @@
 import { renderToString } from "katex";
-import DOMPurify from "dompurify";
+import createDOMPurify from "dompurify";
 
 const mathRegex = /\$\$([\s\S]+?)\$\$/g;
 
@@ -29,8 +29,18 @@ function renderKatex(value: string): string {
   }
 }
 
+// Importing DOMPurify before a window exists returns the factory rather than a
+// usable instance, which happens in tests that only need parseStoredMath. Build
+// the instance on first render so it always binds to the browser window.
+let purifier: ReturnType<typeof createDOMPurify> | null = null;
+
+function sanitize(html: string): string {
+  purifier ??= createDOMPurify(window);
+  return purifier.sanitize(html, CONTENT_POLICY);
+}
+
 export function renderMath(html: string): string {
-  const clean = DOMPurify.sanitize(html, CONTENT_POLICY);
+  const clean = sanitize(html);
   // Replace maths only in text nodes. Running the replacement over serialized
   // HTML after sanitisation could break out of attribute values.
   const template = document.createElement("template");
