@@ -24,10 +24,27 @@ export const msToMinutesAndSeconds = (ms: number) => {
 
 const ISSUE_REPO = "QinCai-rui/maths";
 
+function redactSecrets(value: string) {
+  return value
+    .replace(/\b(runToken|hostToken|token|access_token|api_key)=[^&#\s]*/gi, "$1=[redacted]")
+    .replace(/(\/mathex\/app\/create\/editor(?:\/share)?\/)[^/?#\s]+/gi, "$1[token]");
+}
+
+function publicPageUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${redactSecrets(url.pathname)}`;
+  } catch {
+    return redactSecrets(value.split(/[?#]/)[0] || value);
+  }
+}
+
 export function reportIssueUrl(status: number, pageUrl: string, message?: string) {
+  const safeUrl = publicPageUrl(pageUrl);
+  const safeMessage = redactSecrets(message || "unknown");
   const params = new URLSearchParams({
-    title: `Error ${status} on ${pageUrl}`,
-    body: `Status: ${status}\nURL: ${pageUrl}\nMessage: ${message || "unknown"}\n\nWhat I was doing:\n`
+    title: `Error ${status} on ${safeUrl}`,
+    body: `Status: ${status}\nURL: ${safeUrl}\nMessage: ${safeMessage}\n\nWhat I was doing:\n`
   });
   return `https://github.com/${ISSUE_REPO}/issues/new?${params.toString()}`;
 }

@@ -23,6 +23,7 @@ export function registerSetShareServer(io: AnyServer): void {
 
   namespace.on("connection", (socket) => {
     socket.on("createShare", (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const input = CreateSetShareInput.safeParse(rawInput);
       if (!input.success) {
         callback({ ok: false, error: input.error.issues[0]?.message || "Invalid question set" });
@@ -35,6 +36,7 @@ export function registerSetShareServer(io: AnyServer): void {
     });
 
     socket.on("getShare", (rawToken, callback) => {
+      if (typeof callback !== "function") return;
       const token = SetShareToken.safeParse(rawToken);
       if (!token.success) {
         callback({ ok: false, error: "Invalid share link" });
