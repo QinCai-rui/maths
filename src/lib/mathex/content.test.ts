@@ -50,4 +50,15 @@ describe("renderMath", () => {
     );
     expect(scaled).toBeDefined();
   });
+
+  test("keeps less-than signs inside maths", () => {
+    const container = parse(renderMath("<p>$$x<y$$</p>"));
+    expect(container.querySelector("annotation")?.textContent).toBe("x<y");
+  });
+
+  test("renders every expression when a page has several angle brackets", () => {
+    const container = parse(renderMath("<p>$$a<b$$ and $$c>d$$</p>"));
+    const annotations = [...container.querySelectorAll("annotation")].map((node) => node.textContent);
+    expect(annotations).toEqual(["a<b", "c>d"]);
+  });
 });

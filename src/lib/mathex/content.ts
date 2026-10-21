@@ -2,6 +2,7 @@ import { renderToString } from "katex";
 import createDOMPurify from "dompurify";
 
 const mathRegex = /\$\$([\s\S]+?)\$\$/g;
+const placeholderRegex = /\uE000(\d+)\uE001/g;
 
 // Question content is authored by hosts, collaborators and imported sets. It
 // only needs the formatting Quill produces, never stylesheets or inline CSS.
@@ -40,26 +41,45 @@ function sanitize(html: string): string {
 }
 
 export function renderMath(html: string): string {
-  const clean = sanitize(html);
-  // Replace maths only in text nodes. Running the replacement over serialized
-  // HTML after sanitisation could break out of attribute values.
+  // Protect delimited maths before the HTML parser sees it. A raw less-than
+  // inside $$...$$ would otherwise start a tag and truncate the expression.
+  const expressions: string[] = [];
+  const protectedHtml = html.replace(mathRegex, (_, value: string) => {
+    const index = expressions.push(value) - 1;
+    return `\uE000${index}\uE001`;
+  });
+  const clean = sanitize(protectedHtml);
   const template = document.createElement("template");
   template.innerHTML = clean;
+
+  // A formula in an attribute was protected too. Restore its original text
+  // after sanitisation; setting an attribute programmatically is safe.
+  for (const element of template.content.querySelectorAll("*")) {
+    for (const attribute of [...element.attributes]) {
+      if (!attribute.value.includes("\uE000")) continue;
+      attribute.value = attribute.value.replace(
+        placeholderRegex,
+        (_, index: string) => `$$${expressions[Number(index)] ?? ""}$$`
+      );
+    }
+  }
+
+  // Replace maths only in text nodes. Running the replacement over serialized
+  // HTML after sanitisation could break out of attribute values.
   const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
 
   for (const node of nodes) {
     const value = node.data;
-    const matches = [...value.matchAll(mathRegex)];
-    if (!matches.length) continue;
+    if (!value.includes("\uE000")) continue;
     const fragment = document.createDocumentFragment();
     let offset = 0;
-    for (const match of matches) {
+    for (const match of value.matchAll(placeholderRegex)) {
       const index = match.index ?? 0;
       if (index > offset) fragment.append(document.createTextNode(value.slice(offset, index)));
       const holder = document.createElement("span");
-      holder.innerHTML = renderKatex(match[1]);
+      holder.innerHTML = renderKatex(expressions[Number(match[1])] ?? "");
       fragment.append(...holder.childNodes);
       offset = index + match[0].length;
     }
