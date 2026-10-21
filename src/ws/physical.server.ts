@@ -40,30 +40,42 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
   const store = new PhysicalCompetitionStore();
   const competitions = store.load();
   const registered = new Set<string>();
-  const markerFailures = new Map<string, number[]>();
+  type MarkerAttemptState = { failures: number[]; pending: number };
+  const markerAttempts = new Map<string, MarkerAttemptState>();
   const MARKER_FAILURE_WINDOW_MS = 60_000;
   const MARKER_FAILURE_LIMIT = 10;
 
-  function markerAttemptAllowed(key: string): boolean {
+  function markerAttemptState(key: string): MarkerAttemptState {
     const now = Date.now();
-    const recent = (markerFailures.get(key) ?? []).filter((time) => now - time < MARKER_FAILURE_WINDOW_MS);
-    if (recent.length === 0) markerFailures.delete(key);
-    else markerFailures.set(key, recent);
-    return recent.length < MARKER_FAILURE_LIMIT;
+    const state = markerAttempts.get(key);
+    if (!state) return { failures: [], pending: 0 };
+    state.failures = state.failures.filter((time) => now - time < MARKER_FAILURE_WINDOW_MS);
+    if (state.failures.length === 0 && state.pending === 0) markerAttempts.delete(key);
+    return state;
   }
 
-  function recordMarkerAttempt(key: string, authenticated: boolean): void {
-    if (authenticated) {
-      markerFailures.delete(key);
-      return;
-    }
-    const now = Date.now();
-    const recent = (markerFailures.get(key) ?? []).filter((time) => now - time < MARKER_FAILURE_WINDOW_MS);
-    recent.push(now);
-    markerFailures.set(key, recent);
-    if (markerFailures.size > 5_000) {
-      for (const [entry, times] of markerFailures) {
-        if (!times.some((time) => now - time < MARKER_FAILURE_WINDOW_MS)) markerFailures.delete(entry);
+  // Reserve a slot before hashing. Without the pending count, concurrent
+  // connections all pass the check and each start an expensive verification.
+  function beginMarkerAttempt(key: string): boolean {
+    const state = markerAttemptState(key);
+    if (state.failures.length + state.pending >= MARKER_FAILURE_LIMIT) return false;
+    state.pending++;
+    markerAttempts.set(key, state);
+    return true;
+  }
+
+  function finishMarkerAttempt(key: string, authenticated: boolean): void {
+    const state = markerAttemptState(key);
+    state.pending = Math.max(0, state.pending - 1);
+    if (authenticated) state.failures = [];
+    else state.failures.push(Date.now());
+    if (state.failures.length === 0 && state.pending === 0) markerAttempts.delete(key);
+    else markerAttempts.set(key, state);
+    if (markerAttempts.size > 5_000) {
+      const now = Date.now();
+      for (const [entry, candidate] of markerAttempts) {
+        candidate.failures = candidate.failures.filter((time) => now - time < MARKER_FAILURE_WINDOW_MS);
+        if (candidate.failures.length === 0 && candidate.pending === 0) markerAttempts.delete(entry);
       }
     }
   }
@@ -83,11 +95,13 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
     });
 
     socket.on("createCompetition", async (rawInput, callback) => {
-      if (typeof callback !== "function") return;
+      // The callback is optional. A missing acknowledgement must not skip the
+      // creation itself, because the server also announces it with `goto`.
+      const reply = typeof callback === "function" ? callback : () => {};
       const parsed = CreatePhysicalCompetitionInput.safeParse(rawInput);
       if (!parsed.success) {
         const error = parsed.error.issues[0]?.message || "Invalid competition settings";
-        callback?.({ ok: false, error });
+        reply({ ok: false, error });
         socket.emit("error", error);
         return;
       }
@@ -97,7 +111,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         markerPinHash = await hashMarkerPin(parsed.data.markerPin);
       } catch {
         const error = "Could not secure the marker PIN";
-        callback({ ok: false, error });
+        reply({ ok: false, error });
         socket.emit("error", error);
         return;
       }
@@ -112,7 +126,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         const key = team.name.toLocaleLowerCase();
         if (duplicateNames.has(key)) {
           const error = "Team names must be unique";
-          callback?.({ ok: false, error });
+          reply({ ok: false, error });
           socket.emit("error", error);
           return;
         }
@@ -145,7 +159,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
       registerCompetition(competition);
 
       const hostPath = `${HOST_PATH}?id=${code}&hostToken=${encodeURIComponent(hostToken)}`;
-      callback?.({ ok: true, code, hostToken, hostPath });
+      reply({ ok: true, code, hostToken, hostPath });
       socket.emit("goto", hostPath);
     });
   });
@@ -180,21 +194,25 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
     markerNamespace.use((socket, next) => {
       const auth = socket.handshake.auth;
       void (async () => {
+        const attemptKey = `${competition.code}:${socket.handshake.address}`;
+        if (!beginMarkerAttempt(attemptKey)) return next(new Error("Too many attempts"));
+        let authenticated = false;
         try {
           const validCode = PhysicalCode.safeParse(auth.code);
           const pin = typeof auth.pin === "string" ? auth.pin : "";
-          const attemptKey = `${competition.code}:${socket.handshake.address}`;
-          if (!markerAttemptAllowed(attemptKey)) return next(new Error("Too many attempts"));
-          const authenticated =
+          const hashAtStart = competition.markerPinHash;
+          authenticated =
             validCode.success &&
             validCode.data === competition.code &&
             PhysicalMarkerPin.safeParse(pin).success &&
-            (await verifyMarkerPin(pin, competition.markerPinHash));
-          recordMarkerAttempt(attemptKey, authenticated);
-          next(authenticated ? undefined : new Error("Unauthorized"));
+            (await verifyMarkerPin(pin, hashAtStart)) &&
+            competition.markerPinHash === hashAtStart;
         } catch {
-          next(new Error("Unauthorized"));
+          authenticated = false;
+        } finally {
+          finishMarkerAttempt(attemptKey, authenticated);
         }
+        next(authenticated ? undefined : new Error("Unauthorized"));
       })();
     });
 
@@ -256,10 +274,9 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
       socket.on("configure", async (rawInput, ack) => {
         const input = ConfigurePhysicalCompetitionInput.safeParse(rawInput);
         if (!input.success) return reject(ack, input.error.issues[0]?.message || "Invalid settings");
-        if (
-          competition.state !== "lobby" &&
-          (input.data.questionCount !== undefined || input.data.countdownDurationMs !== undefined)
-        ) {
+        const changesLobbySettings =
+          input.data.questionCount !== undefined || input.data.countdownDurationMs !== undefined;
+        if (competition.state !== "lobby" && changesLobbySettings) {
           return reject(ack, "Question count and countdown can only be changed in the lobby");
         }
         let nextMarkerPinHash: string | undefined;
@@ -269,6 +286,11 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
           } catch {
             return reject(ack, "Could not secure the marker PIN");
           }
+        }
+        // Hashing yields to the event loop, so a start may have happened while
+        // this handler was waiting.
+        if (competition.state !== "lobby" && changesLobbySettings) {
+          return reject(ack, "Question count and countdown can only be changed in the lobby");
         }
         if (input.data.name !== undefined) competition.name = input.data.name;
         if (input.data.questionCount !== undefined) competition.questionCount = input.data.questionCount;
