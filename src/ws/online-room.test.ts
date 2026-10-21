@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
 import { Database } from "bun:sqlite";
 import { io, type Socket } from "socket.io-client";
 import { createWSServer } from "./index.server";
@@ -117,7 +119,7 @@ function failedMarker(code: string, pin = "0000"): Promise<Error> {
 }
 
 beforeAll(async () => {
-  databasePath = `${mkdtempSync("/tmp/opencode/maths-room-tests-")}/rooms.sqlite`;
+  databasePath = joinPath(mkdtempSync(joinPath(tmpdir(), "maths-room-tests-")), "rooms.sqlite");
   process.env.MATHEX_DB_PATH = databasePath;
   server = createServer();
   realtime = createWSServer(server);
