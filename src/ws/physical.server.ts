@@ -8,6 +8,7 @@ import {
   EditPhysicalTeamInput,
   PhysicalCode,
   PhysicalMarkerActionInput,
+  PhysicalMarkerPin,
   ReplacePhysicalTeamsInput,
   PhysicalTeamId,
   PhysicalUndoInput,
@@ -39,6 +40,33 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
   const store = new PhysicalCompetitionStore();
   const competitions = store.load();
   const registered = new Set<string>();
+  const markerFailures = new Map<string, number[]>();
+  const MARKER_FAILURE_WINDOW_MS = 60_000;
+  const MARKER_FAILURE_LIMIT = 10;
+
+  function markerAttemptAllowed(key: string): boolean {
+    const now = Date.now();
+    const recent = (markerFailures.get(key) ?? []).filter((time) => now - time < MARKER_FAILURE_WINDOW_MS);
+    if (recent.length === 0) markerFailures.delete(key);
+    else markerFailures.set(key, recent);
+    return recent.length < MARKER_FAILURE_LIMIT;
+  }
+
+  function recordMarkerAttempt(key: string, authenticated: boolean): void {
+    if (authenticated) {
+      markerFailures.delete(key);
+      return;
+    }
+    const now = Date.now();
+    const recent = (markerFailures.get(key) ?? []).filter((time) => now - time < MARKER_FAILURE_WINDOW_MS);
+    recent.push(now);
+    markerFailures.set(key, recent);
+    if (markerFailures.size > 5_000) {
+      for (const [entry, times] of markerFailures) {
+        if (!times.some((time) => now - time < MARKER_FAILURE_WINDOW_MS)) markerFailures.delete(entry);
+      }
+    }
+  }
 
   const createNamespace: Namespace<
     PhysicalCreateClientToServerEvents,
@@ -49,15 +77,27 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
 
   createNamespace.on("connection", (socket) => {
     socket.on("checkCompetition", (rawCode, callback) => {
+      if (typeof callback !== "function") return;
       const code = PhysicalCode.safeParse(rawCode);
-      callback?.(code.success && competitions.has(code.data));
+      callback(code.success && competitions.has(code.data));
     });
 
-    socket.on("createCompetition", (rawInput, callback) => {
+    socket.on("createCompetition", async (rawInput, callback) => {
+      if (typeof callback !== "function") return;
       const parsed = CreatePhysicalCompetitionInput.safeParse(rawInput);
       if (!parsed.success) {
         const error = parsed.error.issues[0]?.message || "Invalid competition settings";
         callback?.({ ok: false, error });
+        socket.emit("error", error);
+        return;
+      }
+
+      let markerPinHash: string;
+      try {
+        markerPinHash = await hashMarkerPin(parsed.data.markerPin);
+      } catch {
+        const error = "Could not secure the marker PIN";
+        callback({ ok: false, error });
         socket.emit("error", error);
         return;
       }
@@ -88,7 +128,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         code,
         name: parsed.data.name,
         hostToken,
-        markerPinHash: hashMarkerPin(parsed.data.markerPin),
+        markerPinHash,
         questionCount: parsed.data.questionCount,
         countdownDurationMs: parsed.data.countdownDurationMs,
         autoFinishWhenComplete: parsed.data.autoFinishWhenComplete,
@@ -139,11 +179,23 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
     });
     markerNamespace.use((socket, next) => {
       const auth = socket.handshake.auth;
-      const validCode = PhysicalCode.safeParse(auth.code);
-      const pin = typeof auth.pin === "string" ? auth.pin : "";
-      const authenticated =
-        validCode.success && validCode.data === competition.code && verifyMarkerPin(pin, competition.markerPinHash);
-      next(authenticated ? undefined : new Error("Unauthorized"));
+      void (async () => {
+        try {
+          const validCode = PhysicalCode.safeParse(auth.code);
+          const pin = typeof auth.pin === "string" ? auth.pin : "";
+          const attemptKey = `${competition.code}:${socket.handshake.address}`;
+          if (!markerAttemptAllowed(attemptKey)) return next(new Error("Too many attempts"));
+          const authenticated =
+            validCode.success &&
+            validCode.data === competition.code &&
+            PhysicalMarkerPin.safeParse(pin).success &&
+            (await verifyMarkerPin(pin, competition.markerPinHash));
+          recordMarkerAttempt(attemptKey, authenticated);
+          next(authenticated ? undefined : new Error("Unauthorized"));
+        } catch {
+          next(new Error("Unauthorized"));
+        }
+      })();
     });
 
     const emitSnapshots = (): void => {
@@ -156,8 +208,12 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
       store.save(competition);
       emitSnapshots();
     };
-    const reject = (ack: OperationAck, error: string): void => ack?.({ ok: false, error });
-    const accept = (ack: OperationAck): void => ack?.({ ok: true });
+    const reject = (ack: OperationAck, error: string): void => {
+      if (typeof ack === "function") ack({ ok: false, error });
+    };
+    const accept = (ack: OperationAck): void => {
+      if (typeof ack === "function") ack({ ok: true });
+    };
 
     hostNamespace.on("connection", (socket) => {
       socket.emit("snapshot", buildSnapshot(competition));
@@ -197,7 +253,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         commit();
         accept(ack);
       });
-      socket.on("configure", (rawInput, ack) => {
+      socket.on("configure", async (rawInput, ack) => {
         const input = ConfigurePhysicalCompetitionInput.safeParse(rawInput);
         if (!input.success) return reject(ack, input.error.issues[0]?.message || "Invalid settings");
         if (
@@ -206,11 +262,19 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         ) {
           return reject(ack, "Question count and countdown can only be changed in the lobby");
         }
+        let nextMarkerPinHash: string | undefined;
+        if (input.data.markerPin !== undefined) {
+          try {
+            nextMarkerPinHash = await hashMarkerPin(input.data.markerPin);
+          } catch {
+            return reject(ack, "Could not secure the marker PIN");
+          }
+        }
         if (input.data.name !== undefined) competition.name = input.data.name;
         if (input.data.questionCount !== undefined) competition.questionCount = input.data.questionCount;
         if (input.data.countdownDurationMs !== undefined)
           competition.countdownDurationMs = input.data.countdownDurationMs;
-        if (input.data.markerPin !== undefined) competition.markerPinHash = hashMarkerPin(input.data.markerPin);
+        if (nextMarkerPinHash !== undefined) competition.markerPinHash = nextMarkerPinHash;
         commit();
         if (input.data.markerPin !== undefined) markerNamespace.disconnectSockets(true);
         accept(ack);

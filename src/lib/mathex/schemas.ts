@@ -165,15 +165,19 @@ export type SolutionType = z.infer<typeof SolutionItem>["type"];
 export const Question = z.preprocess(
   (val) => {
     if (val && typeof val === "object" && "type" in val && "data" in val) {
-      const q = val as any;
+      const data = (val as { data?: unknown }).data;
+      // Legacy exports can contain a null or non-object data field. Return it
+      // unchanged so the object schema rejects it instead of throwing here.
+      if (!data || typeof data !== "object" || Array.isArray(data)) return val;
+      const q = data as Record<string, unknown>;
       return {
-        contents: q.data.contents || "",
-        solutions: q.data.solutions || [],
-        allowEquivalent: q.data.allowEquivalent ?? true,
-        answerComment: q.data.answerComment || "",
-        requireAllSolutionGroups: q.data.requireAllSolutionGroups ?? false,
-        solutionOrderMatters: q.data.solutionOrderMatters ?? false,
-        skippable: q.data.skippable ?? true
+        contents: q.contents ?? "",
+        solutions: q.solutions ?? [],
+        allowEquivalent: q.allowEquivalent ?? true,
+        answerComment: q.answerComment ?? "",
+        requireAllSolutionGroups: q.requireAllSolutionGroups ?? false,
+        solutionOrderMatters: q.solutionOrderMatters ?? false,
+        skippable: q.skippable ?? true
       };
     }
     return val;

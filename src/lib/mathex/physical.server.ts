@@ -1,25 +1,35 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { Database } from "bun:sqlite";
 
 import type { PhysicalCompetition, PhysicalTeam } from "./physical.schemas";
 
 type StoredPhysicalCompetition = Omit<PhysicalCompetition, "teams"> & { teams: [string, PhysicalTeam][] };
 
-export function hashMarkerPin(pin: string): string {
+function scryptAsync(password: string, salt: Buffer, keylen: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, (error, derivedKey) => {
+      if (error) reject(error);
+      else resolve(derivedKey);
+    });
+  });
+}
+
+export async function hashMarkerPin(pin: string): Promise<string> {
   const salt = randomBytes(16);
-  const digest = scryptSync(pin, salt, 32);
+  const digest = await scryptAsync(pin, salt, 32);
   return `${salt.toString("hex")}:${digest.toString("hex")}`;
 }
 
-export function verifyMarkerPin(pin: string, storedHash: string): boolean {
+export async function verifyMarkerPin(pin: string, storedHash: string): Promise<boolean> {
   const [saltHex, digestHex, extra] = storedHash.split(":");
   if (!saltHex || !digestHex || extra) return false;
   try {
     const expected = Buffer.from(digestHex, "hex");
-    const actual = scryptSync(pin, Buffer.from(saltHex, "hex"), expected.length);
-    return expected.length > 0 && timingSafeEqual(actual, expected);
+    if (expected.length === 0) return false;
+    const actual = await scryptAsync(pin, Buffer.from(saltHex, "hex"), expected.length);
+    return timingSafeEqual(actual, expected);
   } catch {
     return false;
   }

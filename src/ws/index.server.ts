@@ -28,15 +28,12 @@ import {
 import { z } from "zod";
 
 import { createHash, randomBytes, randomInt } from "crypto";
-import { create, all } from "mathjs";
 import { RoomStore } from "../lib/mathex/rooms.server";
 import { buildLeaderboard, sortedPlayers as getPlayers, sanitizeRoomSettings } from "../lib/mathex/room-state";
+import { checkSolution } from "../lib/mathex/answer-matching";
 import { registerPhysicalCompetitionServer } from "./physical.server";
 import { registerSetShareServer } from "./set-share.server";
 import { registerCollaborativeSetServer } from "./collaborative-set.server";
-
-const config = {};
-const math = create(all, config);
 
 export const createWSServer = (base: ServerInstance) => {
   const roomStore = new RoomStore();
@@ -120,7 +117,10 @@ export const createWSServer = (base: ServerInstance) => {
       socket.emit("goto", `/mathex/app/manage?id=${roomId}&runToken=${runToken}`);
       socket.disconnect();
     });
-    socket.on("checkRoom", (id, callback) => callback(rooms.has(id)));
+    socket.on("checkRoom", (id, callback) => {
+      if (typeof callback !== "function") return;
+      callback(rooms.has(id));
+    });
   });
 
   const roomManageNamespace = io.of(/^\/manage\-\d{6}$/) as Namespace<
@@ -810,54 +810,4 @@ function answerGroups(question: z.infer<typeof Question>): SolutionType[][] {
     groups.set(group, [...new Set([...(groups.get(group) || []), solution.type])]);
   }
   return [...groups.entries()].sort(([a], [b]) => a - b).map(([, types]) => types);
-}
-
-function matchesSolution(
-  guess: string | number,
-  solution: z.infer<typeof Question>["solutions"][number],
-  question: z.infer<typeof Question>
-) {
-  if (solution.type === "number") return Number(guess) === solution.value;
-  if (solution.type === "text") return String(guess).trim().toLowerCase() === solution.value.trim().toLowerCase();
-  if (!question.allowEquivalent) return String(guess).trim() === solution.value;
-  try {
-    return math.symbolicEqual(math.parse(solution.value), math.parse(String(guess)));
-  } catch {
-    return false;
-  }
-}
-
-function checkSolution(guess: string | number | (string | number)[], question: z.infer<typeof Question>) {
-  if (!question.requireAllSolutionGroups) {
-    const answer = Array.isArray(guess) ? guess[0] : guess;
-    return question.solutions.some((solution) => matchesSolution(answer, solution, question));
-  }
-
-  const grouped = new Map<number, z.infer<typeof Question>["solutions"]>();
-  for (const solution of question.solutions) {
-    const group = solution.group ?? 0;
-    grouped.set(group, [...(grouped.get(group) || []), solution]);
-  }
-  const groups = [...grouped.entries()].sort(([a], [b]) => a - b).map(([, solutions]) => solutions);
-  const answers = Array.isArray(guess) ? guess : [guess];
-  if (answers.length !== groups.length || answers.some((answer) => String(answer).trim() === "")) return false;
-  if (question.solutionOrderMatters) {
-    return groups.every((solutions, index) =>
-      solutions.some((solution) => matchesSolution(answers[index], solution, question))
-    );
-  }
-
-  const usedGroups = new Set<number>();
-  function matchAnswer(index: number): boolean {
-    if (index === answers.length) return true;
-    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-      if (usedGroups.has(groupIndex)) continue;
-      if (!groups[groupIndex].some((solution) => matchesSolution(answers[index], solution, question))) continue;
-      usedGroups.add(groupIndex);
-      if (matchAnswer(index + 1)) return true;
-      usedGroups.delete(groupIndex);
-    }
-    return false;
-  }
-  return matchAnswer(0);
 }
