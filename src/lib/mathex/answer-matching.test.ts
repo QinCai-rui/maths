@@ -28,6 +28,18 @@ describe("numeric answers", () => {
   });
 });
 
+describe("expression answers", () => {
+  const solution = [{ type: "expression" as const, value: "2*x", group: 0 }];
+
+  test("uses symbolic equality when equivalents are allowed", () => {
+    expect(checkSolution("x*2", question({ solutions: solution, allowEquivalent: true }))).toBe(true);
+  });
+
+  test("requires an exact string when equivalents are disabled", () => {
+    expect(checkSolution("x*2", question({ solutions: solution, allowEquivalent: false }))).toBe(false);
+  });
+});
+
 describe("grouped answers", () => {
   test("accepts a complete unordered assignment", () => {
     const q = question({
@@ -42,6 +54,29 @@ describe("grouped answers", () => {
     expect(checkSolution(["b", "c"], q)).toBe(true);
   });
 
+  test("uses an augmenting path when a greedy assignment would fail", () => {
+    const q = question({
+      requireAllSolutionGroups: true,
+      solutions: [
+        { type: "text", value: "a", group: 0 },
+        { type: "text", value: "b", group: 0 },
+        { type: "text", value: "b", group: 1 }
+      ]
+    });
+    expect(checkSolution(["b", "a"], q)).toBe(true);
+  });
+
+  test("accepts non-contiguous group numbers and repeated answers", () => {
+    const q = question({
+      requireAllSolutionGroups: true,
+      solutions: [
+        { type: "text", value: "x", group: 5 },
+        { type: "text", value: "x", group: 9 }
+      ]
+    });
+    expect(checkSolution(["x", "x"], q)).toBe(true);
+  });
+
   test("rejects a partial unordered assignment", () => {
     const q = question({
       requireAllSolutionGroups: true,
@@ -51,6 +86,18 @@ describe("grouped answers", () => {
       ]
     });
     expect(checkSolution(["a", "a"], q)).toBe(false);
+  });
+
+  test("rejects blank answers in grouped mode", () => {
+    const q = question({
+      requireAllSolutionGroups: true,
+      solutions: [
+        { type: "text", value: "a", group: 0 },
+        { type: "text", value: "b", group: 1 }
+      ]
+    });
+    expect(checkSolution(["", "b"], q)).toBe(false);
+    expect(checkSolution(["a", "   "], q)).toBe(false);
   });
 
   test("honours answer order when requested", () => {

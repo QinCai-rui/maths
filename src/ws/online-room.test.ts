@@ -100,6 +100,22 @@ async function change(host: Socket, value: Partial<RoomSettings>) {
   return await updated;
 }
 
+function failedMarker(code: string, pin = "0000"): Promise<Error> {
+  return new Promise((resolve, reject) => {
+    const marker = io(`${base}/physical-marker-${code}`, {
+      autoConnect: false,
+      forceNew: true,
+      reconnection: false,
+      transports: ["websocket"],
+      auth: { code, pin }
+    });
+    sockets.push(marker);
+    marker.on("connect_error", resolve);
+    marker.on("connect", () => reject(new Error("A wrong PIN connected")));
+    marker.connect();
+  });
+}
+
 beforeAll(async () => {
   databasePath = `${mkdtempSync("/tmp/opencode/maths-room-tests-")}/rooms.sqlite`;
   process.env.MATHEX_DB_PATH = databasePath;
@@ -423,26 +439,44 @@ describe("online rooms through real sockets", () => {
     );
     expect(created.ok).toBe(true);
 
-    const wrongPin = () =>
-      new Promise<Error>((resolve, reject) => {
-        const marker = io(`${base}/physical-marker-${created.code}`, {
-          autoConnect: false,
-          forceNew: true,
-          reconnection: false,
-          transports: ["websocket"],
-          auth: { code: created.code, pin: "0000" }
-        });
-        sockets.push(marker);
-        marker.on("connect_error", resolve);
-        marker.on("connect", () => reject(new Error("A wrong PIN connected")));
-        marker.connect();
-      });
-
     for (let attempt = 0; attempt < 10; attempt++) {
-      expect((await wrongPin()).message).toBe("Unauthorized");
+      expect((await failedMarker(created.code)).message).toBe("Unauthorized");
     }
-    expect((await wrongPin()).message).toBe("Too many attempts");
+    expect((await failedMarker(created.code)).message).toBe("Too many attempts");
   }, 30000);
+
+  test("concurrent marker attempts cannot exceed the failure limit", async () => {
+    const creator = await connect("/physical");
+    const created = await new Promise<any>((resolve) =>
+      creator.emit(
+        "createCompetition",
+        {
+          name: "Concurrent marker test",
+          markerPin: "1234",
+          questionCount: 3,
+          teams: [{ name: "Team A" }]
+        },
+        resolve
+      )
+    );
+    expect(created.ok).toBe(true);
+
+    const attempts = await Promise.all(Array.from({ length: 20 }, () => failedMarker(created.code)));
+    expect(attempts.filter((error) => error.message === "Unauthorized")).toHaveLength(10);
+    expect(attempts.filter((error) => error.message === "Too many attempts")).toHaveLength(10);
+  }, 30000);
+
+  test("physical creation still runs without an acknowledgement", async () => {
+    const creator = await connect("/physical");
+    const destination = event<string>(creator, "goto");
+    creator.emit("createCompetition", {
+      name: "No ack",
+      markerPin: "ABCD1234",
+      questionCount: 1,
+      teams: [{ name: "Team A" }]
+    });
+    expect(await destination).toContain("/mathex/app/live/host?id=");
+  }, 10000);
 
   test("stored deadlines survive reload and expired games finish on startup", async () => {
     const { host, id } = await createRoom({ gameTimerMs: 30000 });
