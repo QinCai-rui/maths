@@ -102,6 +102,15 @@ async function change(host: Socket, value: Partial<RoomSettings>) {
   return await updated;
 }
 
+function call<T>(socket: Socket, name: string, ...args: unknown[]): Promise<T> {
+  return new Promise((resolve, reject) => {
+    socket.timeout(5000).emit(name, ...args, (error: Error | null, value: T) => {
+      if (error) reject(error);
+      else resolve(value);
+    });
+  });
+}
+
 function failedMarker(code: string, pin = "0000"): Promise<Error> {
   return new Promise((resolve, reject) => {
     const marker = io(`${base}/physical-marker-${code}`, {
@@ -466,6 +475,41 @@ describe("online rooms through real sockets", () => {
     const attempts = await Promise.all(Array.from({ length: 20 }, () => failedMarker(created.code)));
     expect(attempts.filter((error) => error.message === "Unauthorized")).toHaveLength(10);
     expect(attempts.filter((error) => error.message === "Too many attempts")).toHaveLength(10);
+  }, 30000);
+
+  test("the most recently submitted marker PIN wins", async () => {
+    const creator = await connect("/physical");
+    const created = await call<any>(creator, "createCompetition", {
+      name: "PIN rotation test",
+      markerPin: "1111",
+      questionCount: 3,
+      teams: [{ name: "Team A" }]
+    });
+    expect(created.ok).toBe(true);
+
+    const host = io(`${base}/physical-host-${created.code}`, {
+      forceNew: true,
+      transports: ["websocket"],
+      auth: { token: created.hostToken }
+    });
+    sockets.push(host);
+    await event(host, "snapshot");
+
+    await Promise.all([
+      call<any>(host, "configure", { markerPin: "2222" }),
+      call<any>(host, "configure", { markerPin: "3333" })
+    ]);
+
+    const marker = io(`${base}/physical-marker-${created.code}`, {
+      forceNew: true,
+      transports: ["websocket"],
+      auth: { code: created.code, pin: "3333" }
+    });
+    sockets.push(marker);
+    await event(marker, "snapshot");
+    marker.disconnect();
+
+    expect((await failedMarker(created.code, "2222")).message).toBe("Unauthorized");
   }, 30000);
 
   test("physical creation still runs without an acknowledgement", async () => {

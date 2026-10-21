@@ -167,6 +167,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
   function registerCompetition(competition: PhysicalCompetition): void {
     if (registered.has(competition.code)) return;
     registered.add(competition.code);
+    let markerPinGeneration = 0;
 
     const hostNamespace: Namespace<
       PhysicalHostClientToServerEvents,
@@ -281,10 +282,16 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         }
         let nextMarkerPinHash: string | undefined;
         if (input.data.markerPin !== undefined) {
+          const generation = ++markerPinGeneration;
           try {
             nextMarkerPinHash = await hashMarkerPin(input.data.markerPin);
           } catch {
             return reject(ack, "Could not secure the marker PIN");
+          }
+          // Two hosts changing the PIN at once can finish hashing out of
+          // order. Only the most recently requested PIN may be applied.
+          if (generation !== markerPinGeneration) {
+            return reject(ack, "A newer PIN update replaced this one");
           }
         }
         // Hashing yields to the event loop, so a start may have happened while
