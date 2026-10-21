@@ -26,4 +26,17 @@ describe("legacy question migration", () => {
       expect(parsed.data.solutions).toEqual([{ type: "number", value: 4, group: 0 }]);
     }
   });
+
+  test("keeps the old defaults for null optional fields", () => {
+    const parsed = Question.safeParse({
+      type: "x",
+      data: { contents: null, solutions: null, answerComment: null }
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.contents).toBe("");
+      expect(parsed.data.solutions).toEqual([]);
+      expect(parsed.data.answerComment).toBe("");
+    }
+  });
 });
