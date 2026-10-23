@@ -152,9 +152,8 @@
   }
 </script>
 
-<div
+<main
   class="mathex-shell min-h-full px-4 py-5 sm:px-8 sm:py-8"
-  role="group"
   aria-label="Create room"
   ondragover={(e) => {
     e.preventDefault();
@@ -163,7 +162,7 @@
   ondragleave={() => (dragOver = false)}
   ondrop={handleFileDrop}
 >
-  <main class="mx-auto w-full max-w-6xl">
+  <div class="mx-auto w-full max-w-6xl">
     <a
       href="/mathex/app"
       class="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -340,5 +339,5 @@
         </div>
       </div>
     </div>
-  </main>
-</div>
+  </div>
+</main>

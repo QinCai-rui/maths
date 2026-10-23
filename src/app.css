@@ -428,7 +428,10 @@
 @media (prefers-reduced-motion: reduce) {
   .mathex-app *,
   .mathex-app *::before,
-  .mathex-app *::after {
+  .mathex-app *::after,
+  [data-slot="alert-dialog-content"],
+  [data-slot="alert-dialog-content"] *,
+  [data-slot="alert-dialog-overlay"] {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;

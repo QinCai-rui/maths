@@ -118,7 +118,7 @@ test("mobile navigation is keyboard-operable", async ({ page, isMobile }, info) 
   await visit(page, "/");
   const toggle = page.getByRole("button", { name: "Open navigation menu" });
   await toggle.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "Close navigation menu" })).toHaveAttribute("aria-expanded", "true");
   await checkAccessibility(page, info, "mobile-navigation-open");
   await page.locator("#mobile-navigation").getByRole("link", { name: "Tools", exact: true }).press("Enter");
   await expect(page).toHaveURL(/\/tools$/);

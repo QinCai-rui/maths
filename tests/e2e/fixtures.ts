@@ -46,6 +46,18 @@ export async function setTheme(page: Page, theme: "light" | "dark") {
 }
 
 export async function checkAccessibility(page: Page, info: TestInfo, state: string) {
+  // Scan the settled UI, not a partially transparent dialog entry frame.
+  await page.evaluate(async () => {
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter(
+          (animation) =>
+            animation.playState === "running" && animation.effect?.getComputedTiming().iterations !== Infinity
+        )
+        .map((animation) => animation.finished.catch(() => undefined))
+    );
+  });
   // No excludes, disabled rules, or accepted violations. Explicitly keep text
   // contrast enabled even if axe changes its default tag selection.
   const result = await new AxeBuilder({ page })
