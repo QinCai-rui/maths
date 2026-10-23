@@ -25,7 +25,7 @@
   <title>Number facts — Raymont's Maths</title>
 </svelte:head>
 
-<main class="site-wrap site-page">
+<div class="site-wrap site-page">
   <p class="site-eyebrow">A closer look at numbers</p>
   <h1 class="site-page-title">Number facts</h1>
   <p class="site-page-intro">Enter a whole number to see its factors, prime factorisation and other properties.</p>
@@ -47,4 +47,4 @@
   {#if errorMessage}
     <p id="search-error" class="mt-2 text-sm font-medium text-destructive" role="alert">{errorMessage}</p>
   {/if}
-</main>
+</div>

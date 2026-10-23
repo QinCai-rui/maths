@@ -51,7 +51,7 @@
       <p class="mt-3 text-muted-foreground sm:text-lg">Select every number from 1 to 12 that divides the target.</p>
     </header>
 
-    <main class="mathex-panel mx-auto mt-8 max-w-xl rounded-3xl p-5 sm:p-8">
+    <section aria-label="Factor Finder round" class="mathex-panel mx-auto mt-8 max-w-xl rounded-3xl p-5 sm:p-8">
       <div class="flex items-center justify-between">
         <div>
           <p class="mathex-kicker">Rounds cleared</p>
@@ -68,6 +68,7 @@
       <div class="mt-7 grid grid-cols-4 gap-3 sm:grid-cols-6">
         {#each options as value}<button
             onclick={() => toggle(value)}
+            aria-pressed={chosen.includes(value)}
             disabled={complete}
             class={`aspect-square rounded-xl border text-lg font-bold tabular-nums transition-all ${chosen.includes(value) ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border bg-background hover:border-primary/50 hover:bg-primary/5"}`}
             >{value}</button
@@ -78,13 +79,14 @@
           ><Check class="h-4 w-4" /> Check factors</Button
         >
         <p
-          class={`mt-3 min-h-5 text-sm font-medium ${complete ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+          role="status"
+          class={`mt-3 min-h-5 text-sm font-medium ${complete ? "text-primary" : "text-muted-foreground"}`}
         >
           {message}
         </p>
         {#if complete}<p class="text-xs text-muted-foreground">There were {totalFactors} factors in the grid.</p>
           <Button onclick={next} size="sm" variant="outline" class="mt-4">Next target</Button>{/if}
       </div>
-    </main>
+    </section>
   </div>
 </div>

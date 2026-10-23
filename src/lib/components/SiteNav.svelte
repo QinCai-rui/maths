@@ -42,12 +42,13 @@
         onclick={() => (mobileOpen = !mobileOpen)}
         aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
         aria-expanded={mobileOpen}
+        aria-controls="mobile-navigation"
       >
         {#if mobileOpen}<X class="h-6 w-6" />{:else}<Menu class="h-6 w-6" />{/if}
       </button>
     </div>
   </div>
-  <div class="site-wrap site-mobile-menu" data-open={mobileOpen}>
+  <nav id="mobile-navigation" aria-label="Mobile navigation" class="site-wrap site-mobile-menu" data-open={mobileOpen}>
     {#each links as link}
       <a
         href={link.url}
@@ -57,5 +58,5 @@
         onclick={() => (mobileOpen = false)}>{link.text}</a
       >
     {/each}
-  </div>
+  </nav>
 </div>

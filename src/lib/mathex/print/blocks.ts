@@ -13,7 +13,22 @@ type Token = Atom | { type: "image"; src: string };
 export const BASE_STYLE: TextStyle = { family: "serif" };
 export const LINK_COLOR = "#1155cc";
 
-const BLOCK_TAGS = new Set(["P", "DIV", "H1", "H2", "H3", "H4", "H5", "H6", "PRE", "BLOCKQUOTE", "OL", "UL", "IMG", "LI"]);
+const BLOCK_TAGS = new Set([
+  "P",
+  "DIV",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "PRE",
+  "BLOCKQUOTE",
+  "OL",
+  "UL",
+  "IMG",
+  "LI"
+]);
 const ROMAN: [number, string][] = [
   [10, "x"],
   [9, "ix"],
@@ -129,7 +144,14 @@ export function parseBlocks(html: string): Block[] {
     let produced = false;
     const flush = (force: boolean) => {
       if (hasContent(atoms) || (force && !produced)) {
-        blocks.push({ kind: "text", atoms, indent: context.indent, marker, quote: context.quote, gapAfter: context.gapAfter });
+        blocks.push({
+          kind: "text",
+          atoms,
+          indent: context.indent,
+          marker,
+          quote: context.quote,
+          gapAfter: context.gapAfter
+        });
         marker = undefined;
         produced = true;
       }
@@ -187,6 +209,8 @@ export function parseBlocks(html: string): Block[] {
 
 export function mathAtoms(blocks: Block[]) {
   return blocks.flatMap((block) =>
-    block.kind === "text" ? block.atoms.filter((atom): atom is Extract<Atom, { type: "math" }> => atom.type === "math") : []
+    block.kind === "text"
+      ? block.atoms.filter((atom): atom is Extract<Atom, { type: "math" }> => atom.type === "math")
+      : []
   );
 }

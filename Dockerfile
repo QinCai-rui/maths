@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Build stage ----
-FROM oven/bun:1 AS build
+FROM oven/bun:1.4.3 AS build
 WORKDIR /app
 
 COPY package.json bun.lock .npmrc ./
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     GIT_COMMIT=$GIT_COMMIT NODE_ENV=production bun run build
 
 # ---- Runtime stage ----
-FROM oven/bun:1-debian AS runtime
+FROM oven/bun:1.4.3-debian AS runtime
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \

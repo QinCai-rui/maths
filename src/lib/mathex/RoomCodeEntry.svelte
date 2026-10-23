@@ -106,7 +106,13 @@
       <p class="mt-3 leading-7 text-muted-foreground">{description}</p>
       <div class="mt-8 border border-border bg-background p-4 sm:p-5" aria-busy={checking}>
         <p class="mb-3 text-sm font-semibold text-muted-foreground">{fieldLabel}</p>
-        <InputOTP.Root maxlength={6} spellcheck="false" pattern={REGEXP_ONLY_DIGITS} bind:value={() => code, setCode}>
+        <InputOTP.Root
+          aria-label={fieldLabel}
+          maxlength={6}
+          spellcheck="false"
+          pattern={REGEXP_ONLY_DIGITS}
+          bind:value={() => code, setCode}
+        >
           {#snippet children({ cells })}
             <div class="flex w-full justify-between gap-1.5 sm:gap-2">
               {#each cells as cell (cell)}

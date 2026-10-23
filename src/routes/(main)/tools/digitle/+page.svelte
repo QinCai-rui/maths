@@ -516,7 +516,7 @@
     {/each}
   </div>
 
-  <div class="digitle-keys" aria-label="Digit keyboard">
+  <div class="digitle-keys" role="group" aria-label="Digit keyboard">
     {#each ["12345", "67890"] as row}
       <div class="digitle-keyrow">
         {#each row as key}

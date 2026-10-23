@@ -22,9 +22,10 @@
 <DisclaimerDialog />
 
 <div class="public-site flex min-h-screen flex-col">
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <SiteNav />
 
-  <main class="flex-1">
+  <main id="main-content" tabindex="-1" class="flex-1">
     {@render children?.()}
   </main>
 

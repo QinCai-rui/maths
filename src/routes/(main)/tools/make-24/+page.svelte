@@ -622,7 +622,7 @@
     {/if}
   </p>
 
-  <div class="make24-cards" aria-label="Cards">
+  <div class="make24-cards" role="group" aria-label="Cards">
     {#each cards as card}
       <div class="make24-card">{card}</div>
     {/each}
@@ -663,7 +663,7 @@
     {/if}
   </p>
 
-  <div class="make24-pad" aria-label="Expression keyboard">
+  <div class="make24-pad" role="group" aria-label="Expression keyboard">
     <div class="make24-keyrow">
       {#each ["1", "2", "3", "4", "5"] as key}
         <button

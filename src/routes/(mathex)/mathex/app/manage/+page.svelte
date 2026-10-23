@@ -409,7 +409,7 @@
                     </div>
                     {#if currentState !== "lobby"}
                       <div class="mt-1.5 flex items-center gap-2">
-                        <Progress value={progress} class="h-2 flex-1" />
+                        <Progress aria-label="{player.name} question progress" value={progress} class="h-2 flex-1" />
                         <span class="shrink-0 text-xs font-medium text-muted-foreground">
                           {player.correctCount}/{totalQuestions}
                         </span>
@@ -516,7 +516,7 @@
                     {/each}
                   </Select.Content>
                 </Select.Root>
-                <Input bind:value={alertText} class="flex-1" placeholder="Alert text" />
+                <Input aria-label="Alert text" bind:value={alertText} class="flex-1" placeholder="Alert text" />
                 <Button type="submit" disabled={sendingAlert || alertType === undefined || !alertText.trim()}
                   >{sendingAlert ? "Sending…" : "Send"}</Button
                 >
@@ -607,8 +607,7 @@
                             ? 'text-yellow-600 dark:text-yellow-400 font-bold'
                             : 'text-muted-foreground'}"
                   >
-                    <span class="shrink-0 text-muted-foreground/60">{new Date(log.timestamp).toLocaleTimeString()}</span
-                    >
+                    <span class="shrink-0 text-muted-foreground">{new Date(log.timestamp).toLocaleTimeString()}</span>
                     <span class="shrink-0 font-semibold">{log.playerName}</span>
                     <span class="min-w-0 break-words">
                       {#if log.type === "submitted"}

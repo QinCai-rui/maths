@@ -395,7 +395,8 @@
   </div>
 {/snippet}
 
-<div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
+<main class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
+  {#if gameState === "started"}<h1 class="sr-only">Mathex competition</h1>{/if}
   {#if gameState === "connecting"}
     <div class="flex min-h-[calc(100vh-3rem)] flex-1 items-center justify-center">
       {#if connectionError}
@@ -747,7 +748,7 @@
       </div>
     </div>
   {/if}
-</div>
+</main>
 
 <Calculator open={calcOpen && gameState === "started" && settings.allowCalculator} onclose={() => (calcOpen = false)} />
 <SketchPad

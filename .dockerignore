@@ -1,5 +1,9 @@
 node_modules
 build
+playwright-report
+test-results
+coverage
+.ci-data
 .svelte-kit
 .git
 .gitignore

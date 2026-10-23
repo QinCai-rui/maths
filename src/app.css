@@ -417,6 +417,9 @@
 .mathex-app .text-emerald-700 {
   color: var(--competition-viridian-deep);
 }
+.mathex-app :is(.text-amber-600, .text-yellow-600) {
+  color: var(--competition-warning);
+}
 .mathex-app .bg-emerald-500\/10,
 .mathex-app .bg-emerald-600\/10 {
   background-color: color-mix(in srgb, var(--competition-viridian) 12%, transparent);
@@ -468,6 +471,8 @@
   --viridian-deep: #0c4234;
   --saffron: #e3a21a;
   --clay: #b0472e;
+  --destructive: #b0472e;
+  --destructive-foreground: #ffffff;
   min-height: 100vh;
   background: var(--paper);
   color: var(--foreground);
@@ -510,6 +515,8 @@
   --viridian-deep: #b7e3ce;
   --saffron: #f2c45c;
   --clay: #ef9279;
+  --destructive: #ef9279;
+  --destructive-foreground: #24110d;
 }
 
 /* Dialogs, menus and toasts render in a portal on document.body, outside the
@@ -546,8 +553,19 @@
 .public-site :is(button, input, a) {
   font-family: inherit;
 }
-.public-site a {
-  color: inherit;
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  background: var(--background);
+  color: var(--foreground);
+  border: 2px solid var(--primary);
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: translateY(0);
 }
 .public-site a:focus-visible,
 .public-site button:focus-visible,

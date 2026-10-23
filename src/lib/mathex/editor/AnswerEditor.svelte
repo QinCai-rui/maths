@@ -268,7 +268,9 @@
   }
   .mode button.on {
     background: var(--mx-surface);
-    box-shadow: var(--mx-shadow), 0 0 0 1px var(--mx-line);
+    box-shadow:
+      var(--mx-shadow),
+      0 0 0 1px var(--mx-line);
   }
   .mode button.on strong {
     color: var(--mx-text);

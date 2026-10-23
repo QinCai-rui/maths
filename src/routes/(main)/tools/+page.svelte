@@ -88,7 +88,7 @@
   <meta name="description" content="Look up number facts, play Digitle and try maths games." />
 </svelte:head>
 
-<main class="site-wrap site-page">
+<div class="site-wrap site-page">
   <header>
     <h1 class="site-page-title">Maths tools and games</h1>
     <p class="site-page-intro">
@@ -146,4 +146,4 @@
       {/each}
     </div>
   </section>
-</main>
+</div>

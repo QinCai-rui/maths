@@ -141,7 +141,7 @@
       <p class="mt-3 text-muted-foreground sm:text-lg">Spot the pattern and find the next number.</p>
     </header>
 
-    <main class="mathex-panel mx-auto mt-8 max-w-xl rounded-3xl p-5 sm:p-8">
+    <section aria-label="Sequencing round" class="mathex-panel mx-auto mt-8 max-w-xl rounded-3xl p-5 sm:p-8">
       <div class="flex items-center justify-between">
         <div>
           <p class="mathex-kicker">Solved</p>
@@ -187,6 +187,6 @@
           One answer per sequence. Correct answers unlock harder patterns.
         </p>
       {/if}
-    </main>
+    </section>
   </div>
 </div>

@@ -29,7 +29,7 @@
 </script>
 
 <div class="site-home">
-  <main class="site-wrap">
+  <div class="site-wrap">
     <section class="site-hero">
       <div>
         <p class="site-eyebrow">Numbers, games and competitions</p>
@@ -84,5 +84,5 @@
         </a>
       </div>
     </section>
-  </main>
+  </div>
 </div>
