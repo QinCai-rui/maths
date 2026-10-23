@@ -671,7 +671,9 @@
       shakingCells = empty;
       schedule(() => (shakingCells = []), 550);
       toast.info(
-        remainingTiles.length > 0 ? `Place the remaining ${remainingTiles.length} tiles first` : "Fill every blank first"
+        remainingTiles.length > 0
+          ? `Place the remaining ${remainingTiles.length} tiles first`
+          : "Fill every blank first"
       );
       focusCell(empty[0]!);
       return;
@@ -745,7 +747,11 @@
       event.preventDefault();
       event.stopPropagation();
       selected = k;
-      press(event.key);
+      if (event.key === "Enter" && selectedTile === null && placements[k] !== undefined) {
+        removeTile(k);
+      } else {
+        press(event.key);
+      }
     } else if (/^\d$/.test(event.key)) {
       event.preventDefault();
       event.stopPropagation();
@@ -947,97 +953,101 @@
 
   <div class="crossmath-grid" role="grid" aria-label="Crossmath puzzle" style={gridTracks}>
     {#each Array.from({ length: puzzle.size * 2 + 1 }, (_, gr) => gr) as gr}
-      {#each Array.from({ length: puzzle.size * 2 + 1 }, (_, gc) => gc) as gc}
-        {@const n = puzzle.size}
-        {#if gr < 2 * n - 1 && gr % 2 === 0}
-          {@const r = gr / 2}
-          {#if gc < 2 * n - 1 && gc % 2 === 0}
-            {@const c = gc / 2}
-            {@const k = cellKey(r, c)}
-            {@const given = givenMap.get(k)}
-            {@const feedback = cellFeedback(k)}
-            {@const inShakingLine = lineIdsForCell(k).some((id) => shakingLines.includes(id))}
-            {#if given !== undefined}
+      <div role={gr % 2 === 0 ? "row" : "presentation"} class="contents">
+        {#each Array.from({ length: puzzle.size * 2 + 1 }, (_, gc) => gc) as gc}
+          {@const n = puzzle.size}
+          {#if gr < 2 * n - 1 && gr % 2 === 0}
+            {@const r = gr / 2}
+            {#if gc < 2 * n - 1 && gc % 2 === 0}
+              {@const c = gc / 2}
+              {@const k = cellKey(r, c)}
+              {@const given = givenMap.get(k)}
+              {@const feedback = cellFeedback(k)}
+              {@const inShakingLine = lineIdsForCell(k).some((id) => shakingLines.includes(id))}
+              {#if given !== undefined}
+                <div
+                  role="gridcell"
+                  aria-label={`Row ${r + 1} column ${c + 1}, given ${given}`}
+                  class="crossmath-cell crossmath-given"
+                >
+                  {given}
+                </div>
+              {:else}
+                {@const placedId = placements[k]}
+                {@const placedValue = placedId !== undefined ? tileById.get(placedId)?.value : undefined}
+                <div role="gridcell" class="contents">
+                  <button
+                    type="button"
+                    id={cellId(k)}
+                    data-cell={k}
+                    aria-label={placedValue !== undefined
+                      ? `Row ${r + 1} column ${c + 1}, tile ${placedValue}. Activate to return it to the bank.`
+                      : `Row ${r + 1} column ${c + 1}, empty. Activate to place the selected tile.`}
+                    class="crossmath-cell crossmath-blank"
+                    class:cell-correct={feedback === "correct"}
+                    class:cell-wrong={feedback === "wrong"}
+                    class:cell-shake={shakingCells.includes(k) || inShakingLine}
+                    class:cell-selected={selected === k}
+                    class:cell-filled={placedValue !== undefined}
+                    disabled={status !== "playing"}
+                    onclick={() => onCellTap(k)}
+                    onkeydown={(event) => onCellKeydown(k, event)}
+                    onfocus={() => (selected = k)}
+                    ondragover={(event) => {
+                      if (status === "playing") event.preventDefault();
+                    }}
+                    ondrop={(event) => onDropToCell(k, event)}
+                  >
+                    {placedValue ?? ""}
+                  </button>
+                </div>
+              {/if}
+            {:else if gc < 2 * n - 1}
+              <div role="presentation" class="crossmath-cell crossmath-op" aria-hidden="true">
+                {displayGlyph(puzzle.rowOps[r]![(gc - 1) / 2]!)}
+              </div>
+            {:else if gc === 2 * n - 1}
+              <div role="presentation" class="crossmath-cell crossmath-eq" aria-hidden="true">=</div>
+            {:else}
               <div
                 role="gridcell"
-                aria-label={`Row ${r + 1} column ${c + 1}, given ${given}`}
-                class="crossmath-cell crossmath-given"
+                aria-label={`Row ${r + 1} result ${puzzle.rowResults[r]}`}
+                class="crossmath-cell crossmath-result"
               >
-                {given}
+                {puzzle.rowResults[r]}
+              </div>
+            {/if}
+          {:else if gr < 2 * n - 1}
+            {@const k = (gr - 1) / 2}
+            {#if gc <= 2 * n - 2 && gc % 2 === 0}
+              <div role="presentation" class="crossmath-cell crossmath-op" aria-hidden="true">
+                {displayGlyph(puzzle.colOps[k]![gc / 2]!)}
               </div>
             {:else}
-              {@const placedId = placements[k]}
-              {@const placedValue = placedId !== undefined ? tileById.get(placedId)?.value : undefined}
-              <button
-                type="button"
-                id={cellId(k)}
-                data-cell={k}
-                aria-label={placedValue !== undefined
-                  ? `Row ${r + 1} column ${c + 1}, tile ${placedValue}. Activate to return it to the bank.`
-                  : `Row ${r + 1} column ${c + 1}, empty. Activate to place the selected tile.`}
-                class="crossmath-cell crossmath-blank"
-                class:cell-correct={feedback === "correct"}
-                class:cell-wrong={feedback === "wrong"}
-                class:cell-shake={shakingCells.includes(k) || inShakingLine}
-                class:cell-selected={selected === k}
-                class:cell-filled={placedValue !== undefined}
-                disabled={status !== "playing"}
-                onclick={() => onCellTap(k)}
-                onkeydown={(event) => onCellKeydown(k, event)}
-                onfocus={() => (selected = k)}
-                ondragover={(event) => {
-                  if (status === "playing") event.preventDefault();
-                }}
-                ondrop={(event) => onDropToCell(k, event)}
-              >
-                {placedValue ?? ""}
-              </button>
+              <div role="presentation" class="crossmath-cell crossmath-void" aria-hidden="true"></div>
             {/if}
-          {:else if gc < 2 * n - 1}
-            <div role="presentation" class="crossmath-cell crossmath-op" aria-hidden="true">
-              {displayGlyph(puzzle.rowOps[r]![(gc - 1) / 2]!)}
-            </div>
-          {:else if gc === 2 * n - 1}
-            <div role="presentation" class="crossmath-cell crossmath-eq" aria-hidden="true">=</div>
+          {:else if gr === 2 * n - 1}
+            {#if gc <= 2 * n - 2 && gc % 2 === 0}
+              <div role="presentation" class="crossmath-cell crossmath-eq" aria-hidden="true">=</div>
+            {:else}
+              <div role="presentation" class="crossmath-cell crossmath-void" aria-hidden="true"></div>
+            {/if}
           {:else}
-            <div
-              role="gridcell"
-              aria-label={`Row ${r + 1} result ${puzzle.rowResults[r]}`}
-              class="crossmath-cell crossmath-result"
-            >
-              {puzzle.rowResults[r]}
-            </div>
+            {@const c = gc / 2}
+            {#if gc % 2 === 0 && c < n}
+              <div
+                role="gridcell"
+                aria-label={`Column ${c + 1} result ${puzzle.colResults[c]}`}
+                class="crossmath-cell crossmath-result"
+              >
+                {puzzle.colResults[c]}
+              </div>
+            {:else}
+              <div role="presentation" class="crossmath-cell crossmath-void" aria-hidden="true"></div>
+            {/if}
           {/if}
-        {:else if gr < 2 * n - 1}
-          {@const k = (gr - 1) / 2}
-          {#if gc <= 2 * n - 2 && gc % 2 === 0}
-            <div role="presentation" class="crossmath-cell crossmath-op" aria-hidden="true">
-              {displayGlyph(puzzle.colOps[k]![gc / 2]!)}
-            </div>
-          {:else}
-            <div role="presentation" class="crossmath-cell crossmath-void" aria-hidden="true"></div>
-          {/if}
-        {:else if gr === 2 * n - 1}
-          {#if gc <= 2 * n - 2 && gc % 2 === 0}
-            <div role="presentation" class="crossmath-cell crossmath-eq" aria-hidden="true">=</div>
-          {:else}
-            <div role="presentation" class="crossmath-cell crossmath-void" aria-hidden="true"></div>
-          {/if}
-        {:else}
-          {@const c = gc / 2}
-          {#if gc % 2 === 0 && c < n}
-            <div
-              role="gridcell"
-              aria-label={`Column ${c + 1} result ${puzzle.colResults[c]}`}
-              class="crossmath-cell crossmath-result"
-            >
-              {puzzle.colResults[c]}
-            </div>
-          {:else}
-            <div role="presentation" class="crossmath-cell crossmath-void" aria-hidden="true"></div>
-          {/if}
-        {/if}
-      {/each}
+        {/each}
+      </div>
     {/each}
   </div>
 
@@ -1080,7 +1090,7 @@
     {/each}
   </div>
 
-  <div class="crossmath-pad" aria-label="Digit keyboard">
+  <div class="crossmath-pad" role="group" aria-label="Digit keyboard">
     <div class="crossmath-pad-row">
       {#each ["1", "2", "3", "4", "5"] as digit}
         <button
@@ -1575,7 +1585,7 @@
     color: var(--viridian);
   }
   .crossmath-bad {
-    color: #c0392b;
+    color: var(--destructive);
   }
   .crossmath-stats {
     display: grid;

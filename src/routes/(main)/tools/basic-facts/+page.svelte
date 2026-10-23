@@ -4,6 +4,7 @@
   import { RefreshCw, Timer, Zap, Maximize, Settings, X } from "@lucide/svelte/icons";
   import { Checkbox } from "#lib/components/ui/checkbox/index.js";
   import { onDestroy, onMount, tick } from "svelte";
+  import { modalFocus } from "#lib/modal-focus.js";
 
   type Question = { text: string; answer: number; level: number; pointsMultiplier: number; label: string };
 
@@ -161,7 +162,6 @@
     input = "";
     questionElapsed = 0;
     questionStartedAt = performance.now();
-    setTimeout(() => (result = null), 350);
   };
 
   onDestroy(() => {
@@ -212,7 +212,6 @@
       exitFocus();
       return;
     }
-    if (event.key === "Enter") submit();
   }}
 />
 
@@ -237,8 +236,8 @@
       </p>
     </header>
 
-    <main class="mathex-panel mx-auto mt-8 max-w-xl rounded-3xl p-5 sm:p-8">
-      <div class="grid grid-cols-3 gap-3 text-center">
+    <section aria-label="Basic Facts round" class="mathex-panel mx-auto mt-8 min-w-0 max-w-xl rounded-3xl p-5 sm:p-8">
+      <div class="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-3 text-center break-words">
         <div>
           <p class="mathex-kicker">Time</p>
           <p class="mt-1 text-2xl font-bold tabular-nums">{seconds}s</p>
@@ -253,15 +252,16 @@
         </div>
       </div>
       <div
-        class="mt-5 flex items-center justify-between gap-4 border-t border-border/60 pt-4 text-xs"
+        class="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-4 text-xs"
+        role="group"
         aria-label={`Level ${level}: ${question.label}. ${correctAtLevel} of 10 correct answers toward the next level.`}
       >
         <p class="font-semibold text-muted-foreground">
           Level {level} <span class="font-normal">· {question.label}</span>
         </p>
-        <div class="flex items-center gap-2">
-          <Progress value={correctAtLevel} max={10} class="h-1 w-16" /><span class="tabular-nums text-muted-foreground"
-            >{correctAtLevel}/10</span
+        <div class="flex max-w-full flex-wrap items-center gap-2">
+          <Progress aria-label="Progress to the next level" value={correctAtLevel} max={10} class="h-1 w-16" /><span
+            class="tabular-nums text-muted-foreground">{correctAtLevel}/10</span
           >
           <Button variant="ghost" size="icon" onclick={enterFocus} aria-label="Enter focus mode"
             ><Maximize class="h-4 w-4" /></Button
@@ -297,8 +297,10 @@
             />
             <Button type="submit" class="h-12">Answer</Button>
           </form>
-          <p class="mt-4 h-5 text-sm font-semibold text-destructive">
-            {result === "wrong" ? "Try the next one." : ""}
+          <p role="status" class="mt-4 h-5 text-sm font-semibold text-destructive">
+            {#key questionsAnswered}
+              {result === "wrong" ? "Try the next one." : ""}
+            {/key}
           </p>
         </div>
       {:else}
@@ -315,10 +317,17 @@
           >
         </div>
       {/if}
-    </main>
+    </section>
 
     {#if focus}
-      <div class="basic-focus" role="dialog" tabindex="-1" aria-modal="true" aria-label="Basic facts focus mode">
+      <div
+        use:modalFocus
+        class="basic-focus"
+        role="dialog"
+        tabindex="-1"
+        aria-modal="true"
+        aria-label="Basic facts focus mode"
+      >
         {#key questionsAnswered}
           <div class="basic-focus-wash" class:wash-wrong={result === "wrong"}></div>
         {/key}
@@ -373,6 +382,7 @@
         }}
       >
         <div
+          use:modalFocus
           class="basic-settings-dialog"
           role="dialog"
           tabindex="-1"

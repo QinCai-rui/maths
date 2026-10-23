@@ -32,15 +32,11 @@ describe("reportIssueUrl", () => {
   });
 
   test("redacts collaborative and share path tokens", () => {
-    const editor = issueText(
-      reportIssueUrl(500, `https://maths.example/mathex/app/create/editor/${SESSION_TOKEN}`)
-    );
+    const editor = issueText(reportIssueUrl(500, `https://maths.example/mathex/app/create/editor/${SESSION_TOKEN}`));
     expect(editor).not.toContain(SESSION_TOKEN);
     expect(editor).toContain("/mathex/app/create/editor/[token]");
 
-    const share = issueText(
-      reportIssueUrl(500, `https://maths.example/mathex/app/create/editor/share/${SHARE_TOKEN}`)
-    );
+    const share = issueText(reportIssueUrl(500, `https://maths.example/mathex/app/create/editor/share/${SHARE_TOKEN}`));
     expect(share).not.toContain(SHARE_TOKEN);
     expect(share).toContain("/mathex/app/create/editor/share/[token]");
   });

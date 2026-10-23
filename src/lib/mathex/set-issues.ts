@@ -50,7 +50,8 @@ export interface QuestionIssues {
 export function questionIssues(question: DraftQuestionValue): QuestionIssues {
   const errors: string[] = [];
   const warnings: string[] = [];
-  if (!plainQuestionText(question.contents) && !/<img\b/i.test(question.contents)) warnings.push("Question text is empty");
+  if (!plainQuestionText(question.contents) && !/<img\b/i.test(question.contents))
+    warnings.push("Question text is empty");
   if (question.solutions.length === 0) warnings.push("No solutions");
   if ((question.answerComment ?? "").length > 2000) errors.push("Notes are longer than 2000 characters");
   for (const [index, solution] of question.solutions.entries()) {

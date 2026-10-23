@@ -28,7 +28,7 @@
   <title>Facts about {data.n} — Raymont's Maths</title>
 </svelte:head>
 
-<main class="site-wrap site-page">
+<div class="site-wrap site-page">
   <p class="site-eyebrow">Number facts</p>
   <h1 class="site-page-title">A closer look at</h1>
   <p class="site-result-number">{data.n}</p>
@@ -45,4 +45,4 @@
   <p class="mt-6 text-sm text-muted-foreground">
     <a class="underline underline-offset-4" href="/utilities/number">Look up another number</a>
   </p>
-</main>
+</div>

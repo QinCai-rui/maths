@@ -409,7 +409,7 @@
                     </div>
                     {#if currentState !== "lobby"}
                       <div class="mt-1.5 flex items-center gap-2">
-                        <Progress value={progress} class="h-2 flex-1" />
+                        <Progress aria-label="{player.name} question progress" value={progress} class="h-2 flex-1" />
                         <span class="shrink-0 text-xs font-medium text-muted-foreground">
                           {player.correctCount}/{totalQuestions}
                         </span>
@@ -503,7 +503,7 @@
                 }}
               >
                 <Select.Root type="single" bind:value={alertType}>
-                  <Select.Trigger class="w-full sm:w-[180px]" aria-label="Alert type">
+                  <Select.Trigger class="w-full sm:w-[180px]" aria-label={`Alert type: ${alertType ?? "Alert type"}`}>
                     {alertType
                       ? alertType.charAt(0).toUpperCase() + alertType.substring(1).toLowerCase()
                       : "Alert type"}
@@ -516,7 +516,7 @@
                     {/each}
                   </Select.Content>
                 </Select.Root>
-                <Input bind:value={alertText} class="flex-1" placeholder="Alert text" />
+                <Input aria-label="Alert text" bind:value={alertText} class="flex-1" placeholder="Alert text" />
                 <Button type="submit" disabled={sendingAlert || alertType === undefined || !alertText.trim()}
                   >{sendingAlert ? "Sending…" : "Send"}</Button
                 >
@@ -529,7 +529,7 @@
                   <Header size="h2">Leaderboard</Header>
                   <div class="flex items-center gap-2">
                     <Select.Root type="single" bind:value={exportFormat}>
-                      <Select.Trigger class="w-[80px]" aria-label="Export format">
+                      <Select.Trigger class="w-[80px]" aria-label={`Export format: ${exportFormat.toUpperCase()}`}>
                         {exportFormat.toUpperCase()}
                       </Select.Trigger>
                       <Select.Content>
@@ -574,7 +574,10 @@
                 <Header size="h2">Logs ({filteredLogs.length})</Header>
                 <div class="flex items-center gap-3">
                   <Select.Root type="single" bind:value={verbosity}>
-                    <Select.Trigger class="w-[140px]" aria-label="Log verbosity">
+                    <Select.Trigger
+                      class="w-[140px]"
+                      aria-label={`Log verbosity: ${verbosity === "all" ? "All activity" : verbosity === "submissions" ? "Answers" : "Results & tabs"}`}
+                    >
                       {verbosity === "all"
                         ? "All activity"
                         : verbosity === "submissions"
@@ -607,8 +610,7 @@
                             ? 'text-yellow-600 dark:text-yellow-400 font-bold'
                             : 'text-muted-foreground'}"
                   >
-                    <span class="shrink-0 text-muted-foreground/60">{new Date(log.timestamp).toLocaleTimeString()}</span
-                    >
+                    <span class="shrink-0 text-muted-foreground">{new Date(log.timestamp).toLocaleTimeString()}</span>
                     <span class="shrink-0 font-semibold">{log.playerName}</span>
                     <span class="min-w-0 break-words">
                       {#if log.type === "submitted"}

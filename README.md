@@ -16,8 +16,8 @@ docker-compose up --build
 
 ## Docker images
 
-Every push to the repository triggers the `.github/workflows/docker-publish.yml`
-workflow, which builds the image and publishes it to GHCR:
+Pushes to `main` and manual runs of `.github/workflows/docker-publish.yml`
+publish images to GHCR after all required verification jobs pass:
 
 ```nolang
 ghcr.io/qincai-rui/maths:{branch}-{sha}
@@ -30,3 +30,17 @@ To run a published image:
 ```bash
 docker run -p 5185:5185 ghcr.io/qincai-rui/maths:latest
 ```
+
+## CI
+
+PR checks cover formatting, types, tests, production builds, browser journeys,
+accessibility and colour contrast, dependency vulnerabilities, secrets, and
+container startup. Daily runs also exercise Firefox and WebKit.
+
+The workflow exposes `CI required` for branch protection. Repository rules must
+require that check to prevent merging a failing PR. No repository settings change
+automatically.
+
+See the [CI reference](docs/ci.md) for coverage and limits, and the
+[manual accessibility checklist](docs/accessibility-review.md) for checks that
+automation cannot decide.

@@ -502,13 +502,15 @@
                 : `animation-delay:${i * 0.3}s`
               : ""}
           >
-            <span class="tile-face tile-front" class:filled={digit !== "" && !mark}>{digit}</span>
+            <span class="tile-face tile-front" class:filled={digit !== "" && !mark} aria-hidden="true"
+              >{mark ? "" : digit}</span
+            >
             <span
               class="tile-face tile-back"
               class:correct={mark === "correct"}
               class:present={mark === "present"}
               class:absent={mark === "absent"}
-              aria-hidden="true">{digit}</span
+              aria-hidden="true">{mark ? digit : ""}</span
             >
           </div>
         {/each}
@@ -516,7 +518,7 @@
     {/each}
   </div>
 
-  <div class="digitle-keys" aria-label="Digit keyboard">
+  <div class="digitle-keys" role="group" aria-label="Digit keyboard">
     {#each ["12345", "67890"] as row}
       <div class="digitle-keyrow">
         {#each row as key}
