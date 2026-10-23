@@ -590,12 +590,14 @@
 .public-site .site-nav {
   min-height: 4.25rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 .public-site .site-brand {
   display: inline-flex;
+  min-width: 0;
   align-items: baseline;
   gap: 0.55rem;
   color: var(--foreground);
@@ -614,6 +616,7 @@
   font-size: 1.2rem;
   font-weight: 600;
   letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
 }
 .public-site .site-nav-links {
   display: flex;

@@ -747,7 +747,11 @@
       event.preventDefault();
       event.stopPropagation();
       selected = k;
-      press(event.key);
+      if (event.key === "Enter" && selectedTile === null && placements[k] !== undefined) {
+        removeTile(k);
+      } else {
+        press(event.key);
+      }
     } else if (/^\d$/.test(event.key)) {
       event.preventDefault();
       event.stopPropagation();
@@ -1581,7 +1585,7 @@
     color: var(--viridian);
   }
   .crossmath-bad {
-    color: #c0392b;
+    color: var(--destructive);
   }
   .crossmath-stats {
     display: grid;

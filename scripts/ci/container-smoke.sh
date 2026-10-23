@@ -33,9 +33,13 @@ done
 # Exercise the actual Socket.IO endpoint, not just SvelteKit's HTTP handler.
 curl --fail --silent --show-error "${base}/socket.io/?EIO=4&transport=polling" | grep --quiet '"sid"'
 docker restart "$name" >/dev/null
+# Docker can allocate a different ephemeral host port when restarting.
+address="$(docker port "$name" 5185/tcp)"
+base="http://${address}"
 for attempt in $(seq 1 30); do
   if curl --fail --silent "${base}/" >/dev/null; then exit 0; fi
   sleep 2
 done
 echo 'Container did not recover after restart' >&2
+docker inspect --format '{{json .State}}' "$name" >&2
 exit 1

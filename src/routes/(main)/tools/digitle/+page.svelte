@@ -502,7 +502,7 @@
                 : `animation-delay:${i * 0.3}s`
               : ""}
           >
-            <span class="tile-face tile-front" class:filled={digit !== "" && !mark}>{digit}</span>
+            <span class="tile-face tile-front" class:filled={digit !== "" && !mark} aria-hidden="true">{digit}</span>
             <span
               class="tile-face tile-back"
               class:correct={mark === "correct"}

@@ -12,7 +12,7 @@
   let mobileOpen = $state(false);
 </script>
 
-<div class="site-topline sticky top-0 z-40">
+<header class="site-topline sticky top-0 z-40">
   <div class="site-wrap site-nav">
     <a href="/" class="site-brand" aria-label="Raymont's Maths home">
       <span class="site-mark"><Sigma class="h-5 w-5" /></span>
@@ -59,4 +59,4 @@
       >
     {/each}
   </nav>
-</div>
+</header>

@@ -72,11 +72,24 @@ export async function checkAccessibility(page: Page, info: TestInfo, state: stri
 }
 
 export async function checkReflow(page: Page) {
-  const dimensions = await page.evaluate(() => ({
-    content: document.documentElement.scrollWidth,
-    viewport: document.documentElement.clientWidth
-  }));
-  expect(dimensions.content, "Page should not scroll horizontally").toBeLessThanOrEqual(dimensions.viewport + 1);
+  const dimensions = await page.evaluate(() => {
+    const viewport = document.documentElement.clientWidth;
+    return {
+      content: document.documentElement.scrollWidth,
+      viewport,
+      overflowing: [...document.querySelectorAll("body *")]
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && (rect.right > viewport + 1 || rect.left < -1);
+        })
+        .slice(0, 20)
+        .map((element) => element.outerHTML.slice(0, 250))
+    };
+  });
+  expect(
+    dimensions.content,
+    `Page should not scroll horizontally: ${JSON.stringify(dimensions.overflowing)}`
+  ).toBeLessThanOrEqual(dimensions.viewport + 1);
 }
 
 export async function checkDialogKeyboard(page: Page, name: string) {

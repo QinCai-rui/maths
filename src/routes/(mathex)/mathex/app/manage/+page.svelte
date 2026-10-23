@@ -503,7 +503,7 @@
                 }}
               >
                 <Select.Root type="single" bind:value={alertType}>
-                  <Select.Trigger class="w-full sm:w-[180px]" aria-label="Alert type">
+                  <Select.Trigger class="w-full sm:w-[180px]" aria-label={`Alert type: ${alertType ?? "Alert type"}`}>
                     {alertType
                       ? alertType.charAt(0).toUpperCase() + alertType.substring(1).toLowerCase()
                       : "Alert type"}
@@ -529,7 +529,7 @@
                   <Header size="h2">Leaderboard</Header>
                   <div class="flex items-center gap-2">
                     <Select.Root type="single" bind:value={exportFormat}>
-                      <Select.Trigger class="w-[80px]" aria-label="Export format">
+                      <Select.Trigger class="w-[80px]" aria-label={`Export format: ${exportFormat.toUpperCase()}`}>
                         {exportFormat.toUpperCase()}
                       </Select.Trigger>
                       <Select.Content>
@@ -574,7 +574,10 @@
                 <Header size="h2">Logs ({filteredLogs.length})</Header>
                 <div class="flex items-center gap-3">
                   <Select.Root type="single" bind:value={verbosity}>
-                    <Select.Trigger class="w-[140px]" aria-label="Log verbosity">
+                    <Select.Trigger
+                      class="w-[140px]"
+                      aria-label={`Log verbosity: ${verbosity === "all" ? "All activity" : verbosity === "submissions" ? "Answers" : "Results & tabs"}`}
+                    >
                       {verbosity === "all"
                         ? "All activity"
                         : verbosity === "submissions"

@@ -93,6 +93,14 @@ package versions in `package.json` and `bun.lock`. Actions use commit SHAs.
 Actionlint and Gitleaks downloads use fixed versions and SHA-256 checksums.
 Dependabot proposes weekly updates to GitHub Actions pins.
 
+The dependency fixes include mathjs 15.2 and an `@xmldom/xmldom` 0.9.12
+override: speech-rule-engine pins an older vulnerable patch version. Remove the
+override when its upstream dependency permits a patched release.
+
+The unused `test.env` file was removed. `.gitleaksignore` exempts only its exact
+historical dummy-key finding, which the owner confirmed was deliberately fake.
+The file and the generic API-key rule remain subject to scanning.
+
 Verification jobs have read-only repository access and do not receive deployment
 secrets. Only publishing jobs have package-write permission. Checkout does not
 persist Git credentials. Superseded runs cancel within the same event/ref group.

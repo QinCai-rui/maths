@@ -236,8 +236,8 @@
       </p>
     </header>
 
-    <section aria-label="Basic Facts round" class="mathex-panel mx-auto mt-8 max-w-xl rounded-3xl p-5 sm:p-8">
-      <div class="grid grid-cols-3 gap-3 text-center">
+    <section aria-label="Basic Facts round" class="mathex-panel mx-auto mt-8 min-w-0 max-w-xl rounded-3xl p-5 sm:p-8">
+      <div class="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-3 text-center break-words">
         <div>
           <p class="mathex-kicker">Time</p>
           <p class="mt-1 text-2xl font-bold tabular-nums">{seconds}s</p>
@@ -298,7 +298,9 @@
             <Button type="submit" class="h-12">Answer</Button>
           </form>
           <p role="status" class="mt-4 h-5 text-sm font-semibold text-destructive">
-            {result === "wrong" ? "Try the next one." : ""}
+            {#key questionsAnswered}
+              {result === "wrong" ? "Try the next one." : ""}
+            {/key}
           </p>
         </div>
       {:else}

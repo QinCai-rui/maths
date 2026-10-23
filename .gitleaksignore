@@ -1,0 +1,3 @@
+# Owner confirmed RANDOM_API_KEY in test.env is a deliberately fake test value.
+# Ignore only this finding in this historical commit, not this file or rule.
+764d053f3cf9276501dd3c6b67b94af70ce65ab8:test.env:generic-api-key:1

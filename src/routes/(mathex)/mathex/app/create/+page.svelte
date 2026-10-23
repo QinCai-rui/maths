@@ -154,7 +154,7 @@
 
 <div
   class="mathex-shell min-h-full px-4 py-5 sm:px-8 sm:py-8"
-  role="region"
+  role="group"
   aria-label="Create room"
   ondragover={(e) => {
     e.preventDefault();
@@ -278,9 +278,9 @@
                   {roomName.length}/60
                 </span>
               </div>
-              {#if roomName && !roomNameValid}
-                <p id="room-name-error" role="status" class="text-xs text-destructive">Must be 3-60 characters</p>
-              {/if}
+              <p id="room-name-error" role="status" class="text-xs text-destructive">
+                {roomName && !roomNameValid ? "Must be 3-60 characters" : ""}
+              </p>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
