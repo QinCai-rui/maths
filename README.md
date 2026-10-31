@@ -11,7 +11,7 @@ Then, run `bun install` to install dependencies, and `bun --bun run dev` to star
 Alternatively, you could use the `Dockerfile`/`docker-compose.yml`:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 ## Docker images
