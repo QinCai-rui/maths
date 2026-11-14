@@ -19,7 +19,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 FROM oven/bun:1.4.3-debian AS runtime
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Upgrade picks up Debian security fixes that the bun base image predates
+RUN apt-get update && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/package.json /app/bun.lock ./
