@@ -1,0 +1,23 @@
+# Anubis policy for the Mathex app.
+#
+# The Cloudflare tunnel only sends /mathex/app* and Anubis' own
+# /.within.website/* assets here; the rest of the site bypasses Anubis.
+# Every request that reaches this file is challenged, including search engines.
+#
+# Rule reference: https://anubis.techaro.lol/docs/admin/policies
+
+bots:
+  - import: (data)/bots/_deny-pathological.yaml
+  - import: (data)/meta/ai-block-aggressive.yaml
+
+  - name: challenge-everyone
+    path_regex: .*
+    action: CHALLENGE
+
+status_codes:
+  CHALLENGE: 200
+  DENY: 200
+
+store:
+  backend: memory
+  parameters: {}

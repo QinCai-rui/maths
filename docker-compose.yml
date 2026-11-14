@@ -22,3 +22,31 @@ services:
       - ./data:/data
     restart: unless-stopped
     stop_grace_period: 15s
+
+  # Bot challenge for /mathex/app. The Cloudflare tunnel routes /mathex/app* and
+  # /.within.website/* to port 8923; everything else goes straight to `maths`.
+  anubis:
+    image: ghcr.io/techarohq/anubis:v1.28.2
+    ports:
+      - "127.0.0.1:8923:8923"
+    environment:
+      - BIND=:8923
+      - TARGET=http://maths:5185
+      - POLICY_FNAME=/data/cfg/botPolicy.yaml
+      - DIFFICULTY=${ANUBIS_DIFFICULTY:-4}
+      # Cloudflare's X-Forwarded-For ends in a Cloudflare IP, so read the client from here
+      - CUSTOM_REAL_IP_HEADER=CF-Connecting-IP
+      - REDIRECT_DOMAINS=maths.qincai.xyz,maths.raymont.dev
+      # Set this so a restart does not make everyone solve the challenge again.
+      # Generate with `openssl rand -hex 32`.
+      - ED25519_PRIVATE_KEY_HEX=${ANUBIS_ED25519_PRIVATE_KEY_HEX:-}
+    volumes:
+      - ./anubis/botPolicy.yaml:/data/cfg/botPolicy.yaml:ro
+    healthcheck:
+      test: ["CMD", "anubis", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - maths
+    restart: unless-stopped

@@ -13,7 +13,7 @@
       <Header size="h1">Mathex on Raymont's Maths</Header>
       <p class="mt-4 text-center text-lg text-muted-foreground">An application designed for Mathex-style events.</p>
       <div class="mt-8 flex justify-center">
-        <Button href="/mathex/app" class="gap-2">
+        <Button href="/mathex/app" class="gap-2" data-sveltekit-reload>
           <Calculator class="h-4 w-4" />
           Open the competition app
         </Button>

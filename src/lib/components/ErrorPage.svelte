@@ -63,11 +63,11 @@
           <a class="site-button site-button-secondary" href={issueUrl} target="_blank" rel="noreferrer"
             >Report an issue</a
           >
-          <a class="site-button site-button-secondary" href={homeHref}>{homeLabel}</a>
+          <a class="site-button site-button-secondary" href={homeHref} data-sveltekit-reload>{homeLabel}</a>
         </div>
       {:else if isNotFound}
         <div class="site-actions">
-          <a class="site-button site-button-primary" href={homeHref}>{homeLabel}</a>
+          <a class="site-button site-button-primary" href={homeHref} data-sveltekit-reload>{homeLabel}</a>
           {#if isMathex}
             <a class="site-button site-button-secondary" href="/">Site home</a>
           {:else}
@@ -76,7 +76,7 @@
         </div>
       {:else}
         <div class="site-actions">
-          <a class="site-button site-button-primary" href={homeHref}>{homeLabel}</a>
+          <a class="site-button site-button-primary" href={homeHref} data-sveltekit-reload>{homeLabel}</a>
         </div>
       {/if}
     </section>

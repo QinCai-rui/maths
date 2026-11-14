@@ -137,7 +137,7 @@
     </div>
     <div class="site-tool-grid">
       {#each mathexTools as tool}
-        <a class="site-tool" href={tool.url}>
+        <a class="site-tool" href={tool.url} data-sveltekit-reload>
           <span class="site-tool-type">{tool.kind}</span>
           <h3><tool.icon class="mr-2 inline h-4 w-4 text-primary" />{tool.name}</h3>
           <p>{tool.description}</p>
