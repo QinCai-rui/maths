@@ -4,7 +4,8 @@
   import { DropdownMenu } from "bits-ui";
   import { toggleMode } from "mode-watcher";
   import { renderToString } from "katex";
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import { onMount, tick } from "svelte";
   import { toast } from "svelte-sonner";
   import { copyText } from "#lib/utils.js";
@@ -933,15 +934,22 @@
     creating = true;
     const collab: Socket<CollaborativeSetServerToClientEvents, CollaborativeSetClientToServerEvents> =
       io("/set-collaboration");
-    collab.emit("createSession", { set: plainSet() }, (result) => {
+    collab.once("connect_error", () => {
       collab.disconnect();
       creating = false;
-      if (!result.ok) return toast.error(result.error);
-      localStorage.setItem(`mathex-collab-host:${result.sessionToken}`, result.hostToken);
-      localStorage.setItem(`mathex-collab-name:${result.sessionToken}`, name);
-      shareOpen = false;
-      goto(`/mathex/app/create/editor/${result.sessionToken}`);
+      toast.error("Could not connect. Reload the page before trying again.");
     });
+    collab.once("connect", () =>
+      collab.emit("createSession", { set: plainSet() }, (result) => {
+        collab.disconnect();
+        creating = false;
+        if (!result.ok) return toast.error(result.error);
+        localStorage.setItem(`mathex-collab-host:${result.sessionToken}`, result.hostToken);
+        localStorage.setItem(`mathex-collab-name:${result.sessionToken}`, name);
+        shareOpen = false;
+        goto(`/mathex/app/create/editor/${result.sessionToken}`);
+      })
+    );
   }
 
   async function createShareLink() {
@@ -950,13 +958,20 @@
     if (set.questions.length === 0) return toast.error("Add at least one question before sharing");
     sharing = true;
     const shareSocket: Socket<SetShareServerToClientEvents, SetShareClientToServerEvents> = io("/set-share");
-    shareSocket.emit("createShare", { set, expiresInMs: shareExpiryMs }, (result) => {
+    shareSocket.once("connect_error", () => {
       shareSocket.disconnect();
       sharing = false;
-      if (!result.ok) return toast.error(result.error);
-      shareExpiresAt = result.expiresAt;
-      shareUrl = `${window.location.origin}/mathex/app/create/editor/share/${result.token}`;
+      toast.error("Could not connect. Reload the page before trying again.");
     });
+    shareSocket.once("connect", () =>
+      shareSocket.emit("createShare", { set, expiresInMs: shareExpiryMs }, (result) => {
+        shareSocket.disconnect();
+        sharing = false;
+        if (!result.ok) return toast.error(result.error);
+        shareExpiresAt = result.expiresAt;
+        shareUrl = `${window.location.origin}/mathex/app/create/editor/share/${result.token}`;
+      })
+    );
   }
 
   async function copy(text: string, what: string) {

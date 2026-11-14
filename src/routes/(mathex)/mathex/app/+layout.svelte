@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConnectionDialog from "#lib/mathex/ConnectionDialog.svelte";
   import { page } from "$app/state";
   import SiteNav from "#lib/components/SiteNav.svelte";
   import SiteFooter from "#lib/components/SiteFooter.svelte";
@@ -23,6 +24,7 @@
   <title>Mathex - Raymont's Maths</title>
 </svelte:head>
 <Toaster />
+<ConnectionDialog />
 <ModeWatcher defaultMode="light" />
 <DisclaimerDialog />
 {#if usesSiteShell}

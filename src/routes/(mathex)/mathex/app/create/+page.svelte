@@ -22,7 +22,8 @@
   } from "#lib/mathex/schemas.js";
   import { z } from "zod";
 
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import { goto } from "$app/navigation";
   const socket: Socket<RoomCreateServerToClientEvents, RoomCreateClientToServerEvents> = io("/rooms");
   $effect(() => () => {

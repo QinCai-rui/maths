@@ -26,6 +26,7 @@ import {
 } from "../lib/mathex/schemas";
 
 import { z } from "zod";
+import { verifyConnection } from "../lib/mathex/verification.server";
 
 import { createHash, randomBytes, randomInt } from "crypto";
 import { RoomStore } from "../lib/mathex/rooms.server";
@@ -64,6 +65,11 @@ export const createWSServer = (base: ServerInstance) => {
   }
   const io = new Server(base, {
     serveClient: false,
+    allowRequest: (request, callback) => {
+      void verifyConnection(request).then((status) =>
+        callback(status === 200 ? null : "Verification required", status === 200)
+      );
+    },
     // Leave non-Socket.IO upgrade requests (e.g. Vite's dev WebSocket) alone.
     // Engine.IO otherwise ends them after destroyUpgradeTimeout (1s), which makes
     // `bun run dev` hard-refresh the browser every second.

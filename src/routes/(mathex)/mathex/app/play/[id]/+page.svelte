@@ -13,7 +13,8 @@
     UserX,
     Hourglass
   } from "@lucide/svelte/icons";
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import {
     type RoomServerToClientEvents,
     type RoomClientToServerEvents,

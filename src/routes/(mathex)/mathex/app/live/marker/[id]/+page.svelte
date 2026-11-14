@@ -11,7 +11,8 @@
     PhysicalOperationResult
   } from "#lib/mathex/physical.schemas.js";
   import { ArrowLeft, Check, CircleMinus, LayoutGrid, RotateCcw, ShieldCheck, Target, X } from "@lucide/svelte/icons";
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import { onMount } from "svelte";
   import { flip } from "svelte/animate";
   import { toast } from "svelte-sonner";

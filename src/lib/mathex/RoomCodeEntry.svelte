@@ -4,7 +4,8 @@
   import * as InputOTP from "#lib/components/ui/input-otp/index.js";
   import { ArrowLeft } from "@lucide/svelte/icons";
   import { REGEXP_ONLY_DIGITS } from "bits-ui";
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import { toast } from "svelte-sonner";
   import { untrack, type Snippet } from "svelte";
 

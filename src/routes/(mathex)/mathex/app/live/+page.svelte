@@ -10,7 +10,8 @@
     PhysicalCreateServerToClientEvents
   } from "#lib/mathex/physical.schemas.js";
   import { ArrowLeft, Clock3, Radio, ShieldCheck, UsersRound } from "@lucide/svelte/icons";
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import { toast } from "svelte-sonner";
   import TeamEditor, { type EditableTeam } from "./TeamEditor.svelte";
 

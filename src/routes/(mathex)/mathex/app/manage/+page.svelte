@@ -7,7 +7,8 @@
   import { DEFAULT_ROOM_SETTINGS, type ChatMessage } from "#lib/mathex/schemas.js";
   import { exportableResults } from "#lib/mathex/room-state.js";
 
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import {
     type RoomManageServerToClientEvents,
     type RoomManageClientToServerEvents,

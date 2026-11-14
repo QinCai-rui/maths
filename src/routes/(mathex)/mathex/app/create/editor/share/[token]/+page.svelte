@@ -13,7 +13,8 @@
     SharedSet
   } from "#lib/mathex/set-share.schemas.js";
   import { Download, LoaderCircle } from "@lucide/svelte/icons";
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import { onMount } from "svelte";
 
   let share: SharedSet | null = $state(null);
@@ -45,43 +46,50 @@
 
   onMount(() => {
     const socket: Socket<SetShareServerToClientEvents, SetShareClientToServerEvents> = io("/set-share");
-    socket.emit("getShare", page.params.token || "", (result) => {
+    socket.once("connect_error", () => {
       socket.disconnect();
-      if (!result.ok) {
-        error = result.error;
-        status = "error";
-        return;
-      }
-      share = result.share;
-      const raw = localStorage.getItem(MATHEX_DRAFT_KEY);
-      if (!raw) {
-        saveSharedSet();
-        return;
-      }
-      try {
-        localRaw = JSON.parse(raw);
-      } catch {
-        localRaw = raw;
-        differences = ["Your draft is not valid JSON, so it cannot be compared"];
-        status = "conflict";
-        return;
-      }
-      const local = parseQuestionSet(localRaw);
-      if (!local.success) {
-        differences = local.error.issues.map(
-          (issue) => `Your draft, ${issue.path.join(".") || "root"}: ${issue.message}`
-        );
-        status = "conflict";
-        return;
-      }
-      const meaningfulLocal = local.data.questions.length > 0 || local.data.name || local.data.instructions;
-      if (!meaningfulLocal) {
-        saveSharedSet();
-        return;
-      }
-      differences = questionSetDifferences(local.data, result.share.set);
-      status = differences.length === 0 ? "same" : "conflict";
+      error = "Could not load the shared set. Reload the page to reconnect.";
+      status = "error";
     });
+    socket.once("connect", () =>
+      socket.emit("getShare", page.params.token || "", (result) => {
+        socket.disconnect();
+        if (!result.ok) {
+          error = result.error;
+          status = "error";
+          return;
+        }
+        share = result.share;
+        const raw = localStorage.getItem(MATHEX_DRAFT_KEY);
+        if (!raw) {
+          saveSharedSet();
+          return;
+        }
+        try {
+          localRaw = JSON.parse(raw);
+        } catch {
+          localRaw = raw;
+          differences = ["Your draft is not valid JSON, so it cannot be compared"];
+          status = "conflict";
+          return;
+        }
+        const local = parseQuestionSet(localRaw);
+        if (!local.success) {
+          differences = local.error.issues.map(
+            (issue) => `Your draft, ${issue.path.join(".") || "root"}: ${issue.message}`
+          );
+          status = "conflict";
+          return;
+        }
+        const meaningfulLocal = local.data.questions.length > 0 || local.data.name || local.data.instructions;
+        if (!meaningfulLocal) {
+          saveSharedSet();
+          return;
+        }
+        differences = questionSetDifferences(local.data, result.share.set);
+        status = differences.length === 0 ? "same" : "conflict";
+      })
+    );
   });
 </script>
 

@@ -12,6 +12,7 @@ services:
     ports:
       - "5185:5185"
     environment:
+      - ANUBIS_CHECK_URL=http://anubis-auth:8923/.within.website/x/cmd/anubis/api/check
       - PORT=${PORT:-5185}
       - HOST=${HOST:-0.0.0.0}
       - MATHEX_DB_PATH=${MATHEX_DB_PATH:-/data/mathex.sqlite}
@@ -34,7 +35,7 @@ services:
       - TARGET=http://maths:5185
       - POLICY_FNAME=/data/cfg/botPolicy.yaml
       # Re-check every 30 minutes. Live games are unaffected: Socket.IO
-      # bypasses Anubis, so only a page load or refresh triggers a new check.
+      # checks its pass only on a new connection, never during an active game.
       - COOKIE_EXPIRATION_TIME=30m
       # Cloudflare's X-Forwarded-For ends in a Cloudflare IP, so read the client from here
       - CUSTOM_REAL_IP_HEADER=CF-Connecting-IP
@@ -52,3 +53,22 @@ services:
     depends_on:
       - maths
     restart: unless-stopped
+
+  # Checks signed passes without proxying or challenging live connections.
+  anubis-auth:
+    image: ghcr.io/techarohq/anubis:v1.28.2
+    restart: unless-stopped
+    environment:
+      BIND: :8923
+      TARGET: " "
+      POLICY_FNAME: /data/cfg/botPolicy.yaml
+      COOKIE_EXPIRATION_TIME: 30m
+      CUSTOM_REAL_IP_HEADER: CF-Connecting-IP
+      ED25519_PRIVATE_KEY_HEX: ${ANUBIS_ED25519_PRIVATE_KEY_HEX:?set the Anubis signing key}
+    volumes:
+      - ./anubis/botPolicy.yaml:/data/cfg/botPolicy.yaml:ro
+    healthcheck:
+      test: ["CMD", "anubis", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

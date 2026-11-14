@@ -11,7 +11,8 @@
   } from "#lib/mathex/physical.schemas.js";
   import { copyText, msToMinutesAndSeconds } from "#lib/utils.js";
   import { CirclePause, CirclePlay, Copy, ExternalLink, Flag, Radio, Save, ShieldCheck } from "@lucide/svelte/icons";
-  import { io, type Socket } from "socket.io-client";
+  import type { Socket } from "socket.io-client";
+  import { io } from "#lib/mathex/connection.js";
   import { toast } from "svelte-sonner";
   import { flip } from "svelte/animate";
   import TeamEditor, { type EditableTeam } from "../TeamEditor.svelte";
