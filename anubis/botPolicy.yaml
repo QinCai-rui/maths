@@ -10,9 +10,14 @@ bots:
   - import: (data)/bots/_deny-pathological.yaml
   - import: (data)/meta/ai-block-aggressive.yaml
 
+  # Difficulty 5 takes a few seconds on a laptop. Passes last 30 minutes
+  # (COOKIE_EXPIRATION_TIME in docker-compose.yml).
   - name: challenge-everyone
     path_regex: .*
     action: CHALLENGE
+    challenge:
+      algorithm: fast
+      difficulty: 5
 
 status_codes:
   CHALLENGE: 200

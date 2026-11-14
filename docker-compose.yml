@@ -33,7 +33,9 @@ services:
       - BIND=:8923
       - TARGET=http://maths:5185
       - POLICY_FNAME=/data/cfg/botPolicy.yaml
-      - DIFFICULTY=${ANUBIS_DIFFICULTY:-4}
+      # Re-check every 30 minutes. Live games are unaffected: Socket.IO
+      # bypasses Anubis, so only a page load or refresh triggers a new check.
+      - COOKIE_EXPIRATION_TIME=30m
       # Cloudflare's X-Forwarded-For ends in a Cloudflare IP, so read the client from here
       - CUSTOM_REAL_IP_HEADER=CF-Connecting-IP
       - REDIRECT_DOMAINS=maths.qincai.xyz,maths.raymont.dev
