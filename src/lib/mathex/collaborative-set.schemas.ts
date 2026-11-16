@@ -96,8 +96,10 @@ export type ApplyClientHistoryTarget = z.infer<typeof ApplyClientHistoryTargetSc
 
 export const CollaboratorPresenceSchema = z.object({
   connectionId: z.string().min(1),
-  displayName: CollaboratorName,
-  isHost: z.boolean()
+  displayName: z.string(),
+  isHost: z.boolean(),
+  /** Set for agents using the HTTP API. They stay listed for a short while after their last request. */
+  isAgent: z.boolean().optional()
 });
 export const QuestionLockSchema = z.object({
   questionId: CollaborativeQuestionId,
@@ -114,6 +116,31 @@ export const CollaborativeSetJoinStateSchema = z.object({
 export type CollaboratorPresence = z.infer<typeof CollaboratorPresenceSchema>;
 export type QuestionLock = z.infer<typeof QuestionLockSchema>;
 export type CollaborativeSetJoinState = z.infer<typeof CollaborativeSetJoinStateSchema>;
+
+export const AgentTokenLevel = z.enum(["editor", "host"]);
+export const AgentMinterKey = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/);
+export const CreateAgentTokenInput = z.object({
+  label: z.string().trim().min(1).max(32),
+  level: AgentTokenLevel,
+  expiresInMs: z
+    .number()
+    .int()
+    .min(15 * 60_000)
+    .max(24 * 60 * 60_000),
+  minterKey: AgentMinterKey
+});
+export const ListAgentTokensInput = z.object({ minterKey: AgentMinterKey });
+export const RevokeAgentTokenInput = z.object({ id: z.string().uuid(), minterKey: AgentMinterKey });
+export interface AgentTokenInfo {
+  id: string;
+  label: string;
+  level: z.infer<typeof AgentTokenLevel>;
+  createdAt: number;
+  expiresAt: number;
+  mine: boolean;
+}
+export type CreateAgentTokenResult = { ok: true; token: string; info: AgentTokenInfo } | { ok: false; error: string };
+export type ListAgentTokensResult = { ok: true; tokens: AgentTokenInfo[] } | { ok: false; error: string };
 
 export type CollaborativeOperationResult = { ok: true } | { ok: false; error: string };
 export type CollaborativeQuestionResult =
@@ -144,6 +171,9 @@ export interface CollaborativeSetClientToServerEvents {
   applyClientHistory: (input: unknown, callback?: OperationAck) => void;
   endSession: (callback?: OperationAck) => void;
   deleteSession: (callback?: OperationAck) => void;
+  createAgentToken: (input: unknown, callback: (result: CreateAgentTokenResult) => void) => void;
+  listAgentTokens: (input: unknown, callback: (result: ListAgentTokensResult) => void) => void;
+  revokeAgentToken: (input: unknown, callback?: OperationAck) => void;
 }
 
 export interface CollaborativeSetServerToClientEvents {

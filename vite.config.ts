@@ -31,11 +31,19 @@ const webSocketServer = {
     // URL so it works across platforms.
     const wsEntry = pathToFileURL(`${server.config.root}/src/ws/index.server.ts`).href;
     const httpServer = server.httpServer;
+    let realtimeReady: ReturnType<typeof import("./src/ws/index.server.js").createWSServer> | null = null;
+    const agentApiEntry = pathToFileURL(`${server.config.root}/src/ws/agent-api.server.ts`).href;
+    server.middlewares.use(async (request, response, next) => {
+      if (!/^\/mathex\/app\/api(\/|\?|$)/.test(request.url || "") || !realtimeReady) return next();
+      const { serveAgentApi } = (await import(agentApiEntry)) as typeof import("./src/ws/agent-api.server.js");
+      await serveAgentApi(realtimeReady.handleAgentApi, request, response).catch(() => response.destroy());
+    });
     // Load after Vite starts listening so socket.io and the Mathex server modules do not delay startup.
     httpServer.once("listening", async () => {
       try {
         const { createWSServer } = (await import(wsEntry)) as typeof import("./src/ws/index.server.js");
         const realtime = createWSServer(httpServer);
+        realtimeReady = realtime;
         httpServer.once("close", () => {
           realtime.dispose();
           realtime.flush();

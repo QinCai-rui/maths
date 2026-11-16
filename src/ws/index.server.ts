@@ -789,6 +789,7 @@ export const createWSServer = (base: ServerInstance) => {
   return {
     io,
     flush: collaborativeSets.flush,
+    handleAgentApi: collaborativeSets.handleAgentApi,
     dispose: () => {
       for (const id of pendingSaves.keys()) {
         const room = rooms.get(id);

@@ -7,6 +7,12 @@
 # Rule reference: https://anubis.techaro.lol/docs/admin/policies
 
 bots:
+  # The agent API is for scripts and AI agents, which cannot solve a challenge. Every request
+  # except the docs needs a short-lived agent token, and the app rate-limits by token and by IP.
+  - name: mathex-agent-api
+    path_regex: ^/mathex/app/api(/.*)?$
+    action: ALLOW
+
   - import: (data)/bots/_deny-pathological.yaml
   - import: (data)/meta/ai-block-aggressive.yaml
 

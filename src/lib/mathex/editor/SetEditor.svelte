@@ -16,6 +16,7 @@
     CollaborativeSetClientToServerEvents,
     CollaborativeSetServerToClientEvents,
     CollaborativeSetSnapshot,
+    AgentTokenInfo,
     ApplyClientHistoryTarget,
     CollaboratorPresence,
     DraftQuestionValue,
@@ -54,6 +55,7 @@
     Sun,
     Trash2,
     TriangleAlert,
+    Bot,
     Undo2,
     Upload,
     UsersRound,
@@ -159,7 +161,64 @@
   let root = $state<HTMLElement | null>(null);
   let contentsOpen = $state(false);
   let shareOpen = $state(false);
-  let shareTab = $state<"live" | "copy">("live");
+  let shareTab = $state<"live" | "copy" | "agent">("live");
+  // ── Agent tokens ──────────────────────────────────────────────────────────
+  const agentExpiries = [
+    { label: "15 min", value: 15 * 60_000 },
+    { label: "1 hour", value: 60 * 60_000 },
+    { label: "8 hours", value: 8 * 60 * 60_000 },
+    { label: "24 hours", value: 24 * 60 * 60_000 }
+  ];
+  let agentTokens = $state<AgentTokenInfo[]>([]);
+  let agentLabel = $state("");
+  let agentLevel = $state<"editor" | "host">("editor");
+  let agentExpiryMs = $state(60 * 60_000);
+  let agentSecret = $state("");
+  let agentBusy = $state(false);
+  const apiDocsUrl = typeof window === "undefined" ? "" : `${window.location.origin}/mathex/app/api/llms.txt`;
+  /** Identifies this browser as the minter, so editors can manage only their own tokens. */
+  function agentMinterKey() {
+    let key = localStorage.getItem("mathex-agent-minter");
+    if (!key) {
+      key = crypto.randomUUID().replaceAll("-", "");
+      localStorage.setItem("mathex-agent-minter", key);
+    }
+    return key;
+  }
+  function refreshAgentTokens() {
+    socket?.emit("listAgentTokens", { minterKey: agentMinterKey() }, (result) => {
+      if (result.ok) agentTokens = result.tokens;
+    });
+  }
+  function openAgentTab() {
+    shareTab = "agent";
+    agentSecret = "";
+    agentLabel ||= `${displayName || "My"}'s agent`.slice(0, 32);
+    if (!isHost) agentLevel = "editor";
+    refreshAgentTokens();
+  }
+  function createAgentToken() {
+    agentBusy = true;
+    socket?.emit(
+      "createAgentToken",
+      { label: agentLabel, level: agentLevel, expiresInMs: agentExpiryMs, minterKey: agentMinterKey() },
+      (result) => {
+        agentBusy = false;
+        if (!result.ok) return toast.error(result.error);
+        agentSecret = result.token;
+        refreshAgentTokens();
+      }
+    );
+  }
+  function revokeAgentToken(id: string) {
+    socket?.emit("revokeAgentToken", { id, minterKey: agentMinterKey() }, (result) => {
+      if (result && !result.ok) return toast.error(result.error);
+      refreshAgentTokens();
+    });
+  }
+  let agentPrompt = $derived(
+    agentSecret ? `Use the Mathex API to edit my question set. Read ${apiDocsUrl} first. Token: ${agentSecret}` : ""
+  );
   let goLiveName = $state("");
   let creating = $state(false);
   let shareExpiryMs = $state<(typeof shareExpiries)[number]["value"]>(86_400_000);
@@ -1853,7 +1912,7 @@
                     transition:slide={{ duration: ms(180), easing: EASE }}
                   >
                     <span class="face" style:background={colourFor(person.connectionId)}
-                      >{initials(person.displayName)}</span
+                      >{#if person.isAgent}<Bot class="size-3.5" />{:else}{initials(person.displayName)}{/if}</span
                     >
                     <span class="who">
                       <strong>{person.displayName}{person.connectionId === socket?.id ? " (you)" : ""}</strong>
@@ -1862,7 +1921,7 @@
                           >Editing Q{holdingIndex + 1}</button
                         >
                       {:else}
-                        <small>{person.isHost ? "Host" : "Reading"}</small>
+                        <small>{person.isAgent ? "Agent" : person.isHost ? "Host" : "Reading"}</small>
                       {/if}
                     </span>
                   </li>
@@ -1898,8 +1957,103 @@
     >
       <Send class="size-4" /> Send a copy
     </button>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={shareTab === "agent"}
+      class:on={shareTab === "agent"}
+      onclick={openAgentTab}
+    >
+      <Bot class="size-4" /> Agent access
+    </button>
   </div>
-  {#if shareTab === "live"}
+  {#if shareTab === "agent"}
+    {#if !sessionToken}
+      <p class="mx-modal-text">Go live to give an agent access. Agents can only work on live sets.</p>
+      <button type="button" class="mx-btn primary wide" onclick={() => (shareTab = "live")}
+        ><Radio class="size-4" /> Go live</button
+      >
+    {:else if agentSecret}
+      <p class="mx-modal-text">
+        Give this to your agent. It is shown only once. The agent can do what a {agentLevel} can, until the token expires
+        or you revoke it.
+      </p>
+      <div class="mx-copy-row">
+        <input
+          readonly
+          value={agentPrompt}
+          aria-label="Agent prompt"
+          onfocus={(event) => event.currentTarget.select()}
+        />
+        <button type="button" class="mx-btn primary" onclick={() => copy(agentPrompt, "Prompt")}
+          ><Copy class="size-4" /> Copy</button
+        >
+      </div>
+      <button type="button" class="mx-btn wide" onclick={() => (agentSecret = "")}>Done</button>
+    {:else}
+      <p class="mx-modal-text">
+        Let an AI agent edit this set over the <a href={apiDocsUrl} target="_blank" rel="noreferrer">Mathex API</a>. It
+        shows up in People while it works.
+      </p>
+      <form onsubmit={(event) => (event.preventDefault(), createAgentToken())}>
+        <label class="mx-field">
+          <span>Name shown to others</span>
+          <input bind:value={agentLabel} maxlength="32" placeholder="e.g. Claude" />
+        </label>
+        {#if isHost}
+          <div class="mx-expiry mx-agent-level" role="radiogroup" aria-label="Permissions">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={agentLevel === "editor"}
+              class:on={agentLevel === "editor"}
+              onclick={() => (agentLevel = "editor")}>Edit questions</button
+            >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={agentLevel === "host"}
+              class:on={agentLevel === "host"}
+              onclick={() => (agentLevel = "host")}>Full host access</button
+            >
+          </div>
+        {/if}
+        <div class="mx-expiry" role="radiogroup" aria-label="Token expires after">
+          {#each agentExpiries as option}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={agentExpiryMs === option.value}
+              class:on={agentExpiryMs === option.value}
+              onclick={() => (agentExpiryMs = option.value)}>{option.label}</button
+            >
+          {/each}
+        </div>
+        <button type="submit" class="mx-btn primary wide" disabled={agentBusy || !agentLabel.trim()}>
+          <Bot class="size-4" />
+          {agentBusy ? "Creating…" : "Create agent token"}
+        </button>
+      </form>
+      {#if agentTokens.length}
+        <ul class="mx-agent-tokens">
+          {#each agentTokens as token (token.id)}
+            <li>
+              <span>
+                <strong>{token.label}</strong>
+                <small
+                  >{token.level === "host" ? "Host" : "Editor"} · expires {new Date(token.expiresAt).toLocaleTimeString(
+                    [],
+                    { hour: "numeric", minute: "2-digit" }
+                  )}{token.mine ? "" : " · someone else's"}</small
+                >
+              </span>
+              <button type="button" class="mx-btn danger" onclick={() => revokeAgentToken(token.id)}>Revoke</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
+  {:else if shareTab === "live"}
     {#if sessionToken}
       <p class="mx-modal-text">Anyone with this link can join. Only the host can add, move or delete questions.</p>
       <div class="mx-copy-row">
@@ -2935,7 +3089,8 @@
   }
   .mx-tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
     gap: 2px;
     margin-bottom: 1rem;
     padding: 3px;
@@ -2973,6 +3128,30 @@
     color: var(--mx-muted);
     font-size: 0.76rem;
   }
+  .mx-agent-level {
+    margin-bottom: 0.5rem;
+  }
+  .mx-agent-tokens {
+    display: grid;
+    gap: 0.4rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--mx-line);
+  }
+  .mx-agent-tokens li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .mx-agent-tokens span {
+    display: grid;
+    min-width: 0;
+  }
+  .mx-agent-tokens small {
+    color: var(--mx-muted);
+    font-size: 0.75rem;
+  }
   .mx-copy-row {
     display: flex;
     gap: 0.5rem;
@@ -2990,7 +3169,8 @@
   }
   .mx-expiry {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
     gap: 2px;
     padding: 3px;
     border-radius: 8px;

@@ -14,6 +14,19 @@ export interface StoredCollaborativeSet {
   set: CollaborativeSetSnapshot;
 }
 
+/** A short-lived token an agent uses with the HTTP API. Only a SHA-256 hash of the secret is kept. */
+export interface StoredAgentToken {
+  id: string;
+  hash: string;
+  sessionToken: string;
+  label: string;
+  level: "editor" | "host";
+  /** Random key from the minting browser, so editors can list and revoke only their own tokens. */
+  minterKey: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 /**
  * Durable copy of live collaborative sets.
  *
@@ -44,6 +57,14 @@ export class CollaborativeSetStore {
         host_token TEXT NOT NULL,
         data TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      )
+    `);
+    this.database.run(`
+      CREATE TABLE IF NOT EXISTS mathex_agent_tokens (
+        hash TEXT PRIMARY KEY,
+        session_token TEXT NOT NULL,
+        data TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
       )
     `);
     this.flushDelayMs = envInteger("MATHEX_COLLAB_PERSIST_DELAY_MS", 30_000, 1_000, 300_000);
@@ -114,6 +135,35 @@ export class CollaborativeSetStore {
   delete(sessionToken: string): void {
     this.pending.delete(sessionToken);
     this.database.query("DELETE FROM mathex_collaborative_sets WHERE session_token = ?").run(sessionToken);
+    this.deleteAgentTokensFor(sessionToken);
+  }
+
+  loadAgentTokens(now = Date.now()): StoredAgentToken[] {
+    this.database.query("DELETE FROM mathex_agent_tokens WHERE expires_at <= ?").run(now);
+    return this.database
+      .query<{ data: string }, []>("SELECT data FROM mathex_agent_tokens")
+      .all()
+      .flatMap((row) => {
+        try {
+          return [JSON.parse(row.data) as StoredAgentToken];
+        } catch {
+          return [];
+        }
+      });
+  }
+
+  saveAgentToken(token: StoredAgentToken): void {
+    this.database
+      .query("INSERT OR REPLACE INTO mathex_agent_tokens (hash, session_token, data, expires_at) VALUES (?, ?, ?, ?)")
+      .run(token.hash, token.sessionToken, JSON.stringify(token), token.expiresAt);
+  }
+
+  deleteAgentToken(hash: string): void {
+    this.database.query("DELETE FROM mathex_agent_tokens WHERE hash = ?").run(hash);
+  }
+
+  deleteAgentTokensFor(sessionToken: string): void {
+    this.database.query("DELETE FROM mathex_agent_tokens WHERE session_token = ?").run(sessionToken);
   }
 }
 

@@ -6,7 +6,11 @@ import {
   AddCollaborativeQuestionInput,
   CollaborativeSetSnapshotSchema,
   ApplyClientHistoryInput,
+  CreateAgentTokenInput,
   CreateCollaborativeSetInput,
+  ListAgentTokensInput,
+  RevokeAgentTokenInput,
+  type AgentTokenInfo,
   DeleteCollaborativeQuestionInput,
   DraftQuestion,
   DuplicateCollaborativeQuestionInput,
@@ -29,7 +33,18 @@ import {
   type DraftQuestionValue,
   type QuestionLock
 } from "../lib/mathex/collaborative-set.schemas";
-import { CollaborativeSetStore, type StoredCollaborativeSet } from "../lib/mathex/collaborative-set.server";
+import {
+  CollaborativeSetStore,
+  type StoredAgentToken,
+  type StoredCollaborativeSet
+} from "../lib/mathex/collaborative-set.server";
+import {
+  AGENT_PRESENCE_MS,
+  createAgentApi,
+  hashAgentToken,
+  newAgentSecret,
+  type AgentApiHandler
+} from "./agent-api.server";
 
 type AnyServer = Server<any, any, any, any>;
 type CollaborationNamespace = Namespace<
@@ -58,10 +73,18 @@ const emptyQuestion = (): DraftQuestionValue => ({
   skippable: true
 });
 
-export function registerCollaborativeSetServer(io: AnyServer): { flush: () => void } {
+const MAX_AGENT_TOKENS_PER_SET = 10;
+
+export function registerCollaborativeSetServer(io: AnyServer): {
+  flush: () => void;
+  handleAgentApi: AgentApiHandler;
+} {
   const store = new CollaborativeSetStore();
   const sessions = store.load();
   const locks = new Map<string, Map<string, QuestionLock>>();
+  const agentTokens = new Map(store.loadAgentTokens().map((token) => [token.hash, token]));
+  /** When each agent token last made a request, for the people rail. */
+  const agentSeen = new Map<string, number>();
   const namespace: CollaborationNamespace = io.of(NAMESPACE);
 
   const roomName = (token: string) => `set:${token}`;
@@ -88,13 +111,45 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
   }
 
   function presence(token: string): CollaboratorPresence[] {
-    return [...namespace.sockets.values()]
+    const now = Date.now();
+    const people: CollaboratorPresence[] = [...namespace.sockets.values()]
       .filter((candidate) => candidate.data.sessionToken === token)
       .map((candidate) => ({
         connectionId: candidate.id,
         displayName: candidate.data.displayName!,
         isHost: candidate.data.isHost === true
       }));
+    for (const agent of agentTokens.values()) {
+      const seen = agentSeen.get(agent.hash);
+      if (agent.sessionToken !== token || !seen || now - seen > AGENT_PRESENCE_MS) continue;
+      people.push({
+        connectionId: `agent:${agent.id}`,
+        displayName: agent.label,
+        isHost: agent.level === "host",
+        isAgent: true
+      });
+    }
+    return people;
+  }
+
+  function agentInfo(agent: StoredAgentToken, socket: CollaborationSocket, minterKey: string): AgentTokenInfo {
+    return {
+      id: agent.id,
+      label: agent.label,
+      level: agent.level,
+      createdAt: agent.createdAt,
+      expiresAt: agent.expiresAt,
+      mine: agent.minterKey === minterKey
+    };
+  }
+
+  function revokeAgentTokens(sessionToken: string): void {
+    for (const [hash, agent] of agentTokens) {
+      if (agent.sessionToken !== sessionToken) continue;
+      agentTokens.delete(hash);
+      agentSeen.delete(hash);
+    }
+    store.deleteAgentTokensFor(sessionToken);
   }
 
   function emitPresence(token: string): void {
@@ -181,6 +236,19 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
 
   const lockTimer = setInterval(() => {
     for (const token of locks.keys()) expireLocks(token);
+    const now = Date.now();
+    for (const [hash, agent] of agentTokens) {
+      const seen = agentSeen.get(hash);
+      const expired = agent.expiresAt <= now;
+      if (expired) {
+        agentTokens.delete(hash);
+        store.deleteAgentToken(hash);
+      }
+      if (seen && (expired || now - seen > AGENT_PRESENCE_MS)) {
+        agentSeen.delete(hash);
+        emitPresence(agent.sessionToken);
+      }
+    }
   }, 5_000);
   lockTimer.unref?.();
 
@@ -461,6 +529,7 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
         return reject(ack, "A question is locked by another collaborator");
       }
       session.set.status = "ended";
+      revokeAgentTokens(session.set.sessionToken);
       const sessionLocks = locks.get(session.set.sessionToken);
       locks.delete(session.set.sessionToken);
       for (const questionId of sessionLocks?.keys() || []) {
@@ -484,12 +553,77 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
       const token = session.set.sessionToken;
       sessions.delete(token);
       locks.delete(token);
+      revokeAgentTokens(token);
       store.delete(token);
       namespace.to(roomName(token)).emit("sessionDeleted");
       accept(ack);
       for (const candidate of namespace.sockets.values()) {
         if (candidate.data.sessionToken === token) candidate.disconnect(true);
       }
+    });
+
+    socket.on("createAgentToken", (rawInput, callback) => {
+      if (typeof callback !== "function") return;
+      const parsed = CreateAgentTokenInput.safeParse(rawInput);
+      if (!parsed.success) return callback({ ok: false, error: errorFor(parsed.error, "Invalid token details") });
+      const session = activeSession(socket, undefined);
+      if (!session) return callback({ ok: false, error: "Join an active live set first" });
+      if (parsed.data.level === "host" && !socket.data.isHost)
+        return callback({ ok: false, error: "Only the host can create host-level agent tokens" });
+      const token = session.set.sessionToken;
+      const live = [...agentTokens.values()].filter((agent) => agent.sessionToken === token);
+      if (live.length >= MAX_AGENT_TOKENS_PER_SET)
+        return callback({ ok: false, error: `A set can have at most ${MAX_AGENT_TOKENS_PER_SET} agent tokens` });
+      const secret = newAgentSecret();
+      const now = Date.now();
+      const agent: StoredAgentToken = {
+        id: randomUUID(),
+        hash: hashAgentToken(secret),
+        sessionToken: token,
+        label: parsed.data.label,
+        level: parsed.data.level,
+        minterKey: parsed.data.minterKey,
+        createdAt: now,
+        expiresAt: now + parsed.data.expiresInMs
+      };
+      agentTokens.set(agent.hash, agent);
+      store.saveAgentToken(agent);
+      callback({ ok: true, token: secret, info: agentInfo(agent, socket, parsed.data.minterKey) });
+    });
+
+    socket.on("listAgentTokens", (rawInput, callback) => {
+      if (typeof callback !== "function") return;
+      const parsed = ListAgentTokensInput.safeParse(rawInput);
+      if (!parsed.success) return callback({ ok: false, error: "Invalid request" });
+      const session = joinedSession(socket, undefined);
+      if (!session) return callback({ ok: false, error: "Join the collaborative set first" });
+      const now = Date.now();
+      const tokens = [...agentTokens.values()]
+        .filter(
+          (agent) =>
+            agent.sessionToken === session.set.sessionToken &&
+            agent.expiresAt > now &&
+            (socket.data.isHost || agent.minterKey === parsed.data.minterKey)
+        )
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map((agent) => agentInfo(agent, socket, parsed.data.minterKey));
+      callback({ ok: true, tokens });
+    });
+
+    socket.on("revokeAgentToken", (rawInput, ack) => {
+      const parsed = RevokeAgentTokenInput.safeParse(rawInput);
+      if (!parsed.success) return reject(ack, "Invalid request");
+      const session = joinedSession(socket, ack);
+      if (!session) return;
+      const agent = [...agentTokens.values()].find(
+        (candidate) => candidate.id === parsed.data.id && candidate.sessionToken === session.set.sessionToken
+      );
+      if (!agent || (!socket.data.isHost && agent.minterKey !== parsed.data.minterKey))
+        return reject(ack, "Agent token not found");
+      agentTokens.delete(agent.hash);
+      store.deleteAgentToken(agent.hash);
+      if (agentSeen.delete(agent.hash)) emitPresence(agent.sessionToken);
+      accept(ack);
     });
 
     socket.on("disconnect", () => {
@@ -499,7 +633,39 @@ export function registerCollaborativeSetServer(io: AnyServer): { flush: () => vo
     });
   });
 
-  return { flush: () => store.flush() };
+  const api = createAgentApi({
+    sessions,
+    agentTokens,
+    agentSeen,
+    lockHolder(sessionToken, questionIds) {
+      expireLocks(sessionToken);
+      const sessionLocks = locks.get(sessionToken);
+      for (const id of questionIds) {
+        const lock = sessionLocks?.get(id);
+        if (lock) return { lock, index: questionIds.indexOf(id) };
+      }
+      return null;
+    },
+    emitPresence,
+    emitQuestion(session, question) {
+      namespace.to(roomName(session.set.sessionToken)).emit("questionUpdated", question);
+      store.save(session);
+    },
+    saveAndEmit,
+    end(session) {
+      session.set.status = "ended";
+      revokeAgentTokens(session.set.sessionToken);
+      saveAndEmit(session);
+    },
+    revoke(agent) {
+      agentTokens.delete(agent.hash);
+      agentSeen.delete(agent.hash);
+      store.deleteAgentToken(agent.hash);
+    },
+    emptyQuestion
+  });
+
+  return { flush: () => store.flush(), handleAgentApi: api };
 }
 
 function insertionIndex(set: CollaborativeSetSnapshot, afterQuestionId?: string | null): number {
