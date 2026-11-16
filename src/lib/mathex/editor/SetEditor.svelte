@@ -657,11 +657,27 @@
       });
       socket.on("state", applyServerState);
       socket.on("presence", (next) => (collaborators = next));
-      socket.on("lockChanged", (questionId, lock) => {
+      socket.on("lockChanged", (questionId, lock, reason) => {
+        const wasMine = ownedLocks[questionId];
         locks = lock
           ? [...locks.filter((item) => item.questionId !== questionId), lock]
           : locks.filter((item) => item.questionId !== questionId);
         if (!lock || lock.connectionId !== socket?.id) ownedLocks = { ...ownedLocks, [questionId]: false };
+        if (wasMine && !lock && reason) {
+          const timer = questionTimers.get(questionId);
+          if (timer) clearTimeout(timer);
+          questionTimers.delete(questionId);
+          if (liveTransaction?.target.type === "question" && liveTransaction.target.questionId === questionId)
+            commitLiveTransaction();
+          // Show what the server kept, in case a last edit arrived after the lock ended.
+          loadedQuestionIds = { ...loadedQuestionIds, [questionId]: false };
+          void loadQuestion(questionId);
+          toast.info(
+            reason === "idle"
+              ? "Stopped editing because nothing changed for a while. Click to edit again."
+              : "Lost the edit lock. Click to edit again."
+          );
+        }
       });
       socket.on("questionUpdated", (question) => {
         const index = questions.findIndex(({ id }) => id === question.id);
@@ -698,11 +714,12 @@
     };
     window.addEventListener("pointerdown", releaseOnOutsidePointer, true);
 
+    // The server ends a lock 15 seconds after the last keepalive, so this leaves room for two misses.
     lockHeartbeat = setInterval(() => {
       for (const [questionId, owned] of Object.entries(ownedLocks)) {
         if (owned) socket?.emit("refreshLock", { questionId });
       }
-    }, 10_000);
+    }, 5_000);
 
     return () => {
       closingSocket = true;

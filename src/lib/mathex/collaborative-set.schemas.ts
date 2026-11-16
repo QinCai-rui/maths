@@ -188,7 +188,8 @@ export interface CollaborativeSetClientToServerEvents {
 export interface CollaborativeSetServerToClientEvents {
   state: (state: CollaborativeSetSnapshot) => void;
   questionUpdated: (question: CollaborativeQuestionValue) => void;
-  lockChanged: (questionId: string, lock: QuestionLock | null) => void;
+  /** `reason` is set when the server took the lock back: no keepalive arrived, or no edits for a while. */
+  lockChanged: (questionId: string, lock: QuestionLock | null, reason?: "expired" | "idle") => void;
   presence: (collaborators: CollaboratorPresence[]) => void;
   sessionDeleted: () => void;
   /** Sent to a host whose access was taken over with the owner PIN. */

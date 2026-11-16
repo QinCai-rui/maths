@@ -63,7 +63,14 @@ type CollaborationSocket = Socket<
 type Ack = ((result: CollaborativeOperationResult) => void) | undefined;
 
 const NAMESPACE = "/set-collaboration";
-const LOCK_TTL_MS = envInteger("MATHEX_COLLAB_LOCK_TTL_MS", 30_000, 5_000, 300_000);
+interface LockTimings {
+  /** A lock ends this long after its holder's last keepalive, which browsers send every 5 seconds. */
+  lockTtlMs: number;
+  /** A lock is taken back this long after its holder's last real edit, even while keepalives arrive. */
+  lockIdleMs: number;
+}
+type ServerLock = QuestionLock & { editedAt: number };
+const publicLock = ({ editedAt: _, ...lock }: ServerLock): QuestionLock => lock;
 const emptyQuestion = (): DraftQuestionValue => ({
   contents: "",
   solutions: [],
@@ -124,13 +131,18 @@ function waitMessage(seconds: number): string {
   return `Too many wrong PINs. Try again in ${Math.ceil(seconds / 60)} min.`;
 }
 
-export function registerCollaborativeSetServer(io: AnyServer): {
+export function registerCollaborativeSetServer(
+  io: AnyServer,
+  timings: Partial<LockTimings> = {}
+): {
   flush: () => void;
   handleAgentApi: AgentApiHandler;
 } {
+  const LOCK_TTL_MS = timings.lockTtlMs ?? envInteger("MATHEX_COLLAB_LOCK_TTL_MS", 15_000, 5_000, 300_000);
+  const LOCK_IDLE_MS = timings.lockIdleMs ?? envInteger("MATHEX_COLLAB_LOCK_IDLE_MS", 45_000, 10_000, 3_600_000);
   const store = new CollaborativeSetStore();
   const sessions = store.load();
-  const locks = new Map<string, Map<string, QuestionLock>>();
+  const locks = new Map<string, Map<string, ServerLock>>();
   const agentTokens = new Map(store.loadAgentTokens().map((token) => [token.hash, token]));
   /** When each agent token last made a request, for the people rail. */
   const agentSeen = new Map<string, number>();
@@ -157,7 +169,7 @@ export function registerCollaborativeSetServer(io: AnyServer): {
 
   function currentLocks(token: string): QuestionLock[] {
     expireLocks(token);
-    return [...(locks.get(token)?.values() || [])];
+    return [...(locks.get(token)?.values() || [])].map(publicLock);
   }
 
   function presence(token: string): CollaboratorPresence[] {
@@ -210,9 +222,10 @@ export function registerCollaborativeSetServer(io: AnyServer): {
     const sessionLocks = locks.get(token);
     if (!sessionLocks) return;
     for (const [questionId, lock] of sessionLocks) {
-      if (lock.expiresAt > now) continue;
+      const idle = now - lock.editedAt >= LOCK_IDLE_MS;
+      if (lock.expiresAt > now && !idle) continue;
       sessionLocks.delete(questionId);
-      namespace.to(roomName(token)).emit("lockChanged", questionId, null);
+      namespace.to(roomName(token)).emit("lockChanged", questionId, null, idle ? "idle" : "expired");
     }
     if (sessionLocks.size === 0) locks.delete(token);
   }
@@ -284,8 +297,13 @@ export function registerCollaborativeSetServer(io: AnyServer): {
     });
   }
 
+  // Sweep every second so locks end close to their deadline.
   const lockTimer = setInterval(() => {
     for (const token of locks.keys()) expireLocks(token);
+  }, 1_000);
+  lockTimer.unref?.();
+
+  const agentTimer = setInterval(() => {
     const now = Date.now();
     for (const [hash, agent] of agentTokens) {
       const seen = agentSeen.get(hash);
@@ -300,7 +318,7 @@ export function registerCollaborativeSetServer(io: AnyServer): {
       }
     }
   }, 5_000);
-  lockTimer.unref?.();
+  agentTimer.unref?.();
 
   namespace.on("connection", (socket) => {
     socket.on("createSession", async (rawInput, callback) => {
@@ -429,19 +447,22 @@ export function registerCollaborativeSetServer(io: AnyServer): {
       if (questionIndex(session.set, parsed.data.questionId) < 0) return reject(ack, "Question not found");
       const token = session.set.sessionToken;
       expireLocks(token);
-      const sessionLocks = locks.get(token) || new Map<string, QuestionLock>();
+      const sessionLocks = locks.get(token) || new Map<string, ServerLock>();
       const current = sessionLocks.get(parsed.data.questionId);
       if (current && current.connectionId !== socket.id)
         return reject(ack, `Question is locked by ${current.displayName}`);
-      const lock = {
+      const now = Date.now();
+      const lock: ServerLock = {
         questionId: parsed.data.questionId,
         connectionId: socket.id,
         displayName: socket.data.displayName!,
-        expiresAt: Date.now() + LOCK_TTL_MS
+        expiresAt: now + LOCK_TTL_MS,
+        // Taking the lock counts as an edit, so the holder gets the full idle window to start typing.
+        editedAt: current?.editedAt ?? now
       };
       sessionLocks.set(lock.questionId, lock);
       locks.set(token, sessionLocks);
-      namespace.to(roomName(token)).emit("lockChanged", lock.questionId, lock);
+      namespace.to(roomName(token)).emit("lockChanged", lock.questionId, publicLock(lock));
       accept(ack);
     });
 
@@ -490,6 +511,7 @@ export function registerCollaborativeSetServer(io: AnyServer): {
       session.set.questions[index] = question;
       session.set.updatedAt = Date.now();
       lock.expiresAt = Date.now() + LOCK_TTL_MS;
+      lock.editedAt = Date.now();
       store.save(session);
       socket.to(roomName(session.set.sessionToken)).emit("questionUpdated", question);
       accept(ack);
