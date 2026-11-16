@@ -48,7 +48,10 @@ export const CollaborativeSetSnapshotSchema = CollaborativeSetDraft.omit({ quest
   updatedAt: z.number().int()
 });
 
-export const CreateCollaborativeSetInput = z.object({ set: CollaborativeSetDraft });
+/** Lets the owner win back host access from any browser. Stored only as a salted hash. */
+export const OwnerPin = z.string().regex(/^\d{6,12}$/, "The owner PIN must be 6 to 12 digits");
+export const CreateCollaborativeSetInput = z.object({ set: CollaborativeSetDraft, ownerPin: OwnerPin });
+export const OwnerPinInput = z.object({ pin: OwnerPin });
 export const JoinCollaborativeSetInput = z.object({
   sessionToken: CollaborativeSetToken,
   hostToken: CollaborativeSetToken.optional(),
@@ -149,7 +152,9 @@ export type CollaborativeQuestionsResult =
   { ok: true; questions: CollaborativeQuestionValue[] } | { ok: false; error: string };
 export type CollaborativeCreateResult =
   { ok: true; sessionToken: string; hostToken: string; state: CollaborativeSetSnapshot } | { ok: false; error: string };
-export type CollaborativeJoinResult = { ok: true; state: CollaborativeSetJoinState } | { ok: false; error: string };
+export type CollaborativeJoinResult =
+  { ok: true; state: CollaborativeSetJoinState; hasOwnerPin: boolean } | { ok: false; error: string };
+export type ClaimHostResult = { ok: true; hostToken: string } | { ok: false; error: string };
 type OperationAck = (result: CollaborativeOperationResult) => void;
 
 export interface CollaborativeSetClientToServerEvents {
@@ -174,6 +179,10 @@ export interface CollaborativeSetClientToServerEvents {
   createAgentToken: (input: unknown, callback: (result: CreateAgentTokenResult) => void) => void;
   listAgentTokens: (input: unknown, callback: (result: ListAgentTokensResult) => void) => void;
   revokeAgentToken: (input: unknown, callback?: OperationAck) => void;
+  /** Host only: set or replace the owner PIN. */
+  setOwnerPin: (input: unknown, callback?: OperationAck) => void;
+  /** Swap a correct owner PIN for a new host secret. Every other host loses host access. */
+  claimHost: (input: unknown, callback: (result: ClaimHostResult) => void) => void;
 }
 
 export interface CollaborativeSetServerToClientEvents {
@@ -182,6 +191,8 @@ export interface CollaborativeSetServerToClientEvents {
   lockChanged: (questionId: string, lock: QuestionLock | null) => void;
   presence: (collaborators: CollaboratorPresence[]) => void;
   sessionDeleted: () => void;
+  /** Sent to a host whose access was taken over with the owner PIN. */
+  hostRevoked: () => void;
 }
 
 export interface CollaborativeSetInterServerEvents {}

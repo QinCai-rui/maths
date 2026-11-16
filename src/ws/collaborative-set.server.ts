@@ -1,5 +1,5 @@
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
+import { randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
+import { isDeepStrictEqual, promisify } from "node:util";
 import type { Namespace, Server, Socket } from "socket.io";
 
 import {
@@ -16,6 +16,7 @@ import {
   DuplicateCollaborativeQuestionInput,
   JoinCollaborativeSetInput,
   MoveCollaborativeQuestionInput,
+  OwnerPinInput,
   QuestionLockInput,
   UpdateCollaborativeMetadataInput,
   UpdateCollaborativePdfInput,
@@ -74,6 +75,54 @@ const emptyQuestion = (): DraftQuestionValue => ({
 });
 
 const MAX_AGENT_TOKENS_PER_SET = 10;
+/** Wrong owner PINs allowed per set, and per IP, in each window. The set limit stops slow, spread-out guessing. */
+const PIN_SET_LIMIT = 5;
+const PIN_IP_LIMIT = 10;
+const PIN_WINDOW_MS = 15 * 60_000;
+const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
+
+async function hashOwnerPin(pin: string): Promise<string> {
+  const salt = randomBytes(16);
+  const hash = await scryptAsync(pin, salt, 32);
+  return `scrypt:${salt.toString("base64url")}:${hash.toString("base64url")}`;
+}
+
+async function ownerPinMatches(pin: string, stored: string): Promise<boolean> {
+  const [scheme, salt, expected] = stored.split(":");
+  if (scheme !== "scrypt" || !salt || !expected) return false;
+  const actual = await scryptAsync(pin, Buffer.from(salt, "base64url"), 32);
+  const wanted = Buffer.from(expected, "base64url");
+  return actual.length === wanted.length && timingSafeEqual(actual, wanted);
+}
+
+/** Counts wrong PINs in fixed windows. In memory, so a restart resets the counts. */
+class PinAttempts {
+  private windows = new Map<string, { start: number; count: number }>();
+  /** Seconds until the key may try again, or null if it is under the limit. */
+  blocked(key: string, limit: number, now = Date.now()): number | null {
+    const window = this.windows.get(key);
+    if (!window || now - window.start >= PIN_WINDOW_MS) return null;
+    return window.count >= limit ? Math.ceil((window.start + PIN_WINDOW_MS - now) / 1000) : null;
+  }
+  add(key: string, delta: number, now = Date.now()): void {
+    let window = this.windows.get(key);
+    if (!window || now - window.start >= PIN_WINDOW_MS) {
+      if (this.windows.size > 10_000)
+        for (const [old, value] of this.windows) if (now - value.start >= PIN_WINDOW_MS) this.windows.delete(old);
+      window = { start: now, count: 0 };
+      this.windows.set(key, window);
+    }
+    window.count = Math.max(0, window.count + delta);
+  }
+}
+
+function socketIp(socket: CollaborationSocket): string {
+  return String(socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || "unknown");
+}
+
+function waitMessage(seconds: number): string {
+  return `Too many wrong PINs. Try again in ${Math.ceil(seconds / 60)} min.`;
+}
 
 export function registerCollaborativeSetServer(io: AnyServer): {
   flush: () => void;
@@ -85,6 +134,7 @@ export function registerCollaborativeSetServer(io: AnyServer): {
   const agentTokens = new Map(store.loadAgentTokens().map((token) => [token.hash, token]));
   /** When each agent token last made a request, for the people rail. */
   const agentSeen = new Map<string, number>();
+  const pinAttempts = new PinAttempts();
   const namespace: CollaborationNamespace = io.of(NAMESPACE);
 
   const roomName = (token: string) => `set:${token}`;
@@ -253,10 +303,11 @@ export function registerCollaborativeSetServer(io: AnyServer): {
   lockTimer.unref?.();
 
   namespace.on("connection", (socket) => {
-    socket.on("createSession", (rawInput, callback) => {
+    socket.on("createSession", async (rawInput, callback) => {
       if (typeof callback !== "function") return;
       const parsed = CreateCollaborativeSetInput.safeParse(rawInput);
       if (!parsed.success) return callback({ ok: false, error: errorFor(parsed.error, "Invalid set draft") });
+      const ownerPinHash = await hashOwnerPin(parsed.data.ownerPin);
 
       let sessionToken: string;
       do sessionToken = randomBytes(32).toString("base64url");
@@ -269,7 +320,7 @@ export function registerCollaborativeSetServer(io: AnyServer): {
         questions: parsed.data.set.questions.map((question) => ({ id: randomUUID(), ...question })),
         updatedAt: Date.now()
       });
-      const session: StoredCollaborativeSet = { hostToken, set };
+      const session: StoredCollaborativeSet = { hostToken, ownerPinHash, set };
       sessions.set(sessionToken, session);
       store.saveNow(session);
       callback({ ok: true, sessionToken, hostToken, state: summarizedSet(set) });
@@ -298,9 +349,60 @@ export function registerCollaborativeSetServer(io: AnyServer): {
           set: summarizedSet(session.set),
           collaborators: presence(parsed.data.sessionToken),
           locks: currentLocks(parsed.data.sessionToken)
-        }
+        },
+        hasOwnerPin: !!session.ownerPinHash
       });
       emitPresence(parsed.data.sessionToken);
+    });
+
+    socket.on("setOwnerPin", async (rawInput, ack) => {
+      const parsed = OwnerPinInput.safeParse(rawInput);
+      if (!parsed.success) return reject(ack, errorFor(parsed.error, "Invalid PIN"));
+      const session = joinedHostSession(socket, ack);
+      if (!session) return;
+      session.ownerPinHash = await hashOwnerPin(parsed.data.pin);
+      store.saveNow(session);
+      accept(ack);
+    });
+
+    socket.on("claimHost", async (rawInput, callback) => {
+      if (typeof callback !== "function") return;
+      const parsed = OwnerPinInput.safeParse(rawInput);
+      if (!parsed.success) return callback({ ok: false, error: errorFor(parsed.error, "Invalid PIN") });
+      const session = joinedSession(socket, undefined);
+      if (!session) return callback({ ok: false, error: "Join the collaborative set first" });
+      if (!session.ownerPinHash) return callback({ ok: false, error: "This set has no owner PIN" });
+      const token = session.set.sessionToken;
+      const setKey = `set:${token}`;
+      const ipKey = `ip:${socketIp(socket)}`;
+      const wait = pinAttempts.blocked(setKey, PIN_SET_LIMIT) ?? pinAttempts.blocked(ipKey, PIN_IP_LIMIT);
+      if (wait !== null) return callback({ ok: false, error: waitMessage(wait) });
+      // Count the try before the slow hash, so parallel guesses cannot slip past the limit.
+      pinAttempts.add(setKey, 1);
+      pinAttempts.add(ipKey, 1);
+      const matches = await ownerPinMatches(parsed.data.pin, session.ownerPinHash);
+      if (!matches || sessions.get(token) !== session)
+        return callback({ ok: false, error: matches ? "Collaborative set not found" : "Wrong PIN" });
+      pinAttempts.add(setKey, -1);
+      pinAttempts.add(ipKey, -1);
+
+      session.hostToken = randomBytes(32).toString("base64url");
+      store.saveNow(session);
+      for (const candidate of namespace.sockets.values()) {
+        if (candidate.data.sessionToken !== token || candidate.id === socket.id || !candidate.data.isHost) continue;
+        candidate.data.isHost = false;
+        candidate.emit("hostRevoked");
+      }
+      // Host-level agent tokens came from the old host, so they go with it.
+      for (const [hash, agent] of agentTokens) {
+        if (agent.sessionToken !== token || agent.level !== "host") continue;
+        agentTokens.delete(hash);
+        agentSeen.delete(hash);
+        store.deleteAgentToken(hash);
+      }
+      socket.data.isHost = true;
+      callback({ ok: true, hostToken: session.hostToken });
+      emitPresence(token);
     });
 
     socket.on("getQuestion", (rawInput, callback) => {

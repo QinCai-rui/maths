@@ -134,7 +134,8 @@ test("live editor waits for connection before joining with a saved name", async 
         instructions: "",
         questions,
         pdfOptions: { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 }
-      }
+      },
+      ownerPin: "246810"
     });
     expect(result.ok, result.error).toBe(true);
     await page.addInitScript(

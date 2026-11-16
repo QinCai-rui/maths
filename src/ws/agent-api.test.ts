@@ -71,7 +71,7 @@ function api(token: string | null, ip = `10.0.0.${++ipCounter}`) {
 
 async function liveSet() {
   const host = await client();
-  const created = await call(host, "createSession", { set: draft });
+  const created = await call(host, "createSession", { set: draft, ownerPin: "135790" });
   await call(host, "joinSession", {
     sessionToken: created.sessionToken,
     hostToken: created.hostToken,

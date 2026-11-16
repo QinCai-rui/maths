@@ -11,6 +11,8 @@ import {
 
 export interface StoredCollaborativeSet {
   hostToken: string;
+  /** Salted scrypt hash of the owner PIN. Sets created before PINs existed have none. */
+  ownerPinHash?: string;
   set: CollaborativeSetSnapshot;
 }
 
@@ -59,6 +61,9 @@ export class CollaborativeSetStore {
         updated_at INTEGER NOT NULL
       )
     `);
+    const columns = this.database.query<{ name: string }, []>("PRAGMA table_info(mathex_collaborative_sets)").all();
+    if (!columns.some(({ name }) => name === "owner_pin_hash"))
+      this.database.run("ALTER TABLE mathex_collaborative_sets ADD COLUMN owner_pin_hash TEXT");
     this.database.run(`
       CREATE TABLE IF NOT EXISTS mathex_agent_tokens (
         hash TEXT PRIMARY KEY,
@@ -77,8 +82,8 @@ export class CollaborativeSetStore {
   load(): Map<string, StoredCollaborativeSet> {
     const sets = new Map<string, StoredCollaborativeSet>();
     const rows = this.database
-      .query<{ session_token: string; host_token: string; data: string }, []>(
-        "SELECT session_token, host_token, data FROM mathex_collaborative_sets"
+      .query<{ session_token: string; host_token: string; owner_pin_hash: string | null; data: string }, []>(
+        "SELECT session_token, host_token, owner_pin_hash, data FROM mathex_collaborative_sets"
       )
       .all();
     for (const row of rows) {
@@ -88,7 +93,11 @@ export class CollaborativeSetStore {
         const envelope = zStoredData.safeParse(data);
         const set = envelope.success ? envelope.data.set : CollaborativeSetSnapshotSchema.parse(data);
         if (set.sessionToken === row.session_token) {
-          sets.set(row.session_token, { hostToken: row.host_token, set });
+          sets.set(row.session_token, {
+            hostToken: row.host_token,
+            ownerPinHash: row.owner_pin_hash || undefined,
+            set
+          });
         }
       } catch {
         // Ignore a corrupt row without affecting other durable sessions.
@@ -127,9 +136,15 @@ export class CollaborativeSetStore {
   private write(session: StoredCollaborativeSet): void {
     this.database
       .query(
-        "INSERT OR REPLACE INTO mathex_collaborative_sets (session_token, host_token, data, updated_at) VALUES (?, ?, ?, ?)"
+        "INSERT OR REPLACE INTO mathex_collaborative_sets (session_token, host_token, owner_pin_hash, data, updated_at) VALUES (?, ?, ?, ?, ?)"
       )
-      .run(session.set.sessionToken, session.hostToken, JSON.stringify(session.set), session.set.updatedAt);
+      .run(
+        session.set.sessionToken,
+        session.hostToken,
+        session.ownerPinHash ?? null,
+        JSON.stringify(session.set),
+        session.set.updatedAt
+      );
   }
 
   delete(sessionToken: string): void {

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Server } from "socket.io";
 import { io, type Socket } from "socket.io-client";
+import { CollaborativeSetStore } from "../lib/mathex/collaborative-set.server";
 import { registerCollaborativeSetServer } from "./collaborative-set.server";
 
 const question = {
@@ -23,6 +24,7 @@ const draft = {
   questions: [question],
   pdfOptions: { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 }
 };
+const ownerPin = "482913";
 const server = createServer();
 const transport = new Server(server);
 const sockets: Socket[] = [];
@@ -79,8 +81,8 @@ test("missing and non-function acknowledgements do not throw or create sessions"
     peer.emit(name, {});
     peer.emit(name, {}, { invalidAck: true });
   }
-  peer.emit("createSession", { set: draft });
-  peer.emit("createSession", { set: draft }, { invalidAck: true });
+  peer.emit("createSession", { set: draft, ownerPin });
+  peer.emit("createSession", { set: draft, ownerPin }, { invalidAck: true });
   peer.emit("getQuestions");
   peer.emit("getQuestions", { invalidAck: true });
   peer.emit("acquireLock", {}, { invalidAck: true });
@@ -94,7 +96,7 @@ test("missing and non-function acknowledgements do not throw or create sessions"
   ).count;
   expect(countAfter).toBe(countBefore);
 
-  const created = await call(peer, "createSession", { set: draft });
+  const created = await call(peer, "createSession", { set: draft, ownerPin });
   expect(created.ok).toBe(true);
   peer.emit("joinSession", { sessionToken: created.sessionToken, displayName: "Ignored join" });
   peer.emit("joinSession", { sessionToken: created.sessionToken, displayName: "Ignored join" }, { invalidAck: true });
@@ -105,7 +107,7 @@ test("missing and non-function acknowledgements do not throw or create sessions"
 
 test("live locks, bulk loading and question undo preserve other authors' work without per-edit disk writes", async () => {
   const host = await client();
-  const created = await call(host, "createSession", { set: draft });
+  const created = await call(host, "createSession", { set: draft, ownerPin });
   expect(created.ok).toBe(true);
   const hostState = await call(host, "joinSession", {
     sessionToken: created.sessionToken,
@@ -173,4 +175,109 @@ test("live locks, bulk loading and question undo preserve other authors' work wi
   });
   expect(stale.ok).toBe(false);
   expect((await call(host, "getQuestions")).questions[0].contents).toBe("Ben's new question");
+});
+
+test("going live needs an owner PIN, and the PIN is stored only as a hash", async () => {
+  const peer = await client();
+  expect((await call(peer, "createSession", { set: draft })).ok).toBe(false);
+  expect((await call(peer, "createSession", { set: draft, ownerPin: "12345" })).ok).toBe(false);
+  const created = await call(peer, "createSession", { set: draft, ownerPin });
+  expect(created.ok).toBe(true);
+  const row = database
+    .query("SELECT owner_pin_hash FROM mathex_collaborative_sets WHERE session_token = ?")
+    .get(created.sessionToken) as { owner_pin_hash: string };
+  expect(row.owner_pin_hash).toStartWith("scrypt:");
+  expect(row.owner_pin_hash).not.toContain(ownerPin);
+});
+
+test("the owner PIN moves host access to a new browser and away from the old one", async () => {
+  const oldHost = await client();
+  const created = await call(oldHost, "createSession", { set: draft, ownerPin });
+  const joinedOld = await call(oldHost, "joinSession", {
+    sessionToken: created.sessionToken,
+    hostToken: created.hostToken,
+    displayName: "Ana"
+  });
+  expect(joinedOld.hasOwnerPin).toBe(true);
+  const agent = await call(oldHost, "createAgentToken", {
+    label: "Old agent",
+    level: "host",
+    expiresInMs: 15 * 60_000,
+    minterKey: "c".repeat(32)
+  });
+  expect(agent.ok).toBe(true);
+
+  const newBrowser = await client();
+  await call(newBrowser, "joinSession", { sessionToken: created.sessionToken, displayName: "Ana again" });
+  expect((await call(newBrowser, "addQuestion", {})).ok).toBe(false);
+  expect((await call(newBrowser, "claimHost", { pin: "000000" })).error).toBe("Wrong PIN");
+
+  const revoked = new Promise<void>((resolve) => oldHost.once("hostRevoked", resolve));
+  const claimed = await call(newBrowser, "claimHost", { pin: ownerPin });
+  expect(claimed.ok).toBe(true);
+  await revoked;
+  expect((await call(newBrowser, "addQuestion", {})).ok).toBe(true);
+  expect((await call(oldHost, "addQuestion", {})).ok).toBe(false);
+  expect((await call(newBrowser, "listAgentTokens", { minterKey: "c".repeat(32) })).tokens).toHaveLength(0);
+
+  // The old secret is dead; the new one works on a fresh connection.
+  const rejoinOld = await client();
+  await call(rejoinOld, "joinSession", {
+    sessionToken: created.sessionToken,
+    hostToken: created.hostToken,
+    displayName: "Ana"
+  });
+  expect((await call(rejoinOld, "addQuestion", {})).ok).toBe(false);
+  const rejoinNew = await client();
+  await call(rejoinNew, "joinSession", {
+    sessionToken: created.sessionToken,
+    hostToken: claimed.hostToken,
+    displayName: "Ana"
+  });
+  expect((await call(rejoinNew, "addQuestion", {})).ok).toBe(true);
+
+  // Only the host can change the PIN.
+  expect((await call(rejoinOld, "setOwnerPin", { pin: "111111" })).ok).toBe(false);
+  expect((await call(rejoinNew, "setOwnerPin", { pin: "222222" })).ok).toBe(true);
+  expect((await call(rejoinOld, "claimHost", { pin: ownerPin })).error).toBe("Wrong PIN");
+  expect((await call(rejoinOld, "claimHost", { pin: "222222" })).ok).toBe(true);
+});
+
+test("wrong owner PINs lock the set for a while, even across connections", async () => {
+  const host = await client();
+  const created = await call(host, "createSession", { set: draft, ownerPin });
+  const guesses: string[] = [];
+  for (let attempt = 0; attempt < 5; attempt++) {
+    // A new connection each time, like a guesser reconnecting to dodge the limit.
+    const guesser = await client();
+    await call(guesser, "joinSession", { sessionToken: created.sessionToken, displayName: "Eve" });
+    guesses.push((await call(guesser, "claimHost", { pin: `99999${attempt}` })).error);
+  }
+  expect(guesses).toEqual(Array(5).fill("Wrong PIN"));
+  const late = await client();
+  await call(late, "joinSession", { sessionToken: created.sessionToken, displayName: "Ana" });
+  const blocked = await call(late, "claimHost", { pin: ownerPin });
+  expect(blocked.ok).toBe(false);
+  expect(blocked.error).toMatch(/^Too many wrong PINs/);
+});
+
+test("databases from before owner PINs are migrated and their sets still load", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "mathex-legacy-")), "old.sqlite");
+  const legacy = new Database(path);
+  legacy.run(
+    "CREATE TABLE mathex_collaborative_sets (session_token TEXT PRIMARY KEY, host_token TEXT NOT NULL, data TEXT NOT NULL, updated_at INTEGER NOT NULL)"
+  );
+  const sessionToken = "s".repeat(43);
+  const set = { ...draft, sessionToken, status: "active", questions: [], updatedAt: 1 };
+  legacy
+    .query("INSERT INTO mathex_collaborative_sets VALUES (?, ?, ?, ?)")
+    .run(sessionToken, "h".repeat(43), JSON.stringify(set), 1);
+  legacy.close();
+
+  const store = new CollaborativeSetStore(path);
+  const loaded = store.load().get(sessionToken);
+  expect(loaded?.hostToken).toBe("h".repeat(43));
+  expect(loaded?.ownerPinHash).toBeUndefined();
+  store.saveNow({ ...loaded!, ownerPinHash: "scrypt:a:b" });
+  expect(new CollaborativeSetStore(path).load().get(sessionToken)?.ownerPinHash).toBe("scrypt:a:b");
 });

@@ -219,6 +219,39 @@
   let agentPrompt = $derived(
     agentSecret ? `Use the Mathex API to edit my question set. Read ${apiDocsUrl} first. Token: ${agentSecret}` : ""
   );
+  // ── Owner PIN ─────────────────────────────────────────────────────────────
+  let hasOwnerPin = $state(false);
+  let goLivePin = $state("");
+  let ownerPinInput = $state("");
+  let ownerPinBusy = $state(false);
+  const validPin = (pin: string) => /^\d{6,12}$/.test(pin);
+  function hostTokenKey() {
+    return `mathex-collab-host:${sessionToken}`;
+  }
+  function setOwnerPin() {
+    if (!validPin(ownerPinInput)) return toast.error("The owner PIN must be 6 to 12 digits");
+    ownerPinBusy = true;
+    socket?.emit("setOwnerPin", { pin: ownerPinInput }, (result) => {
+      ownerPinBusy = false;
+      if (!result.ok) return toast.error(result.error);
+      ownerPinInput = "";
+      hasOwnerPin = true;
+      toast.success("Owner PIN saved");
+    });
+  }
+  function claimHost() {
+    if (!validPin(ownerPinInput)) return toast.error("The owner PIN must be 6 to 12 digits");
+    ownerPinBusy = true;
+    socket?.emit("claimHost", { pin: ownerPinInput }, (result) => {
+      ownerPinBusy = false;
+      if (!result.ok) return toast.error(result.error);
+      ownerPinInput = "";
+      localStorage.setItem(hostTokenKey(), result.hostToken);
+      hostSession = true;
+      shareOpen = false;
+      toast.success("You are the host again. Other browsers lost host access.");
+    });
+  }
   let goLiveName = $state("");
   let creating = $state(false);
   let shareExpiryMs = $state<(typeof shareExpiries)[number]["value"]>(86_400_000);
@@ -582,6 +615,7 @@
         hostSession = result.state.collaborators.some(
           (collaborator) => collaborator.connectionId === socket?.id && collaborator.isHost
         );
+        hasOwnerPin = result.hasOwnerPin;
         if (reconnecting) loadedQuestionIds = {};
         applyServerState(result.state.set);
         coverOpen = questions.length === 0;
@@ -635,6 +669,11 @@
         questions[index] = question;
         loadedQuestionIds = { ...loadedQuestionIds, [question.id]: true };
         lastQuestionSent.set(question.id, JSON.stringify(plainQuestion(question)));
+      });
+      socket.on("hostRevoked", () => {
+        hostSession = false;
+        localStorage.removeItem(hostTokenKey());
+        toast.warning("Someone used the owner PIN, so this browser is no longer the host");
       });
       socket.on("sessionDeleted", () => {
         deleted = true;
@@ -1003,6 +1042,7 @@
   function createSession() {
     const name = goLiveName.trim();
     if (name.length < 1 || name.length > 20) return toast.error("Enter a name between 1 and 20 characters");
+    if (!validPin(goLivePin)) return toast.error("The owner PIN must be 6 to 12 digits");
     creating = true;
     const collab: Socket<CollaborativeSetServerToClientEvents, CollaborativeSetClientToServerEvents> =
       io("/set-collaboration");
@@ -1012,10 +1052,11 @@
       toast.error("Could not connect. Reload the page before trying again.");
     });
     collab.once("connect", () =>
-      collab.emit("createSession", { set: plainSet() }, (result) => {
+      collab.emit("createSession", { set: plainSet(), ownerPin: goLivePin }, (result) => {
         collab.disconnect();
         creating = false;
         if (!result.ok) return toast.error(result.error);
+        goLivePin = "";
         localStorage.setItem(`mathex-collab-host:${result.sessionToken}`, result.hostToken);
         localStorage.setItem(`mathex-collab-name:${result.sessionToken}`, name);
         shareOpen = false;
@@ -2067,6 +2108,34 @@
           ><Copy class="size-4" /> Copy</button
         >
       </div>
+      {#if isHost || hasOwnerPin}
+        <form class="mx-owner-pin" onsubmit={(event) => (event.preventDefault(), isHost ? setOwnerPin() : claimHost())}>
+          <label class="mx-field">
+            <span>{isHost ? (hasOwnerPin ? "Change owner PIN" : "Set an owner PIN") : "Are you the owner?"}</span>
+            <input
+              bind:value={ownerPinInput}
+              type="password"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="12"
+              autocomplete={isHost ? "new-password" : "current-password"}
+              placeholder={isHost ? "6 to 12 digits" : "Owner PIN"}
+              aria-label="Owner PIN"
+            />
+          </label>
+          <p class="mx-field-hint">
+            {#if isHost}
+              The PIN gets host access back on another browser or after clearing site data. Using it takes host access
+              away from every other browser.
+            {:else}
+              Enter the owner PIN to become the host. The current host loses host access.
+            {/if}
+          </p>
+          <button type="submit" class="mx-btn wide" disabled={ownerPinBusy || !validPin(ownerPinInput)}>
+            {isHost ? "Save PIN" : "Become host"}
+          </button>
+        </form>
+      {/if}
     {:else}
       <p class="mx-modal-text">
         Edit with others in real time. A copy of this set is stored on the server and you become the host. Your browser
@@ -2077,7 +2146,26 @@
           <span>Your name</span>
           <input bind:value={goLiveName} maxlength="20" placeholder="e.g. Mr Chen" autocomplete="nickname" />
         </label>
-        <button type="submit" class="mx-btn primary wide" disabled={creating || !goLiveName.trim()}>
+        <label class="mx-field">
+          <span>Owner PIN</span>
+          <input
+            bind:value={goLivePin}
+            type="password"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="12"
+            autocomplete="new-password"
+            placeholder="6 to 12 digits"
+          />
+        </label>
+        <p class="mx-field-hint">
+          Write it down. If this browser forgets you are the host, the PIN gets you back in. Nobody can recover it.
+        </p>
+        <button
+          type="submit"
+          class="mx-btn primary wide"
+          disabled={creating || !goLiveName.trim() || !validPin(goLivePin)}
+        >
           <Radio class="size-4" />
           {creating ? "Starting…" : "Start live session"}
         </button>
@@ -3130,6 +3218,20 @@
   }
   .mx-agent-level {
     margin-bottom: 0.5rem;
+  }
+  .mx-field-hint {
+    margin: 0.35rem 0 0.75rem;
+    color: var(--mx-muted);
+    font-size: 0.75rem;
+    line-height: 1.45;
+  }
+  form > :global(.mx-field + .mx-field) {
+    margin-top: 0.75rem;
+  }
+  .mx-owner-pin {
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--mx-line);
   }
   .mx-agent-tokens {
     display: grid;
