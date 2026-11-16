@@ -2553,6 +2553,7 @@
   .mx-claim {
     position: absolute;
     inset: 2.75rem 0 0;
+    z-index: 6;
     display: flex;
     align-items: flex-start;
     justify-content: center;

@@ -173,8 +173,13 @@
     font-size: 1.25rem;
     outline: none;
     --caret-color: var(--mx-accent);
+    --selection-color: var(--mx-text);
     --selection-background-color: color-mix(in srgb, var(--mx-accent) 22%, transparent);
     --contains-highlight-background-color: color-mix(in srgb, var(--mx-accent) 10%, transparent);
+    /* MathLive shades text runs, including the placeholder, with a blue block. MathLive reads
+       this colour from a different variable in light and dark OS modes, so set both. */
+    --highlight-text: transparent;
+    --text-highlight-background-color: transparent;
   }
   :global(.mx-mathfield::part(menu-toggle)),
   :global(.mx-mathfield::part(virtual-keyboard-toggle)) {
