@@ -12,7 +12,7 @@ const math = create(all);
 test.each(["3/28", "2(x+1)", "(x+1)^2", "sqrt(x)/2", "(a+b)/(c-d)", "x^(2y)", "-(x-1)", "1/(2x)", "x^2/3"])(
   "%s survives repeated editor round trips",
   (start) => {
-    let value = start;
+    let value: string = start;
     const steps = [value];
     for (let round = 0; round < 4; round++) {
       value = convertLatexToAsciiMath(expressionToLatex(value));
