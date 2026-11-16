@@ -1,3 +1,4 @@
+import { io } from "socket.io-client";
 import { test, expect, visit, setTheme, checkAccessibility, checkReflow } from "./fixtures";
 
 const questions = [
@@ -119,3 +120,69 @@ for (const theme of ["light", "dark"] as const) {
     }
   });
 }
+
+test("live editor waits for connection before joining with a saved name", async ({ page }) => {
+  const socket = io("http://127.0.0.1:5199/set-collaboration", { forceNew: true });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once("connect", resolve);
+      socket.once("connect_error", reject);
+    });
+    const result = await socket.timeout(5000).emitWithAck("createSession", {
+      set: {
+        name: "Saved-name regression",
+        instructions: "",
+        questions,
+        pdfOptions: { questionTextSize: 11, answerTextSize: 11, imageHeight: 30, slipHeight: 49.5, cutMargin: 50 }
+      }
+    });
+    expect(result.ok, result.error).toBe(true);
+    await page.addInitScript(
+      ({ token }) => {
+        localStorage.setItem("disclaimer-acknowledged", "true");
+        localStorage.setItem(`mathex-collab-name:${token}`, "Returning editor");
+      },
+      { token: result.sessionToken }
+    );
+
+    let releaseConnection!: () => void;
+    let connectionReady = new Promise<void>((resolve) => {
+      releaseConnection = resolve;
+    });
+    await page.route("**/socket.io/**", async (route) => {
+      await connectionReady;
+      await route.continue();
+    });
+    await page.goto(`/mathex/app/create/editor/${result.sessionToken}`);
+    await expect(page.getByRole("button", { name: "Join", exact: true })).toBeDisabled();
+    await expect(page.getByRole("alertdialog", { name: "Mathex connection interrupted" })).toBeHidden();
+    releaseConnection();
+    await expect(page.getByRole("textbox", { name: "Set title", exact: true })).toHaveValue("Saved-name regression");
+    await expect(page.getByRole("alertdialog", { name: "Mathex connection interrupted" })).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Set title", exact: true })).toHaveValue("Saved-name regression");
+    await expect(page.getByRole("alertdialog", { name: "Mathex connection interrupted" })).toBeHidden();
+
+    // A first-time visitor must still choose when to submit their name.
+    await page.addInitScript(
+      ({ token }) => {
+        localStorage.removeItem(`mathex-collab-name:${token}`);
+      },
+      { token: result.sessionToken }
+    );
+    connectionReady = new Promise<void>((resolve) => {
+      releaseConnection = resolve;
+    });
+    await page.reload();
+    await page.getByRole("textbox", { name: "Your name" }).fill("New visitor");
+    await expect(page.getByRole("button", { name: "Join", exact: true })).toBeDisabled();
+    releaseConnection();
+    await expect(page.getByRole("button", { name: "Join", exact: true })).toBeEnabled();
+    await expect(page.getByRole("heading", { name: "Join live set" })).toBeVisible();
+    await page.getByRole("button", { name: "Join", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Set title", exact: true })).toHaveValue("Saved-name regression");
+  } finally {
+    socket.disconnect();
+  }
+});

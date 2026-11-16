@@ -484,6 +484,7 @@
   }
 
   function joinSession(reconnecting = false) {
+    if (!socket?.connected) return;
     const name = displayName.trim();
     if (!sessionToken || !socket || name.length < 1 || name.length > 20) {
       toast.error("Enter a name between 1 and 20 characters");
@@ -528,6 +529,8 @@
     window.addEventListener("popstate", syncQuestionHash);
 
     if (sessionToken) {
+      const savedName = localStorage.getItem(`mathex-collab-name:${sessionToken}`) || "";
+      displayName = savedName;
       socket = io("/set-collaboration", {
         reconnection: true,
         reconnectionAttempts: Infinity,
@@ -535,9 +538,9 @@
         reconnectionDelayMax: 10_000
       });
       socket.on("connect", () => {
-        const shouldRejoin = joined && !!displayName && !deleted;
         connected = true;
-        if (shouldRejoin) joinSession(true);
+        // Saved-name joins must also wait for the initial connection.
+        if ((joined || savedName) && displayName && !deleted) joinSession(joined);
       });
       socket.on("disconnect", () => {
         connected = false;
@@ -566,8 +569,6 @@
         deleted = true;
         joined = false;
       });
-      displayName = localStorage.getItem(`mathex-collab-name:${sessionToken}`) || "";
-      if (displayName) joinSession();
     } else {
       loadLocalDraft();
       localBaseline = editorSnapshot();
@@ -1292,7 +1293,7 @@
               autocomplete="nickname"
             />
           </label>
-          <button class="mx-btn primary wide" type="submit" disabled={joining || !displayName.trim()}>
+          <button class="mx-btn primary wide" type="submit" disabled={!connected || joining || !displayName.trim()}>
             {joining ? "Joining…" : "Join"}
           </button>
         </form>
