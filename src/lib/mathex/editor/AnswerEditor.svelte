@@ -2,6 +2,8 @@
   import { math } from "#lib/mathex/math.js";
   import type { DraftQuestionValue } from "#lib/mathex/collaborative-set.schemas.js";
   import MathInput from "./MathInput.svelte";
+  import { slide } from "svelte/transition";
+  import { EASE, ms } from "./motion.js";
   import { Plus, X, Hash, Type, SquareFunction } from "@lucide/svelte/icons";
 
   interface Props {
@@ -22,15 +24,30 @@
   const partLetter = (index: number) =>
     String.fromCharCode(65 + (index % 26)) + (index >= 26 ? Math.floor(index / 26) : "");
 
+  // Answers have no ids, so keep a stable key per row and per part alongside them. That way a
+  // removed row animates out instead of the last one, and the rest slide up into place.
+  // Changes from outside this component (undo, co-authors) only pad or trim the ends.
+  let nextKey = 0;
+  const rowKeys: number[] = [];
+  const partKeys: number[] = [];
+  const keyAt = (keys: number[], index: number) => {
+    while (keys.length <= index) keys.push(nextKey++);
+    return keys[index];
+  };
+
   let multiPart = $derived(question.requireAllSolutionGroups);
   let parts = $derived.by(() => {
-    if (!multiPart) return [{ group: 0, items: question.solutions.map((solution, index) => ({ solution, index })) }];
-    const groups = new Map<number, { solution: Solution; index: number }[]>();
+    rowKeys.length = Math.min(rowKeys.length, question.solutions.length);
+    const item = (solution: Solution, index: number) => ({ solution, index, key: keyAt(rowKeys, index) });
+    if (!multiPart) return [{ group: 0, key: keyAt(partKeys, 0), items: question.solutions.map(item) }];
+    const groups = new Map<number, ReturnType<typeof item>[]>();
     question.solutions.forEach((solution, index) => {
       const group = solution.group ?? 0;
-      groups.set(group, [...(groups.get(group) || []), { solution, index }]);
+      groups.set(group, [...(groups.get(group) || []), item(solution, index)]);
     });
-    return [...groups.entries()].sort(([a], [b]) => a - b).map(([group, items]) => ({ group, items }));
+    const sorted = [...groups.entries()].sort(([a], [b]) => a - b);
+    partKeys.length = Math.min(partKeys.length, sorted.length);
+    return sorted.map(([group, items], position) => ({ group, key: keyAt(partKeys, position), items }));
   });
   let hasExpression = $derived(question.solutions.some((solution) => solution.type === "expression"));
 
@@ -67,6 +84,7 @@
     const type: Kind = last?.type || "number";
     const solution: Solution = type === "number" ? { type, value: "", group } : { type, value: "", group };
     const at = question.solutions.findLastIndex((item) => item.group === group);
+    if (at >= 0) rowKeys.splice(at + 1, 0, nextKey++);
     question.solutions = at < 0 ? [...question.solutions, solution] : question.solutions.toSpliced(at + 1, 0, solution);
   }
 
@@ -76,10 +94,17 @@
   }
 
   function remove(index: number) {
+    rowKeys.splice(index, 1);
     question.solutions = renumber(question.solutions.toSpliced(index, 1));
   }
 
   function removePart(group: number) {
+    partKeys.splice(
+      parts.findIndex((part) => part.group === group),
+      1
+    );
+    for (let index = question.solutions.length - 1; index >= 0; index--)
+      if (question.solutions[index].group === group) rowKeys.splice(index, 1);
     question.solutions = renumber(question.solutions.filter((solution) => solution.group !== group));
   }
 
@@ -102,7 +127,8 @@
 </script>
 
 <div class="mx-answers">
-  <div class="mode" role="radiogroup" aria-label="How answers are marked">
+  <div class="mode" class:second={multiPart} role="radiogroup" aria-label="How answers are marked">
+    <span class="thumb" aria-hidden="true"></span>
     <button
       type="button"
       role="radio"
@@ -125,8 +151,8 @@
     </button>
   </div>
 
-  {#each parts as part, partIndex (part.group)}
-    <div class="part" class:multi={multiPart}>
+  {#each parts as part, partIndex (part.key)}
+    <div class="part" class:multi={multiPart} transition:slide={{ duration: ms(200), easing: EASE }}>
       {#if multiPart}
         <div class="part-head">
           <span class="part-label">Part {partLetter(partIndex)}</span>
@@ -142,69 +168,71 @@
           {/if}
         </div>
       {/if}
-      {#each part.items as { solution, index }, itemIndex (index)}
+      {#each part.items as { solution, index, key }, itemIndex (key)}
         {@const error = solution.type === "expression" ? expressionError(String(solution.value)) : null}
-        {#if itemIndex > 0}<div class="or" aria-hidden="true"><span>or</span></div>{/if}
-        <div class="row">
-          <div class="kind" role="radiogroup" aria-label="Answer type">
-            {#each kinds as kind}
-              {@const Icon = kind.icon}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={solution.type === kind.value}
-                class:on={solution.type === kind.value}
-                title={kind.label}
-                aria-label={kind.label}
-                onclick={() => setKind(index, kind.value)}
-                {disabled}
-                ><Icon />{#if solution.type === kind.value}<span class="kind-label">{kind.label}</span>{/if}</button
-              >
-            {/each}
+        <div class="item" transition:slide={{ duration: ms(180), easing: EASE }}>
+          {#if itemIndex > 0}<div class="or" aria-hidden="true"><span>or</span></div>{/if}
+          <div class="row">
+            <div class="kind" role="radiogroup" aria-label="Answer type">
+              {#each kinds as kind}
+                {@const Icon = kind.icon}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={solution.type === kind.value}
+                  class:on={solution.type === kind.value}
+                  title={kind.label}
+                  aria-label={kind.label}
+                  onclick={() => setKind(index, kind.value)}
+                  {disabled}
+                  ><Icon />{#if solution.type === kind.value}<span class="kind-label">{kind.label}</span>{/if}</button
+                >
+              {/each}
+            </div>
+            <div class="value">
+              {#if solution.type === "expression"}
+                <MathInput
+                  value={String(solution.value)}
+                  format="ascii-math"
+                  compact
+                  invalid={!!error}
+                  placeholder="Expression, e.g. 2x+1"
+                  {disabled}
+                  onValueChange={(value) => setText(index, value)}
+                />
+              {:else if solution.type === "number"}
+                <input
+                  class="field numeric"
+                  type="number"
+                  step="any"
+                  value={solution.value === "" ? "" : String(solution.value)}
+                  oninput={(event) => setNumber(index, event.currentTarget.value)}
+                  placeholder="e.g. 42"
+                  aria-label="Number answer"
+                  {disabled}
+                />
+              {:else}
+                <input
+                  class="field"
+                  type="text"
+                  value={String(solution.value)}
+                  oninput={(event) => setText(index, event.currentTarget.value)}
+                  placeholder="e.g. isosceles"
+                  aria-label="Text answer"
+                  {disabled}
+                />
+              {/if}
+              {#if error}<p class="error">{error}</p>{/if}
+            </div>
+            <button
+              type="button"
+              class="remove"
+              onclick={() => remove(index)}
+              {disabled}
+              aria-label="Remove answer"
+              title="Remove answer"><X /></button
+            >
           </div>
-          <div class="value">
-            {#if solution.type === "expression"}
-              <MathInput
-                value={String(solution.value)}
-                format="ascii-math"
-                compact
-                invalid={!!error}
-                placeholder="Expression, e.g. 2x+1"
-                {disabled}
-                onValueChange={(value) => setText(index, value)}
-              />
-            {:else if solution.type === "number"}
-              <input
-                class="field numeric"
-                type="number"
-                step="any"
-                value={solution.value === "" ? "" : String(solution.value)}
-                oninput={(event) => setNumber(index, event.currentTarget.value)}
-                placeholder="e.g. 42"
-                aria-label="Number answer"
-                {disabled}
-              />
-            {:else}
-              <input
-                class="field"
-                type="text"
-                value={String(solution.value)}
-                oninput={(event) => setText(index, event.currentTarget.value)}
-                placeholder="e.g. isosceles"
-                aria-label="Text answer"
-                {disabled}
-              />
-            {/if}
-            {#if error}<p class="error">{error}</p>{/if}
-          </div>
-          <button
-            type="button"
-            class="remove"
-            onclick={() => remove(index)}
-            {disabled}
-            aria-label="Remove answer"
-            title="Remove answer"><X /></button
-          >
         </div>
       {/each}
       <button type="button" class="add" onclick={() => add(part.group)} {disabled}>
@@ -215,7 +243,7 @@
   {/each}
 
   {#if multiPart}
-    <div class="part-actions">
+    <div class="part-actions" transition:slide={{ duration: ms(180), easing: EASE }}>
       <button type="button" class="add strong" onclick={addPart} {disabled}><Plus /> Add part</button>
       <label class="switch">
         <input type="checkbox" bind:checked={question.solutionOrderMatters} {disabled} />
@@ -226,7 +254,7 @@
   {/if}
 
   {#if hasExpression}
-    <label class="switch standalone">
+    <label class="switch standalone" transition:slide={{ duration: ms(180), easing: EASE }}>
       <input type="checkbox" bind:checked={question.allowEquivalent} {disabled} />
       <span class="track" aria-hidden="true"></span>
       Accept equivalent expressions <small>2(x+1) = 2x+2</small>
@@ -240,6 +268,7 @@
     gap: 0.75rem;
   }
   .mode {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2px;
@@ -247,7 +276,25 @@
     border-radius: 8px;
     background: var(--mx-subtle);
   }
+  /* One highlight that slides between the two options instead of each button drawing its own. */
+  .thumb {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc(50% - 4px);
+    border-radius: 6px;
+    background: var(--mx-surface);
+    box-shadow:
+      var(--mx-shadow),
+      0 0 0 1px var(--mx-line);
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .mode.second .thumb {
+    transform: translateX(calc(100% + 2px));
+  }
   .mode button {
+    position: relative;
     display: grid;
     gap: 0.05rem;
     padding: 0.4rem 0.7rem;
@@ -266,12 +313,6 @@
   .mode button:hover:not(.on):not(:disabled) strong {
     color: var(--mx-text);
   }
-  .mode button.on {
-    background: var(--mx-surface);
-    box-shadow:
-      var(--mx-shadow),
-      0 0 0 1px var(--mx-line);
-  }
   .mode button.on strong {
     color: var(--mx-text);
     font-weight: 600;
@@ -283,6 +324,10 @@
     opacity: 0.6;
   }
   .part {
+    display: grid;
+    gap: 0.4rem;
+  }
+  .item {
     display: grid;
     gap: 0.4rem;
   }
@@ -530,6 +575,15 @@
     .mode {
       grid-template-columns: 1fr;
     }
+    .thumb {
+      right: 3px;
+      bottom: auto;
+      width: auto;
+      height: calc(50% - 4px);
+    }
+    .mode.second .thumb {
+      transform: translateY(calc(100% + 2px));
+    }
     .row {
       grid-template-columns: minmax(0, 1fr) auto;
     }
@@ -539,6 +593,7 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
+    .thumb,
     .track,
     .track::after {
       transition: none;

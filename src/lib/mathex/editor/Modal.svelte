@@ -59,6 +59,36 @@
     z-index: 60;
     background: rgb(10 12 16 / 45%);
   }
+  /* bits-ui waits for these animations to finish before it unmounts a closing dialog. */
+  :global(.mx-modal-overlay[data-state="open"]) {
+    animation: mx-modal-fade 180ms ease-out;
+  }
+  :global(.mx-modal-overlay[data-state="closed"]) {
+    animation: mx-modal-fade 140ms ease-in reverse forwards;
+  }
+  :global(.mx-modal[data-state="open"]) {
+    animation: mx-modal-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  :global(.mx-modal[data-state="closed"]) {
+    animation: mx-modal-in 140ms ease-in reverse forwards;
+  }
+  @keyframes -global-mx-modal-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes -global-mx-modal-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, calc(-50% + 6px)) scale(0.97);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.mx-modal-overlay),
+    :global(.mx-modal) {
+      animation: none !important;
+    }
+  }
   :global(.mx-modal) {
     position: fixed;
     top: 50%;

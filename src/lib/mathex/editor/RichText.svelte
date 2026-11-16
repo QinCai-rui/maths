@@ -4,6 +4,7 @@
   import "quill/dist/quill.core.css";
   import { toast } from "svelte-sonner";
   import MathInput from "./MathInput.svelte";
+  import { pop } from "./motion.js";
   import {
     Bold,
     Italic,
@@ -440,7 +441,7 @@
   </div>
 
   {#if linkOpen}
-    <form class="mx-pop mx-link" onsubmit={(event) => (event.preventDefault(), applyLink())}>
+    <form class="mx-pop mx-link" transition:pop onsubmit={(event) => (event.preventDefault(), applyLink())}>
       <input
         bind:value={linkUrl}
         placeholder="https://example.com"
@@ -452,7 +453,12 @@
   {/if}
 
   {#if mathOpen}
-    <div class="mx-pop mx-equation" role="dialog" aria-label={mathIndex === null ? "Insert equation" : "Edit equation"}>
+    <div
+      class="mx-pop mx-equation"
+      transition:pop
+      role="dialog"
+      aria-label={mathIndex === null ? "Insert equation" : "Edit equation"}
+    >
       <div class="mx-pop-head">
         <span class="kicker">{mathIndex === null ? "Insert equation" : "Edit equation"}</span>
         <div class="scale" role="radiogroup" aria-label="Equation size">

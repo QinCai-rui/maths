@@ -26,6 +26,9 @@
   import RichText from "./RichText.svelte";
   import ProofSlip from "./ProofSlip.svelte";
   import Modal from "./Modal.svelte";
+  import { flip } from "svelte/animate";
+  import { fade, slide } from "svelte/transition";
+  import { EASE, ms, pop, sheetIn } from "./motion.js";
   import {
     ArrowDown,
     ArrowUp,
@@ -115,6 +118,15 @@
   let loadedQuestionIds = $state<Record<string, boolean>>({});
   let questionHash = $state(typeof window === "undefined" ? "" : window.location.hash.slice(1));
   let currentQuestionLoaded = $derived(!!currentQuestion && (!sessionToken || loadedQuestionIds[currentQuestion.id]));
+  // The cover counts as position -1, so moving from it to any question slides forward.
+  let sheetPosition = $derived(coverOpen ? -1 : currentQuestionIndex);
+  let sheetDirection = $state(1);
+  let lastSheetPosition = -1;
+  $effect.pre(() => {
+    const position = sheetPosition;
+    if (position !== lastSheetPosition) sheetDirection = position > lastSheetPosition ? 1 : -1;
+    lastSheetPosition = position;
+  });
 
   // ── Live collaboration state ──────────────────────────────────────────────
   let collaborators = $state<CollaboratorPresence[]>([]);
@@ -1378,6 +1390,7 @@
           <div class="mx-faces" aria-label="{othersHere.length} other people here">
             {#each othersHere.slice(0, 4) as person (person.connectionId)}
               <span
+                in:pop={{ y: 4 }}
                 style:background={colourFor(person.connectionId)}
                 title={person.displayName + (person.isHost ? " · host" : "")}>{initials(person.displayName)}</span
               >
@@ -1478,6 +1491,9 @@
               {@const current = !coverOpen && currentQuestionId === question.id}
               {@const preview = sessionToken && !loadedQuestionIds[question.id] ? null : previewHtml(question.contents)}
               <li
+                animate:flip={{ duration: ms(200), easing: EASE }}
+                in:slide={{ duration: ms(180), easing: EASE }}
+                out:slide={{ duration: ms(150), easing: EASE }}
                 class:current
                 class:dragging={dragId === question.id}
                 class:drop-before={dropIndex === index && dragId !== question.id}
@@ -1512,7 +1528,7 @@
                   {#if issues}<i class="dot" class:bad={issues.errors.length} title={issues.all.join(" · ")}></i>{/if}
                 </button>
                 {#if canEditSet && current}
-                  <div class="tools">
+                  <div class="tools" transition:slide={{ duration: ms(150), easing: EASE }}>
                     <span class="grip" title="Drag to reorder" aria-hidden="true"><GripVertical /></span>
                     <button
                       type="button"
@@ -1576,6 +1592,7 @@
         </nav>
       </aside>
       {#if contentsOpen}<button
+          transition:fade={{ duration: ms(180) }}
           type="button"
           class="mx-scrim lg:hidden"
           onclick={() => (contentsOpen = false)}
@@ -1585,17 +1602,19 @@
       <!-- Manuscript -->
       <main class="mx-desk" bind:this={mainScroller}>
         {#if draftLoadFailed}
-          <div class="mx-banner warn">
+          <div class="mx-banner warn" transition:slide={{ duration: ms(200), easing: EASE }}>
             Your saved draft could not be read. It has not been overwritten. Import a backup from Export, or
             <button type="button" class="underline" onclick={() => (confirmNewSet = true)}>start a blank set</button>.
           </div>
         {/if}
         {#if sessionStatus === "ended"}
-          <div class="mx-banner warn">This live session has ended. The set is read only.</div>
+          <div class="mx-banner warn" transition:slide={{ duration: ms(200), easing: EASE }}>
+            This live session has ended. The set is read only.
+          </div>
         {/if}
 
         {#if coverOpen}
-          <article class="mx-sheet">
+          <article class="mx-sheet" in:sheetIn|global={{ direction: sheetDirection }}>
             <div class="mx-sheet-inner">
               <label class="mx-cover-title">
                 <span class="mx-label">Title</span>
@@ -1700,52 +1719,58 @@
           {@const currentLock = lockFor(currentQuestion.id)}
           {@const hasOwnLock = !sessionToken || ownedLocks[currentQuestion.id]}
           {@const readOnly = sessionStatus !== "active" || !hasOwnLock}
-          <article
-            class="mx-sheet"
-            class:locked={lockedByOther(currentQuestion.id)}
-            style:--who={currentLock ? colourFor(currentLock.connectionId) : undefined}
-            bind:this={activeQuestionCard}
-            onfocusin={() => focusQuestion(currentQuestion!.id)}
-          >
-            <div class="mx-runninghead">
-              <span class="mx-qno">Question {currentQuestionIndex + 1}<small>/ {questions.length}</small></span>
-              {#if currentLock}
-                <span class="who"
-                  ><LockKeyhole class="size-3" />{currentLock.connectionId === socket?.id
-                    ? "You are editing"
-                    : `${currentLock.displayName} is editing`}</span
-                >
-              {/if}
-            </div>
-            <div class="mx-sheet-inner">
-              {#if currentQuestionLoaded}
-                {#key currentQuestion.id}
-                  <QuestionSheet
-                    bind:question={
-                      () => questions[currentQuestionIndex],
-                      (value) => {
-                        const question = questions[currentQuestionIndex];
-                        if (question) questions[currentQuestionIndex] = { ...value, id: question.id };
+          {#key currentQuestion.id}
+            <article
+              class="mx-sheet"
+              class:locked={lockedByOther(currentQuestion.id)}
+              style:--who={currentLock ? colourFor(currentLock.connectionId) : undefined}
+              bind:this={activeQuestionCard}
+              onfocusin={() => focusQuestion(currentQuestion!.id)}
+              in:sheetIn|global={{ direction: sheetDirection }}
+            >
+              <div class="mx-runninghead">
+                <span class="mx-qno">Question {currentQuestionIndex + 1}<small>/ {questions.length}</small></span>
+                {#if currentLock}
+                  <span class="who" transition:fade={{ duration: ms(150) }}
+                    ><LockKeyhole class="size-3" />{currentLock.connectionId === socket?.id
+                      ? "You are editing"
+                      : `${currentLock.displayName} is editing`}</span
+                  >
+                {/if}
+              </div>
+              <div class="mx-sheet-inner">
+                {#if currentQuestionLoaded}
+                  <div in:fade={{ duration: ms(150) }}>
+                    <QuestionSheet
+                      bind:question={
+                        () => questions[currentQuestionIndex],
+                        (value) => {
+                          const question = questions[currentQuestionIndex];
+                          if (question) questions[currentQuestionIndex] = { ...value, id: question.id };
+                        }
                       }
-                    }
-                    disabled={readOnly}
-                  />
-                {/key}
-              {:else}
-                <div class="mx-loading">Loading question…</div>
+                      disabled={readOnly}
+                    />
+                  </div>
+                {:else}
+                  <div class="mx-loading">Loading question…</div>
+                {/if}
+              </div>
+              {#if sessionToken && connected && sessionStatus === "active" && !currentLock && !hasOwnLock && currentQuestionLoaded}
+                <button
+                  type="button"
+                  class="mx-claim"
+                  onclick={() => focusQuestion(currentQuestion!.id)}
+                  disabled={acquiringQuestionId === currentQuestion.id}
+                  transition:fade={{ duration: ms(150) }}
+                >
+                  <span in:pop={{ y: -6 }}
+                    >{acquiringQuestionId === currentQuestion.id ? "Reserving…" : "Click to edit"}</span
+                  >
+                </button>
               {/if}
-            </div>
-            {#if sessionToken && connected && sessionStatus === "active" && !currentLock && !hasOwnLock && currentQuestionLoaded}
-              <button
-                type="button"
-                class="mx-claim"
-                onclick={() => focusQuestion(currentQuestion!.id)}
-                disabled={acquiringQuestionId === currentQuestion.id}
-              >
-                <span>{acquiringQuestionId === currentQuestion.id ? "Reserving…" : "Click to edit"}</span>
-              </button>
-            {/if}
-          </article>
+            </article>
+          {/key}
           <div class="mx-pager">
             <button
               type="button"
@@ -1802,10 +1827,14 @@
               {:else if currentIssues}
                 <ul class="mx-issues">
                   {#each currentIssues.errors as message}
-                    <li class="bad"><CircleAlert class="size-3.5" />{message}</li>
+                    <li class="bad" transition:slide={{ duration: ms(150), easing: EASE }}>
+                      <CircleAlert class="size-3.5" />{message}
+                    </li>
                   {/each}
                   {#each currentIssues.warnings as message}
-                    <li><TriangleAlert class="size-3.5" />{message}</li>
+                    <li transition:slide={{ duration: ms(150), easing: EASE }}>
+                      <TriangleAlert class="size-3.5" />{message}
+                    </li>
                   {/each}
                 </ul>
               {/if}
@@ -1819,7 +1848,10 @@
                 {#each collaborators as person (person.connectionId)}
                   {@const holding = locks.find((lock) => lock.connectionId === person.connectionId)}
                   {@const holdingIndex = holding ? questions.findIndex(({ id }) => id === holding.questionId) : -1}
-                  <li>
+                  <li
+                    animate:flip={{ duration: ms(200), easing: EASE }}
+                    transition:slide={{ duration: ms(180), easing: EASE }}
+                  >
                     <span class="face" style:background={colourFor(person.connectionId)}
                       >{initials(person.displayName)}</span
                     >
@@ -2762,6 +2794,15 @@
   .mx-proof-inline[open] summary {
     margin-bottom: 0.5rem;
   }
+  .mx-proof-inline[open] > :global(:not(summary)) {
+    animation: mx-rise 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes mx-rise {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
   .mx-rail-link {
     display: inline-flex;
     align-items: center;
@@ -2844,6 +2885,19 @@
     background: var(--mx-surface);
     color: var(--mx-text);
     box-shadow: var(--mx-shadow-pop);
+    transform-origin: var(--bits-floating-transform-origin);
+  }
+  :global(.mx-menu[data-state="open"]) {
+    animation: mx-menu-in 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  :global(.mx-menu[data-state="closed"]) {
+    animation: mx-menu-in 110ms ease-in reverse forwards;
+  }
+  @keyframes -global-mx-menu-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(-4px);
+    }
   }
   :global(.mx-menu-heading) {
     padding: 0.4rem 0.55rem 0.2rem;
@@ -3145,6 +3199,10 @@
     .mx-contents,
     .mx-proof-inline summary::before {
       transition: none;
+    }
+    :global(.mx-menu),
+    .mx-proof-inline[open] > :global(:not(summary)) {
+      animation: none !important;
     }
   }
 </style>
