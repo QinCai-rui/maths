@@ -38,10 +38,10 @@
     CircleAlert,
     CircleCheck,
     Copy,
-    Download,
     Eye,
     FileJson,
     FilePlus2,
+    FolderOpen,
     GripVertical,
     Link2,
     LockKeyhole,
@@ -262,6 +262,7 @@
   let unloadedCount = $state(0);
   let pendingDeleteQuestion = $state<CollaborativeQuestionValue | null>(null);
   let confirmNewSet = $state(false);
+  let pendingImport = $state.raw<{ filename: string; source: { questions: unknown[] } } | null>(null);
   let confirmEndSession = $state(false);
   let dragId = $state<string | null>(null);
   let dropIndex = $state<number | null>(null);
@@ -1122,18 +1123,38 @@
       const file = input.files?.[0];
       if (!file) return;
       try {
-        const parsed = JSON.parse(await file.text());
+        const parsed: unknown = JSON.parse(await file.text());
         const source = Array.isArray(parsed) ? { questions: parsed } : parsed;
-        if (!Array.isArray(source.questions) || source.questions.length > MAX_QUESTIONS) throw new Error();
-        flushHistory();
-        loadSource(source);
-        draftLoadFailed = false;
-        toast.success(`Imported ${questions.length} questions`, { action: { label: "Undo", onClick: () => undo() } });
+        if (!source || typeof source !== "object" || !("questions" in source) || !Array.isArray(source.questions)) {
+          throw new Error();
+        }
+        if (source.questions.length > MAX_QUESTIONS) {
+          toast.error(`A Mathex set can contain at most ${MAX_QUESTIONS} questions`);
+          return;
+        }
+        // Accept older files that wrap each question in a data field, as well as unfinished drafts.
+        for (const question of source.questions) {
+          const value = question?.data ?? question;
+          if (typeof value?.contents !== "string") throw new Error();
+        }
+        pendingImport = { filename: file.name, source: { ...source, questions: source.questions } };
       } catch {
         toast.error("This file is not a Mathex set");
       }
     };
     input.click();
+  }
+
+  function confirmImport() {
+    if (!pendingImport) return;
+    flushHistory();
+    loadSource(pendingImport.source);
+    pendingImport = null;
+    draftLoadFailed = false;
+    const count = questions.length;
+    toast.success(`Imported ${count} ${count === 1 ? "question" : "questions"}`, {
+      action: { label: "Undo", onClick: () => undo() }
+    });
   }
 
   function newBlankSet() {
@@ -1295,7 +1316,7 @@
 
   // ── Keyboard ──────────────────────────────────────────────────────────────
   function anyModalOpen() {
-    return checksOpen || shareOpen || !!pendingDeleteQuestion || confirmNewSet || confirmEndSession;
+    return checksOpen || shareOpen || !!pendingDeleteQuestion || !!pendingImport || confirmNewSet || confirmEndSession;
   }
 
   function onShortcut(event: KeyboardEvent) {
@@ -1518,10 +1539,26 @@
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger class="mx-btn">
-            <Download class="size-4" /><span class="hidden sm:inline">Export</span>
+            <FolderOpen class="hidden size-4 sm:block" />Files
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal to={root || "body"}>
             <DropdownMenu.Content class="mx-menu" align="end" sideOffset={6}>
+              <DropdownMenu.Group>
+                {#if !sessionToken}
+                  <DropdownMenu.Item class="mx-menu-item" disabled={!ready} onSelect={importFile}
+                    ><Upload /> Import set…</DropdownMenu.Item
+                  >
+                {/if}
+                <DropdownMenu.Item class="mx-menu-item" onSelect={downloadJson}
+                  ><FileJson /> Download as JSON</DropdownMenu.Item
+                >
+                {#if !sessionToken}
+                  <DropdownMenu.Item class="mx-menu-item" onSelect={() => (confirmNewSet = true)}
+                    ><FilePlus2 /> New blank set…</DropdownMenu.Item
+                  >
+                {/if}
+              </DropdownMenu.Group>
+              <DropdownMenu.Separator class="mx-menu-sep" />
               <DropdownMenu.Group>
                 <DropdownMenu.GroupHeading class="mx-menu-heading">Print</DropdownMenu.GroupHeading>
                 <DropdownMenu.Item class="mx-menu-item" onSelect={() => previewPdf(false)}
@@ -1538,25 +1575,9 @@
                 >
               </DropdownMenu.Group>
               <DropdownMenu.Separator class="mx-menu-sep" />
-              <DropdownMenu.Group>
-                <DropdownMenu.GroupHeading class="mx-menu-heading">File</DropdownMenu.GroupHeading>
-                <DropdownMenu.Item class="mx-menu-item" onSelect={downloadJson}
-                  ><FileJson /> Download as JSON</DropdownMenu.Item
-                >
-                {#if !sessionToken}
-                  <DropdownMenu.Item class="mx-menu-item" onSelect={importFile}
-                    ><Upload /> Import JSON…</DropdownMenu.Item
-                  >
-                {/if}
-                <DropdownMenu.Item class="mx-menu-item" onSelect={useInRoom}
-                  ><UsersRound /> Use in a room</DropdownMenu.Item
-                >
-                {#if !sessionToken}
-                  <DropdownMenu.Item class="mx-menu-item" onSelect={() => (confirmNewSet = true)}
-                    ><FilePlus2 /> New blank set…</DropdownMenu.Item
-                  >
-                {/if}
-              </DropdownMenu.Group>
+              <DropdownMenu.Item class="mx-menu-item" onSelect={useInRoom}
+                ><UsersRound /> Use in a room</DropdownMenu.Item
+              >
               {#if sessionToken && isHost}
                 <DropdownMenu.Separator class="mx-menu-sep" />
                 <DropdownMenu.Item class="mx-menu-item danger" onSelect={() => (confirmEndSession = true)}
@@ -1720,7 +1741,8 @@
       <main class="mx-desk" bind:this={mainScroller}>
         {#if draftLoadFailed}
           <div class="mx-banner warn" transition:slide={{ duration: ms(200), easing: EASE }}>
-            Your saved draft could not be read. It has not been overwritten. Import a backup from Export, or
+            Your saved draft could not be read. It has not been overwritten. Choose Files → Import set to open a backup,
+            or
             <button type="button" class="underline" onclick={() => (confirmNewSet = true)}>start a blank set</button>.
           </div>
         {/if}
@@ -2270,6 +2292,21 @@
     <button type="button" class="mx-btn" onclick={() => (pendingDeleteQuestion = null)}>Cancel</button>
     <button type="button" class="mx-btn danger" onclick={confirmDeleteQuestion}><Trash2 class="size-4" /> Delete</button
     >
+  {/snippet}
+</Modal>
+
+<Modal
+  open={!!pendingImport}
+  onClose={() => (pendingImport = null)}
+  portal={root}
+  title="Import a Mathex set?"
+  description="This replaces the draft saved in this browser. You can undo this while the page is open."
+>
+  <p class="mx-modal-text break-all">{pendingImport?.filename}</p>
+  {#snippet footer()}
+    <button type="button" class="mx-btn" onclick={() => (pendingImport = null)}>Cancel</button>
+    <button type="button" class="mx-btn" onclick={downloadJson}><FileJson class="size-4" /> Back up draft</button>
+    <button type="button" class="mx-btn primary" onclick={confirmImport}>Import set</button>
   {/snippet}
 </Modal>
 

@@ -22,6 +22,62 @@ const questions = [
   }
 ];
 
+test("set editor imports a JSON backup without replacing the draft until confirmed", async ({ page, isMobile }) => {
+  await page.addInitScript((questions) => {
+    if (!localStorage.getItem("mathex-draft")) {
+      localStorage.setItem(
+        "mathex-draft",
+        JSON.stringify({ name: "Existing draft", questions: questions.slice(0, 1) })
+      );
+    }
+  }, questions);
+  await visit(page, "/mathex/app/create/editor");
+  const title = page.getByRole("textbox", { name: "Set title", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Import a Mathex set?" });
+  const importFile = async (value: unknown) => {
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("menuitem", { name: "Import set…", exact: true }).click();
+    await (
+      await chooser
+    ).setFiles({
+      name: "mathex-backup.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(value))
+    });
+  };
+
+  await expect(title).toHaveValue("Existing draft");
+  await importFile({ questions: [null] });
+  await expect(page.getByText("This file is not a Mathex set")).toBeVisible();
+  await expect(dialog).toBeHidden();
+  await expect(title).toHaveValue("Existing draft");
+
+  const backup = { name: "Imported set", instructions: "<p>No calculators.</p>", questions };
+  await importFile(backup);
+  await expect(dialog.getByText("mathex-backup.json")).toBeVisible();
+  const download = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Back up draft" }).click();
+  expect((await download).suggestedFilename()).toBe("Existing-draft.json");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(title).toHaveValue("Existing draft");
+
+  await importFile(backup);
+  await dialog.getByRole("button", { name: "Import set", exact: true }).click();
+  await expect(title).toHaveValue("Imported set");
+  await expect(page.getByText("Imported 2 questions")).toBeVisible();
+  await page.locator("[data-sonner-toast]").getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(title).toHaveValue("Existing draft");
+
+  await importFile(backup);
+  await dialog.getByRole("button", { name: "Import set", exact: true }).click();
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(title).toHaveValue("Imported set");
+  if (isMobile) await page.getByRole("button", { name: "Contents", exact: true }).click();
+  await expect(page.getByRole("button", { name: /What is 3 \+ 3\?/ })).toBeVisible();
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`host and player complete a real Mathex round in ${theme}`, async ({
     page: host,
@@ -164,6 +220,9 @@ test("live editor waits for connection before joining with a saved name", async 
     await page.reload();
     await expect(page.getByRole("textbox", { name: "Set title", exact: true })).toHaveValue("Saved-name regression");
     await expect(page.getByRole("alertdialog", { name: "Mathex connection interrupted" })).toBeHidden();
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "Download as JSON" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Import set…" })).toHaveCount(0);
 
     // A first-time visitor must still choose when to submit their name.
     await page.addInitScript(
