@@ -37,16 +37,11 @@ export const EditPhysicalTeamInput = z.object({
   group: PhysicalTeamGroup.optional().default("")
 });
 
-export const ReplacePhysicalTeamsInput = z
-  .array(
-    z.object({
-      id: PhysicalTeamId.optional(),
-      name: PhysicalTeamName,
-      group: PhysicalTeamGroup.optional().default("")
-    })
-  )
-  .min(1)
-  .max(200);
+export const ReplacePhysicalTeamsInput = z.object({
+  expectedRoster: z.string(),
+  confirmedRemovals: z.array(PhysicalTeamId).max(200),
+  teams: z.array(EditPhysicalTeamInput).min(1).max(200)
+});
 
 export const PhysicalMarkerActionInput = z.object({
   teamId: PhysicalTeamId,
@@ -85,6 +80,13 @@ export interface PhysicalTeam {
   id: string;
   name: string;
   group: string;
+}
+
+export function physicalRosterKey(roster: Iterable<PhysicalTeam>): string {
+  // Snapshot order changes with the scores, but roster identity does not.
+  return JSON.stringify(
+    [...roster].map(({ id, name, group }) => [id, name, group]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+  );
 }
 
 export interface PhysicalCompetition {
@@ -157,15 +159,16 @@ export interface PhysicalCreateServerToClientEvents {
 }
 
 export interface PhysicalHostClientToServerEvents {
-  start: (callback?: OperationAck) => void;
-  pause: (callback?: OperationAck) => void;
-  resume: (callback?: OperationAck) => void;
-  finish: (callback?: OperationAck) => void;
-  configure: (input: unknown, callback?: OperationAck) => void;
+  start: (callback: OperationAck) => void;
+  pause: (callback: OperationAck) => void;
+  resume: (callback: OperationAck) => void;
+  finish: (callback: OperationAck) => void;
+  setTimer: (duration: number | null, callback: OperationAck) => void;
+  configure: (input: unknown, callback: OperationAck) => void;
   addTeam: (input: unknown, callback?: OperationAck) => void;
   editTeam: (input: unknown, callback?: OperationAck) => void;
   removeTeam: (teamId: string, callback?: OperationAck) => void;
-  updateTeams: (input: unknown, callback?: OperationAck) => void;
+  updateTeams: (input: unknown, callback: OperationAck) => void;
 }
 
 export interface PhysicalHostServerToClientEvents {
@@ -174,8 +177,8 @@ export interface PhysicalHostServerToClientEvents {
 }
 
 export interface PhysicalMarkerClientToServerEvents {
-  mark: (input: unknown, callback?: OperationAck) => void;
-  undo: (input: unknown, callback?: OperationAck) => void;
+  mark: (input: unknown, callback: OperationAck) => void;
+  undo: (input: unknown, callback: OperationAck) => void;
 }
 
 export interface PhysicalMarkerServerToClientEvents {

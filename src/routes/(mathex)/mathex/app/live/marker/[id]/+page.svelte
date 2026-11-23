@@ -1,413 +1,656 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Button } from "#lib/components/ui/button/index.js";
-  import { Header } from "#lib/components/ui/header/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import { Label } from "#lib/components/ui/label/index.js";
   import type {
+    PhysicalMarkerActionType,
     PhysicalMarkerClientToServerEvents,
     PhysicalMarkerServerToClientEvents,
     PhysicalMarkerSnapshot,
-    PhysicalOperationResult
+    PhysicalOperationResult,
+    PhysicalTeamSnapshot
   } from "#lib/mathex/physical.schemas.js";
-  import { ArrowLeft, Check, CircleMinus, LayoutGrid, RotateCcw, ShieldCheck, Target, X } from "@lucide/svelte/icons";
+  import { Check, RotateCcw, SkipForward, X } from "@lucide/svelte/icons";
   import type { Socket } from "socket.io-client";
   import { io } from "#lib/mathex/connection.js";
   import { onMount } from "svelte";
-  import { flip } from "svelte/animate";
-  import { toast } from "svelte-sonner";
+  import LiveStandings from "../../LiveStandings.svelte";
+  import LiveBar from "../../LiveBar.svelte";
+  import QuestionTrack from "../../QuestionTrack.svelte";
+  import { roundLabels, spacedCode, teamProgress, teamTally, wrongAttempts } from "../../standings.js";
 
   const id = page.params.id ?? "";
   const sessionKey = `mathex-live-marker-${id}`;
-  const validCode = /^[0-9]{6}$/.test(id);
+  const pinsKey = `${sessionKey}-pinned`;
+  const validCode = /^\d{6}$/.test(id);
+  const validPin = /^(?:[A-Z0-9]{8}|\d{4,12})$/;
   const socket: Socket<PhysicalMarkerServerToClientEvents, PhysicalMarkerClientToServerEvents> = io(
     `/physical-marker-${id}`,
     { autoConnect: false, forceNew: true }
   );
 
   let snapshot: PhysicalMarkerSnapshot | null = $state(null);
-  const initialPin = typeof sessionStorage === "undefined" ? "" : (sessionStorage.getItem(sessionKey) ?? "");
-  let pin = $state(initialPin);
+  let pin = $state("");
   let authenticated = $state(false);
-  let connected = $state(false);
+  let synced = $state(false);
   let checkingPin = $state(false);
-  let pinInvalid = $state(false);
-  let group = $state("all");
-  let focusedTeamId = $state<string | null>(null);
-  let busyTeams = $state(new Set<string>());
+  let accessError = $state("");
+  let pinned = $state<string[]>([]);
+  let chosen = $state("");
+  let allTeams = $state(false);
+  let recordDialog = $state<HTMLDialogElement>();
+  let recordTeamId = $state("");
+  let busy = $state<Set<string>>(new Set());
+  let feedback = $state<Record<string, { text: string; error: boolean }>>({});
 
-  const groups = $derived.by(() =>
-    [...new Set((snapshot?.teams || []).map((team) => team.group).filter(Boolean))].sort()
-  );
-  const visibleTeams = $derived.by(() =>
-    (snapshot?.teams || []).filter((team) => group === "all" || team.group === group)
-  );
-  const focusedTeam = $derived.by(() => snapshot?.teams.find((team) => team.id === focusedTeamId) || null);
-
-  const motionDuration = $derived(
-    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
-  );
+  const roster = $derived.by(() => [...(snapshot?.teams ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
+  const displayed = $derived(allTeams ? roster : pinned.flatMap((id) => roster.find((team) => team.id === id) ?? []));
+  const recordTeam = $derived(roster.find((team) => team.id === recordTeamId));
 
   socket.on("connect", () => {
     authenticated = true;
-    connected = true;
     checkingPin = false;
-    busyTeams = new Set();
+    accessError = "";
     sessionStorage.setItem(sessionKey, pin);
   });
   socket.on("connect_error", (error) => {
-    connected = false;
-    authenticated = false;
+    synced = false;
     checkingPin = false;
-    // Invalid URL codes never reach a connection attempt, so any auth
-    // refusal here means the PIN itself was wrong.
     if (error.message === "Unauthorized") {
+      authenticated = false;
       sessionStorage.removeItem(sessionKey);
-      toast.error("Incorrect marker PIN");
+      accessError = "Incorrect marker PIN. Check with the host and try again.";
     } else {
-      toast.error("Could not connect to the marker desk");
+      accessError = "Couldn’t connect to the marker desk. Try again.";
     }
   });
-  socket.on("disconnect", () => {
-    connected = false;
-    if (snapshot) busyTeams = new Set();
+  socket.on("disconnect", (reason) => {
+    synced = false;
+    if (reason === "io server disconnect") {
+      authenticated = false;
+      snapshot = null;
+      pin = "";
+      sessionStorage.removeItem(sessionKey);
+      accessError = "Marker access ended. Ask the host for the current PIN.";
+    }
   });
-  socket.on("error", (message) => toast.error(message));
   socket.on("snapshot", (next) => {
     snapshot = next;
+    synced = true;
+    accessError = "";
+    const remaining = pinned.filter((id) => next.teams.some((team) => team.id === id));
+    if (remaining.length !== pinned.length) setPins(remaining);
   });
 
   function unlock() {
-    if (checkingPin) return;
-    if (!/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(pin)) return;
+    if (checkingPin || !validPin.test(pin)) return;
     checkingPin = true;
+    accessError = "";
     socket.auth = { code: id, pin };
     socket.connect();
   }
 
-  function mark(teamId: string, action: "correct" | "wrong" | "skip") {
-    const team = snapshot?.teams.find((candidate) => candidate.id === teamId);
-    if (!team || !beginAction(teamId)) return;
-    socket.emit(
-      "mark",
-      { teamId, action, expectedQuestion: team.currentQuestion, expectedLastActionId: team.lastActionId },
-      (result) => finishAction(teamId, result)
-    );
+  function setPins(ids: string[]) {
+    pinned = ids;
+    localStorage.setItem(pinsKey, JSON.stringify(ids));
   }
 
-  function undo(teamId: string) {
-    const team = snapshot?.teams.find((candidate) => candidate.id === teamId);
-    if (!team?.lastActionId || !beginAction(teamId)) return;
-    socket.emit("undo", { teamId, actionId: team.lastActionId }, (result) => finishAction(teamId, result));
+  function pinTeam(teamId: string) {
+    if (pinned.includes(teamId) || pinned.length === 2 || !roster.some((team) => team.id === teamId)) return;
+    setPins([...pinned, teamId]);
+    chosen = "";
   }
 
-  function beginAction(teamId: string) {
-    if (busyTeams.has(teamId)) return false;
-    busyTeams = new Set([...busyTeams, teamId]);
-    return true;
+  function mark(team: PhysicalTeamSnapshot, action: PhysicalMarkerActionType | "undo") {
+    if (!snapshot || !synced || busy.has(team.id)) return;
+    if (
+      action === "undo"
+        ? !team.lastActionId || !["running", "paused"].includes(snapshot.state)
+        : snapshot.state !== "running" || team.currentQuestion > snapshot.questionCount
+    )
+      return;
+    busy = new Set([...busy, team.id]);
+    const question = team.currentQuestion;
+    const questionCount = snapshot.questionCount;
+    const report = (error: Error | null, result?: PhysicalOperationResult) => {
+      const remaining = new Set(busy);
+      remaining.delete(team.id);
+      busy = remaining;
+      if (error || !result) {
+        feedback[team.id] = {
+          text: "Couldn’t confirm the mark. Check the team record before trying again.",
+          error: true
+        };
+      } else if (!result.ok) {
+        feedback[team.id] = { text: result.error, error: true };
+      } else {
+        const next = question < questionCount ? `Next is Q${question + 1}` : "All questions done";
+        const text =
+          action === "wrong"
+            ? `Q${question} marked wrong. Still on Q${question}.`
+            : action === "correct"
+              ? `Q${question} correct. ${next}.`
+              : action === "skip"
+                ? `Q${question} skipped, no point. ${next}.`
+                : "Last mark undone.";
+        feedback[team.id] = { text, error: false };
+      }
+    };
+    if (action === "undo") socket.timeout(4000).emit("undo", { teamId: team.id, actionId: team.lastActionId }, report);
+    else
+      socket
+        .timeout(4000)
+        .emit(
+          "mark",
+          { teamId: team.id, action, expectedQuestion: question, expectedLastActionId: team.lastActionId },
+          report
+        );
   }
 
-  function finishAction(teamId: string, result: PhysicalOperationResult) {
-    const next = new Set(busyTeams);
-    next.delete(teamId);
-    busyTeams = next;
-    if (!result.ok) toast.error(result.error);
-  }
+  const idleHints: Partial<Record<PhysicalMarkerSnapshot["state"], string>> = {
+    lobby: "Waiting for the host to start.",
+    paused: "Round paused. Marking resumes with the round.",
+    finished: "Round finished. Marks are locked."
+  };
+  const idleHint = $derived.by(() => (snapshot && idleHints[snapshot.state]) || "");
 
   onMount(() => {
-    if (!validCode) {
-      pinInvalid = true;
-      return () => socket.disconnect();
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(pinsKey) ?? "[]");
+      if (Array.isArray(saved))
+        pinned = [...new Set(saved.filter((id): id is string => typeof id === "string"))].slice(0, 2);
+    } catch {
+      /* An invalid saved selection shouldn't block marking. */
     }
-    if (pin) unlock();
-    return () => socket.disconnect();
+    if (validCode) {
+      pin = sessionStorage.getItem(sessionKey) ?? "";
+      if (pin) unlock();
+    }
+    return () => {
+      socket.disconnect();
+    };
   });
 </script>
 
 <svelte:head><title>{snapshot?.name || "Mathex Live"} - Marker</title></svelte:head>
 
-<div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
-  {#if !authenticated && pinInvalid}
-    <main class="mx-auto grid min-h-[80vh] max-w-md place-items-center">
-      <div class="mathex-panel w-full p-6 text-center sm:p-8" role="alert">
-        <p class="mathex-kicker">Invalid link</p>
-        <Header size="h2" class="mt-2 text-2xl">This event code is not valid</Header>
-        <p class="mt-2 text-sm leading-6 text-muted-foreground">
-          Live codes are six digits. Enter the current event code.
-        </p>
-        <Button href="/mathex/app/live/marker" class="mt-5 w-full">Enter a different code</Button>
-      </div>
-    </main>
-  {:else if !authenticated}
-    <main class="mx-auto grid min-h-[80vh] max-w-md place-items-center">
-      <form
-        class="mathex-panel w-full p-6 sm:p-8"
-        onsubmit={(event) => {
-          event.preventDefault();
-          if (!checkingPin) unlock();
-        }}
+<LiveBar role="Marker desk" code={validCode ? id : ""}>
+  {#if authenticated && snapshot}
+    <p role="status">
+      <span
+        class="lv-plate"
+        class:is-signal={synced && snapshot.state === "running"}
+        class:is-line={synced && snapshot.state !== "running"}
+        class:is-stop={!synced}
+        >{synced ? roundLabels[snapshot.state] : "Connection lost. Scoring is unavailable."}</span
       >
-        <span class="flex h-12 w-12 items-center justify-center bg-primary/10 text-primary"
-          ><ShieldCheck class="h-6 w-6" /></span
-        >
-        <p class="mathex-kicker mt-6">Marker access</p>
-        <Header size="h1" class="mt-1 text-3xl">Enter the desk PIN</Header>
-        <p class="mt-3 text-sm leading-6 text-muted-foreground">
-          The host can provide the marker PIN for this competition.
-        </p>
-        <div class="mt-6">
-          <Label for="marker-pin">PIN</Label><Input
-            id="marker-pin"
-            class="mt-2 h-12 text-center font-mono text-xl tracking-[0.35em]"
-            type="text"
-            autocapitalize="characters"
-            autocomplete="one-time-code"
-            inputmode="text"
-            pattern={"(?:[A-Z0-9]{8}|[0-9]{4,12})"}
-            maxlength={12}
-            bind:value={pin}
-            oninput={() =>
-              (pin = pin
-                .toUpperCase()
-                .replace(/[^A-Z0-9]/g, "")
-                .slice(0, 12))}
-            autofocus
-          />
-        </div>
-        <p class="mt-2 text-xs text-muted-foreground">8 letters or digits, or 4 to 12 digits.</p>
-        <Button type="submit" class="mt-4 h-11 w-full" disabled={checkingPin || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(pin)}
-          >{checkingPin ? "Checking..." : "Open marker desk"}</Button
-        >
-      </form>
-    </main>
-  {:else if snapshot}
-    <main class="mx-auto max-w-7xl">
-      <header class="flex flex-col justify-between gap-4 py-2 sm:flex-row sm:items-end">
-        <div>
-          <p class="mathex-kicker">Marker desk</p>
-          <Header size="h1" class="mt-1 text-3xl tracking-[-0.04em]">{snapshot.name}</Header>
-        </div>
-        <div class="flex items-center gap-2">
-          {#if focusedTeamId}<Button variant="outline" onclick={() => (focusedTeamId = null)}
-              ><LayoutGrid /> All teams</Button
-            >{/if}
-          <span class="bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary"
-            >{connected ? snapshot.state : "reconnecting"}</span
+    </p>
+  {/if}
+</LiveBar>
+
+{#if !validCode}
+  <main class="gate">
+    <h1 class="lv-title">This event code is not valid</h1>
+    <p class="lv-soft">Live codes are six digits.</p>
+    <a href="/mathex/app/live/marker" class="lbtn lbtn-solid gate-go">Enter a different code</a>
+  </main>
+{:else if !authenticated}
+  <main class="gate">
+    <form
+      onsubmit={(event) => {
+        event.preventDefault();
+        unlock();
+      }}
+    >
+      <h1 class="lv-title">Enter the desk PIN</h1>
+      <p class="lv-soft">Ask the host for the PIN for event {spacedCode(id)}.</p>
+      <Label for="marker-pin" class="lv-label mt-6">PIN</Label>
+      <Input
+        id="marker-pin"
+        class="gate-pin lv-code"
+        type="text"
+        autocapitalize="characters"
+        autocomplete="one-time-code"
+        maxlength={12}
+        bind:value={pin}
+        oninput={() => (pin = pin.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+        aria-describedby="pin-hint"
+      />
+      <p id="pin-hint" class="lv-hint">8 letters or digits, or 4 to 12 digits.</p>
+      {#if accessError}<p class="lv-alert mt-3" role="alert">{accessError}</p>{/if}
+      <button type="submit" class="lbtn lbtn-solid gate-go" disabled={checkingPin || !validPin.test(pin)}
+        >{checkingPin ? "Checking…" : "Open marker desk"}</button
+      >
+    </form>
+  </main>
+{:else if snapshot}
+  <main class="desk">
+    <h1 class="desk-title lv-title">{snapshot.name}</h1>
+
+    <div class="desk-grid">
+      <section class="desk-stations" aria-label="Mark teams">
+        <div class="desk-head">
+          <h2 class="lv-h2">{allTeams ? "All teams" : "My teams"}</h2>
+          <button type="button" class="lbtn lbtn-quiet lbtn-sm" onclick={() => (allTeams = !allTeams)}
+            >{allTeams ? "Back to my teams" : "Browse all teams"}</button
           >
         </div>
-      </header>
-
-      {#if focusedTeam}
-        <section class="mt-4 grid gap-4 lg:grid-cols-[1fr_0.55fr]">
-          <div class="mathex-panel p-5 sm:p-8">
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-              onclick={() => (focusedTeamId = null)}><ArrowLeft class="h-4 w-4" /> Back to all teams</button
-            >
-            <div class="mt-10 text-center">
-              <p class="text-sm font-semibold text-muted-foreground">
-                {focusedTeam.group || "Ungrouped"}
-              </p>
-              <h2 class="mt-2 break-words text-3xl font-black sm:text-5xl">{focusedTeam.name}</h2>
-              {#if focusedTeam.currentQuestion > snapshot.questionCount}
-                <p class="mt-10 text-2xl font-bold text-emerald-600 dark:text-emerald-400">All questions complete</p>
-              {:else}
-                <div class="mt-9">
-                  <p class="mathex-kicker">Next question</p>
-                  <p class="mt-1 text-7xl font-black tabular-nums text-primary sm:text-9xl">
-                    {focusedTeam.currentQuestion}
-                  </p>
-                  <p class="text-sm text-muted-foreground">of {snapshot.questionCount}</p>
+        <div class="stations" class:all={allTeams}>
+          {#each displayed as team (team.id)}
+            {@const done = team.currentQuestion > snapshot.questionCount}
+            {@const live = snapshot.state === "running" && !done}
+            {@const blocked = !synced || busy.has(team.id) || !live}
+            {@const stuck = done ? 0 : (team.questions[team.currentQuestion - 1]?.incorrect ?? 0)}
+            <article class="station" class:is-live={live}>
+              <header class="station-head">
+                <div class="min-w-0">
+                  <h3>{team.name}</h3>
+                  {#if team.group}<p class="lv-soft lv-small">{team.group}</p>{/if}
                 </div>
-              {/if}
-            </div>
-            <div
-              class="sticky bottom-2 mt-8 grid grid-cols-3 gap-2 bg-background/95 py-2 sm:static sm:bottom-auto sm:mt-10 sm:bg-transparent sm:py-0"
-            >
-              <Button
-                class="h-16 gap-1 bg-emerald-600 text-base hover:bg-emerald-700 sm:h-20 sm:text-lg"
-                onclick={() => mark(focusedTeam.id, "correct")}
-                disabled={!connected ||
-                  busyTeams.has(focusedTeam.id) ||
-                  snapshot.state !== "running" ||
-                  focusedTeam.currentQuestion > snapshot.questionCount}><Check class="h-5 w-5" /> Correct</Button
-              >
-              <Button
-                variant="destructive"
-                class="h-16 gap-1 text-base sm:h-20 sm:text-lg"
-                onclick={() => mark(focusedTeam.id, "wrong")}
-                disabled={!connected ||
-                  busyTeams.has(focusedTeam.id) ||
-                  snapshot.state !== "running" ||
-                  focusedTeam.currentQuestion > snapshot.questionCount}><X class="h-5 w-5" /> Wrong</Button
-              >
-              <Button
-                class="h-16 gap-1 bg-amber-500 text-base text-slate-950 hover:bg-amber-400 sm:h-20 sm:text-lg"
-                onclick={() => mark(focusedTeam.id, "skip")}
-                disabled={!connected ||
-                  busyTeams.has(focusedTeam.id) ||
-                  snapshot.state !== "running" ||
-                  focusedTeam.currentQuestion > snapshot.questionCount}><CircleMinus class="h-5 w-5" /> Skip</Button
-              >
-            </div>
-          </div>
-          <aside class="mathex-panel p-5 sm:p-7">
-            <p class="mathex-kicker">Team record</p>
-            <div class="mt-5 grid grid-cols-3 gap-2 text-center">
-              <div class="bg-emerald-500/10 p-3">
-                <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{focusedTeam.correct}</p>
-                <p class="text-xs text-muted-foreground">Correct</p>
+                {#if pinned.includes(team.id)}
+                  <button
+                    type="button"
+                    class="lbtn lbtn-quiet lbtn-sm"
+                    aria-label="Unpin {team.name}"
+                    onclick={() => setPins(pinned.filter((id) => id !== team.id))}>Unpin</button
+                  >
+                {:else if allTeams && pinned.length < 2}
+                  <button
+                    type="button"
+                    class="lbtn lbtn-line lbtn-sm"
+                    aria-label="Pin {team.name}"
+                    onclick={() => pinTeam(team.id)}>Pin</button
+                  >
+                {/if}
+              </header>
+              <div class="station-now">
+                <p class="station-q">
+                  {#key team.currentQuestion}
+                    {#if done || snapshot.state === "lobby" || snapshot.state === "finished"}
+                      <span class="question-change is-text"
+                        >{teamProgress(team, snapshot.questionCount, snapshot.state)}</span
+                      >
+                    {:else}
+                      <span class="question-change">Q{team.currentQuestion}</span>
+                      <span class="station-of">of {snapshot.questionCount}</span>
+                    {/if}
+                  {/key}
+                </p>
+                <p class="station-stuck lv-small">
+                  {#if stuck}{wrongAttempts(stuck)} on this question{/if}
+                </p>
               </div>
-              <div class="bg-red-500/10 p-3">
-                <p class="text-2xl font-black text-red-600 dark:text-red-400">{focusedTeam.incorrect}</p>
-                <p class="text-xs text-muted-foreground">Wrong</p>
-              </div>
-              <div class="bg-amber-500/10 p-3">
-                <p class="text-2xl font-black text-amber-600 dark:text-amber-400">{focusedTeam.skipped}</p>
-                <p class="text-xs text-muted-foreground">Skipped</p>
-              </div>
-            </div>
-            <div class="mt-5 flex flex-wrap gap-1.5" aria-label="Question results">
-              {#each focusedTeam.questions as question}
-                <span
-                  title="Question {question.questionNumber}{question.incorrect ? `, ${question.incorrect} wrong` : ''}"
-                  class="flex h-8 min-w-8 items-center justify-center rounded-md border px-1 text-xs font-bold {question.outcome ===
-                  'correct'
-                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                    : question.outcome === 'skipped'
-                      ? 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                      : question.questionNumber === focusedTeam.currentQuestion
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground'}">{question.questionNumber}</span
-                >
-              {/each}
-            </div>
-            <Button
-              variant="outline"
-              class="mt-5 w-full gap-2"
-              onclick={() => undo(focusedTeam.id)}
-              disabled={!connected ||
-                busyTeams.has(focusedTeam.id) ||
-                !focusedTeam.canUndo ||
-                (snapshot.state !== "running" && snapshot.state !== "paused")}><RotateCcw /> Undo last mark</Button
-            >
-          </aside>
-        </section>
-      {:else}
-        <section class="mt-4">
-          <div class="mathex-panel flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center">
-            <div>
-              <p class="font-bold">All teams</p>
-              <p class="text-sm text-muted-foreground">Tap a team for a focused marking view, or mark directly here.</p>
-            </div>
-            {#if groups.length > 0}<label class="flex items-center gap-2 text-sm font-medium"
-                >Group <select bind:value={group} class="h-10 rounded-md border border-input bg-background px-3"
-                  ><option value="all">All groups</option>{#each groups as groupName}<option value={groupName}
-                      >{groupName}</option
-                    >{/each}</select
-                ></label
-              >{/if}
-          </div>
-          <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {#each visibleTeams as team (team.id)}
-              <article animate:flip={{ duration: motionDuration }} class="mathex-panel p-4">
+              <QuestionTrack {team} round={snapshot.state} />
+              <div class="station-keys">
                 <button
                   type="button"
-                  class="flex w-full items-center justify-between gap-3 text-left"
-                  onclick={() => (focusedTeamId = team.id)}
+                  class="key key-correct"
+                  aria-label="Mark {team.name} correct"
+                  disabled={blocked}
+                  onclick={() => mark(team, "correct")}><Check /> Correct</button
                 >
-                  <div class="min-w-0">
-                    <p class="truncate text-lg font-bold">{team.name}</p>
-                    <p class="text-xs text-muted-foreground">{team.group || "Ungrouped"}</p>
-                  </div>
-                  <div class="shrink-0 text-right">
-                    <p class="text-xs font-semibold text-muted-foreground">Next question</p>
-                    <p class="text-2xl font-black tabular-nums text-primary">
-                      {team.currentQuestion > snapshot.questionCount ? "Done" : `Q${team.currentQuestion}`}
-                    </p>
-                  </div>
-                </button>
-                <div class="mt-3 flex flex-wrap gap-1" aria-label="{team.name} question results">
-                  {#each team.questions as question}
-                    <span
-                      title="Question {question.questionNumber}{question.incorrect
-                        ? `, ${question.incorrect} wrong`
-                        : ''}"
-                      class="flex h-6 min-w-6 items-center justify-center rounded border px-0.5 text-[10px] font-bold {question.outcome ===
-                      'correct'
-                        ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                        : question.outcome === 'skipped'
-                          ? 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                          : question.questionNumber === team.currentQuestion
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border text-muted-foreground/70'}">{question.questionNumber}</span
-                    >
+                <button
+                  type="button"
+                  class="key key-wrong"
+                  aria-label="Mark {team.name} wrong"
+                  disabled={blocked}
+                  onclick={() => mark(team, "wrong")}><X /> Wrong</button
+                >
+                <button
+                  type="button"
+                  class="lbtn lbtn-line"
+                  aria-label="Skip question for {team.name}"
+                  disabled={blocked}
+                  onclick={() => mark(team, "skip")}><SkipForward /> Skip question</button
+                >
+                <button
+                  type="button"
+                  class="lbtn lbtn-line"
+                  aria-label="Undo last mark for {team.name}"
+                  disabled={!synced ||
+                    busy.has(team.id) ||
+                    !team.canUndo ||
+                    !["running", "paused"].includes(snapshot.state)}
+                  onclick={() => mark(team, "undo")}><RotateCcw /> Undo</button
+                >
+              </div>
+              <p role="status" class="station-status" class:lv-alert={feedback[team.id]?.error}>
+                {busy.has(team.id) ? "Saving…" : (feedback[team.id]?.text ?? idleHint)}
+              </p>
+              <footer class="station-foot">
+                <p class="lv-soft lv-small">{teamTally(team)}</p>
+                <button
+                  type="button"
+                  class="lbtn lbtn-quiet lbtn-sm"
+                  aria-label="Team record for {team.name}"
+                  onclick={() => {
+                    recordTeamId = team.id;
+                    recordDialog?.showModal();
+                  }}>Team record</button
+                >
+              </footer>
+            </article>
+          {/each}
+          {#if !allTeams && pinned.length < 2}
+            <div class="station-slot">
+              <label class="lv-label" for="pin-team"
+                >{pinned.length ? "Choose a second team" : "Choose the teams you score"}</label
+              >
+              <div class="station-slot-pick">
+                <select id="pin-team" class="lv-select" bind:value={chosen}>
+                  <option value="">Select team</option>
+                  {#each roster.filter((team) => !pinned.includes(team.id)) as team (team.id)}
+                    <option value={team.id}>{team.name}{team.group ? ` (${team.group})` : ""}</option>
                   {/each}
-                </div>
-                <div class="mt-4 grid grid-cols-[1fr_1fr_1fr_auto] gap-1.5 border-t border-border/70 pt-3">
-                  <Button
-                    size="sm"
-                    class="bg-emerald-600 px-2 hover:bg-emerald-700"
-                    aria-label="Mark {team.name} correct"
-                    onclick={() => mark(team.id, "correct")}
-                    disabled={!connected ||
-                      busyTeams.has(team.id) ||
-                      snapshot.state !== "running" ||
-                      team.currentQuestion > snapshot.questionCount}
-                    ><Check /> <span class="hidden sm:inline">Correct</span></Button
-                  >
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    class="px-2"
-                    aria-label="Mark {team.name} wrong"
-                    onclick={() => mark(team.id, "wrong")}
-                    disabled={!connected ||
-                      busyTeams.has(team.id) ||
-                      snapshot.state !== "running" ||
-                      team.currentQuestion > snapshot.questionCount}
-                    ><X /> <span class="hidden sm:inline">Wrong</span></Button
-                  >
-                  <Button
-                    size="sm"
-                    class="bg-amber-500 px-2 text-slate-950 hover:bg-amber-400"
-                    aria-label="Skip for {team.name}"
-                    onclick={() => mark(team.id, "skip")}
-                    disabled={!connected ||
-                      busyTeams.has(team.id) ||
-                      snapshot.state !== "running" ||
-                      team.currentQuestion > snapshot.questionCount}
-                    ><CircleMinus /> <span class="hidden sm:inline">Skip</span></Button
-                  >
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Undo last mark for {team.name}"
-                    onclick={() => undo(team.id)}
-                    disabled={!connected ||
-                      busyTeams.has(team.id) ||
-                      !team.canUndo ||
-                      (snapshot.state !== "running" && snapshot.state !== "paused")}><RotateCcw /></Button
-                  >
-                </div>
-                <div class="mt-3 flex gap-3 text-xs font-semibold">
-                  <span class="text-emerald-600 dark:text-emerald-400">{team.correct} correct</span><span
-                    class="text-red-600 dark:text-red-400">{team.incorrect} wrong</span
-                  ><span class="text-amber-600 dark:text-amber-400">{team.skipped} skipped</span>
-                </div>
-              </article>
-            {/each}
-          </div>
-        </section>
-      {/if}
-    </main>
-  {:else}
-    <main class="grid min-h-[80vh] place-items-center">
-      <div class="text-center">
-        <Target class="mx-auto h-8 w-8 animate-pulse text-primary" />
-        <p class="mt-3 text-muted-foreground">Loading marker desk...</p>
+                </select>
+                <button type="button" class="lbtn lbtn-solid" disabled={!chosen} onclick={() => pinTeam(chosen)}
+                  >Pin team</button
+                >
+              </div>
+              {#if pinned.length === 0}<p class="lv-hint">
+                  Pin one or two teams to keep their marking controls here. Your choices are saved on this device.
+                </p>{/if}
+            </div>
+          {/if}
+        </div>
+      </section>
+      <aside class="desk-standings" aria-labelledby="marker-standings">
+        <h2 id="marker-standings" class="lv-h2">Live standings</h2>
+        <LiveStandings {snapshot} {pinned} />
+      </aside>
+    </div>
+    <dialog bind:this={recordDialog} class="record" aria-labelledby="team-record-heading">
+      <div class="record-head">
+        <h2 id="team-record-heading" class="lv-h2">
+          {recordTeam ? `${recordTeam.name} team record` : "Team record"}
+        </h2>
+        <form method="dialog"><button type="submit" class="lbtn lbtn-line lbtn-sm">Close</button></form>
       </div>
-    </main>
-  {/if}
-</div>
+      {#if recordTeam}
+        <p class="lv-soft mt-1">{teamTally(recordTeam)}</p>
+        <ul aria-label="Question results">
+          {#each recordTeam.questions as question (question.questionNumber)}
+            <li class:is-open={question.outcome !== "correct" && question.outcome !== "skipped"}>
+              <strong>Q{question.questionNumber}</strong>
+              <span>{question.outcome}{question.incorrect ? `, ${question.incorrect} wrong` : ""}</span>
+            </li>
+          {/each}
+        </ul>
+      {:else}<p class="lv-soft mt-2">This team is no longer on the roster.</p>{/if}
+    </dialog>
+  </main>
+{:else}
+  <main class="gate lv-soft" role="status">{accessError || "Loading marker desk…"}</main>
+{/if}
+
+<style>
+  .gate {
+    width: min(28rem, calc(100% - 1.5rem));
+    margin: clamp(1.5rem, 12vh, 7rem) auto 3rem;
+    padding: clamp(1.25rem, 4vw, 2rem);
+    border: 1px solid var(--lv-line);
+    border-radius: 4px;
+    background: var(--lv-surface);
+    box-shadow: 0 1px 2px rgb(25 28 22 / 5%);
+  }
+  .gate h1 {
+    margin-bottom: 0.5rem;
+    font-size: 1.875rem;
+  }
+  .gate :global(.gate-pin) {
+    height: 3rem;
+    font-size: 1.25rem;
+  }
+  .gate-go {
+    width: 100%;
+    min-height: 2.75rem;
+    margin-top: 1.25rem;
+    font-size: 1rem;
+  }
+
+  .desk {
+    width: min(92rem, 100%);
+    margin-inline: auto;
+    padding: clamp(0.75rem, 2vw, 1.5rem) clamp(0.75rem, 3vw, 2rem) 3rem;
+  }
+  .desk-title {
+    font-size: clamp(1.375rem, 2.6vw, 2rem);
+  }
+  .desk-grid {
+    display: grid;
+    gap: 2rem;
+    margin-top: 0.9rem;
+  }
+  .desk-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .desk-stations {
+    min-width: 0;
+  }
+  .stations {
+    display: grid;
+    gap: 1rem;
+    align-items: start;
+  }
+  .desk-standings {
+    min-width: 0;
+    padding-top: 0.75rem;
+    border-top: 2px solid var(--lv-ink);
+  }
+
+  .station {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.9rem clamp(0.8rem, 1.6vw, 1.25rem) 0.6rem;
+    border: 1px solid var(--lv-line);
+    border-radius: 4px;
+    background: var(--lv-surface);
+    box-shadow: 0 1px 2px rgb(25 28 22 / 5%);
+    --track-h: 0.5rem;
+  }
+  .station-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .station-head h3 {
+    font-size: clamp(1.25rem, 2vw, 1.5rem);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }
+  .station-now {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 1rem;
+  }
+  .station-q {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    color: var(--primary);
+    font-size: clamp(2.5rem, 5vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+    white-space: nowrap;
+  }
+  .station-q .is-text {
+    font-size: 0.6em;
+    line-height: 1.5;
+  }
+  .station-of {
+    color: var(--lv-ink-soft);
+    font-size: 0.36em;
+    font-weight: 600;
+  }
+  .station-stuck {
+    color: var(--lv-stop);
+    font-weight: 600;
+  }
+  .station-keys {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 4.25rem;
+    border-radius: 3px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+  }
+  .key :global(svg) {
+    width: 1.15em;
+    height: 1.15em;
+    stroke-width: 2.5;
+  }
+  .key-correct {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .key-wrong {
+    background: var(--lv-stop);
+    color: var(--lv-stop-ink);
+  }
+  .key:not(:disabled):active {
+    transform: translateY(2px);
+  }
+  .key:disabled {
+    background: var(--lv-line-soft);
+    color: var(--lv-ink-soft);
+    cursor: not-allowed;
+  }
+  @media (hover: hover) {
+    .key:not(:disabled):hover {
+      opacity: 0.9;
+    }
+  }
+  .station-status {
+    min-height: 2.9em;
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+  .station-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 0.75rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--lv-line);
+  }
+  .station-slot {
+    padding: 1rem clamp(0.8rem, 1.6vw, 1.25rem);
+    border: 1px dashed var(--competition-line-strong);
+    border-radius: 4px;
+  }
+  .station-slot-pick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .station-slot-pick select {
+    flex: 1 1 12rem;
+  }
+
+  .record {
+    width: min(34rem, 94vw);
+    max-height: 85dvh;
+    margin: auto;
+    padding: 1.25rem;
+    overflow: auto;
+    border: 1px solid var(--lv-line);
+    border-radius: 4px;
+    background: var(--lv-surface);
+    color: var(--lv-ink);
+  }
+  .record::backdrop {
+    background: rgb(0 0 0 / 0.5);
+  }
+  .record-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .record-head h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .record ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0 1.5rem;
+    margin-top: 0.9rem;
+  }
+  .record li {
+    display: flex;
+    gap: 0.6rem;
+    padding-block: 0.3rem;
+    border-bottom: 1px solid var(--lv-line);
+  }
+  .record li strong {
+    min-width: 2.6rem;
+  }
+  .record li.is-open span {
+    color: var(--lv-ink-soft);
+  }
+
+  @media (min-width: 40rem) {
+    .stations {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 62rem) {
+    .desk-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(18rem, 23rem);
+      align-items: start;
+    }
+    .desk-standings {
+      position: sticky;
+      top: 1rem;
+      max-height: calc(100dvh - 2rem);
+      overflow: auto;
+    }
+  }
+  @media (min-width: 62rem) and (max-width: 74.99rem) {
+    .stations.all {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 75rem) {
+    .stations.all {
+      grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .question-change {
+      display: inline-block;
+      animation: question-change 210ms ease-out;
+    }
+    @keyframes question-change {
+      from {
+        opacity: 0.6;
+        transform: translateY(0.12em);
+      }
+    }
+  }
+</style>

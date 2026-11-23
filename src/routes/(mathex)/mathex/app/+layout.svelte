@@ -16,8 +16,12 @@
 
   const siteShellRoutes = ["/mathex/app", "/mathex/app/create", "/mathex/app/play", "/mathex/app/live"];
   const usesSiteShell = $derived(siteShellRoutes.includes(page.url.pathname));
-  // The set editor has its own theme control in its masthead.
-  const hidesThemeToggle = $derived(/^\/mathex\/app\/create\/editor(\/(?!share\/)[^/]+)?\/?$/.test(page.url.pathname));
+  // The set editor and the Mathex Live screens have their own theme control.
+  const hidesThemeToggle = $derived(
+    /^\/mathex\/app\/(create\/editor(\/(?!share\/)[^/]+)?\/?|live\/(host|(marker|scoreboard)\/[^/]+)\/?)$/.test(
+      page.url.pathname
+    )
+  );
 </script>
 
 <svelte:head>

@@ -7,8 +7,10 @@ import {
   CreatePhysicalCompetitionInput,
   EditPhysicalTeamInput,
   PhysicalCode,
+  PhysicalCountdownDuration,
   PhysicalMarkerActionInput,
   PhysicalMarkerPin,
+  physicalRosterKey,
   ReplacePhysicalTeamsInput,
   PhysicalTeamId,
   PhysicalUndoInput,
@@ -272,6 +274,15 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         commit();
         accept(ack);
       });
+      socket.on("setTimer", (rawDuration, ack) => {
+        if (competition.state === "finished") return reject(ack, "The round has finished");
+        const duration = PhysicalCountdownDuration.safeParse(rawDuration);
+        if (!duration.success) return reject(ack, "Enter a countdown between 1 second and 24 hours");
+        // Store the target on the elapsed round clock, without moving the scoring clock.
+        competition.countdownDurationMs = duration.data === null ? null : elapsedMs(competition) + duration.data;
+        commit();
+        accept(ack);
+      });
       socket.on("configure", async (rawInput, ack) => {
         const input = ConfigurePhysicalCompetitionInput.safeParse(rawInput);
         if (!input.success) return reject(ack, input.error.issues[0]?.message || "Invalid settings");
@@ -309,6 +320,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         accept(ack);
       });
       socket.on("addTeam", (rawInput, ack) => {
+        if (competition.state === "finished") return reject(ack, "The final roster is locked");
         const input = AddPhysicalTeamInput.safeParse(rawInput);
         if (!input.success) return reject(ack, input.error.issues[0]?.message || "Invalid team");
         const duplicate = [...competition.teams.values()].some(
@@ -321,6 +333,7 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         accept(ack);
       });
       socket.on("editTeam", (rawInput, ack) => {
+        if (competition.state === "finished") return reject(ack, "The final roster is locked");
         const input = EditPhysicalTeamInput.safeParse(rawInput);
         if (!input.success) return reject(ack, input.error.issues[0]?.message || "Invalid team");
         if (!competition.teams.has(input.data.id)) return reject(ack, "Team does not exist");
@@ -335,23 +348,39 @@ export function registerPhysicalCompetitionServer(io: AnyServer): void {
         accept(ack);
       });
       socket.on("removeTeam", (rawTeamId, ack) => {
+        if (competition.state === "finished") return reject(ack, "The final roster is locked");
         const teamId = PhysicalTeamId.safeParse(rawTeamId);
         if (!teamId.success || !competition.teams.has(teamId.data)) return reject(ack, "Team does not exist");
         if (competition.teams.size <= 1) return reject(ack, "A competition must have at least one team");
+        if (competition.actions.some((action) => action.teamId === teamId.data)) {
+          return reject(ack, "Use the roster editor to confirm removal of this team’s marks");
+        }
         competition.teams.delete(teamId.data);
         competition.actions = competition.actions.filter((action) => action.teamId !== teamId.data);
         commit();
         accept(ack);
       });
       socket.on("updateTeams", (rawInput, ack) => {
+        if (competition.state === "finished") return reject(ack, "The final roster is locked");
         const input = ReplacePhysicalTeamsInput.safeParse(rawInput);
         if (!input.success) return reject(ack, input.error.issues[0]?.message || "Invalid teams");
-        const names = input.data.map((team) => team.name.toLocaleLowerCase());
+        if (input.data.expectedRoster !== physicalRosterKey(competition.teams.values())) {
+          socket.emit("snapshot", buildSnapshot(competition));
+          return reject(ack, "The roster changed. Review the latest roster before saving");
+        }
+        const names = input.data.teams.map((team) => team.name.toLocaleLowerCase());
         if (new Set(names).size !== names.length) return reject(ack, "Team names must be unique");
+        const teamIds = new Set(input.data.teams.map((team) => team.id));
+        if (teamIds.size !== input.data.teams.length) return reject(ack, "Duplicate team IDs");
+        const confirmed = new Set(input.data.confirmedRemovals);
+        if (competition.actions.some(({ teamId }) => !teamIds.has(teamId) && !confirmed.has(teamId))) {
+          socket.emit("snapshot", buildSnapshot(competition));
+          return reject(ack, "A removed team has marks. Review and confirm the removal before saving");
+        }
 
         const nextTeams = new Map(
-          input.data.map((team) => {
-            const id = team.id && competition.teams.has(team.id) ? team.id : randomUUID();
+          input.data.teams.map((team) => {
+            const id = competition.teams.has(team.id) ? team.id : randomUUID();
             return [id, { id, name: team.name, group: team.group }];
           })
         );
@@ -430,7 +459,7 @@ function elapsedMs(competition: PhysicalCompetition, now = Date.now()): number {
   return competition.elapsedBeforeRunMs;
 }
 
-function buildSnapshot(competition: PhysicalCompetition): PhysicalScoreboardSnapshot {
+export function buildSnapshot(competition: PhysicalCompetition): PhysicalScoreboardSnapshot {
   const serverNow = Date.now();
   const elapsed = elapsedMs(competition, serverNow);
   const teams = [...competition.teams.keys()].map((teamId) => buildTeamSnapshot(competition, teamId));
@@ -438,9 +467,18 @@ function buildSnapshot(competition: PhysicalCompetition): PhysicalScoreboardSnap
     const groupOrder = (a.group || "Ungrouped").localeCompare(b.group || "Ungrouped", undefined, {
       sensitivity: "base"
     });
+    const finishOrder =
+      a.finishTimeMs === b.finishTimeMs
+        ? 0
+        : a.finishTimeMs === null
+          ? 1
+          : b.finishTimeMs === null
+            ? -1
+            : a.finishTimeMs - b.finishTimeMs;
     return (
       groupOrder ||
       b.correct - a.correct ||
+      finishOrder ||
       a.correctReachedAtMs - b.correctReachedAtMs ||
       a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) ||
       a.id.localeCompare(b.id)
