@@ -390,25 +390,6 @@
 .mathex-scoreboard > main {
   width: min(100%, 100rem);
 }
-.mathex-scoreboard header {
-  min-height: 7rem;
-}
-.mathex-scoreboard .scoreboard-team {
-  min-height: 6rem;
-}
-.mathex-scoreboard .scoreboard-team:first-child {
-  border-top: 1px solid var(--border);
-}
-.mathex-scoreboard .scoreboard-team h3 {
-  font-size: clamp(1.35rem, 2.5vw, 2.6rem);
-}
-.mathex-scoreboard .scoreboard-team > span:first-child {
-  font-size: clamp(1.5rem, 2.4vw, 2.5rem);
-}
-.mathex-scoreboard [aria-label$="question progress"] {
-  height: 0.6rem;
-  margin-top: 0.5rem;
-}
 .mathex-app .bg-emerald-500,
 .mathex-app .bg-emerald-600 {
   background-color: var(--competition-success);

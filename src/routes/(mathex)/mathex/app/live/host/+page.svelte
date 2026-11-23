@@ -9,18 +9,16 @@
     PhysicalHostSnapshot,
     PhysicalOperationResult
   } from "#lib/mathex/physical.schemas.js";
+  import { physicalRosterKey } from "#lib/mathex/physical.schemas.js";
   import { copyText, msToMinutesAndSeconds } from "#lib/utils.js";
-  import { CirclePause, CirclePlay, Copy, ExternalLink, Flag, Radio, Save, ShieldCheck } from "@lucide/svelte/icons";
+  import { CirclePause, CirclePlay, Copy, ExternalLink, Flag, Save } from "@lucide/svelte/icons";
   import type { Socket } from "socket.io-client";
   import { io } from "#lib/mathex/connection.js";
   import { toast } from "svelte-sonner";
-  import { flip } from "svelte/animate";
   import TeamEditor, { type EditableTeam } from "../TeamEditor.svelte";
+  import LiveStandings from "../LiveStandings.svelte";
+  import { roundLabels } from "../standings.js";
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
-
-  const motionDuration = $derived(
-    typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200
-  );
 
   const id = page.url.searchParams.get("id") || "";
   const hostToken = page.url.searchParams.get("hostToken") || "";
@@ -33,31 +31,34 @@
   let teams: EditableTeam[] = $state([]);
   let connected = $state(false);
   let saving = $state(false);
+  let savedRoster = $state<EditableTeam[]>([]);
+  let draftConflict = $state(false);
   let loadError = $state(false);
   let finishConfirmOpen = $state(false);
+  let removalConfirmOpen = $state(false);
+  let removalTargets = $state<{ id: string; name: string }[]>([]);
+  let pinConfirmOpen = $state(false);
+  let changingPin = $state(false);
+  let pendingRoundAction = $state(false);
+  let timerMinutes = $state<number | undefined>();
+  let timerBusy = $state(false);
   let markerPin = $state("");
   let snapshotReceivedAt = $state(Date.now());
 
   const scoreboardUrl = $derived(`/mathex/app/live/scoreboard/${encodeURIComponent(id)}`);
   const markerUrl = $derived(`/mathex/app/live/marker/${encodeURIComponent(id)}`);
-  const stateLabel = $derived.by(() =>
-    snapshot?.state === "running"
-      ? "ROUND LIVE"
-      : snapshot?.state === "paused"
-        ? "ROUND PAUSED"
-        : snapshot?.state === "finished"
-          ? "ROUND FINISHED"
-          : "READY TO START"
+  const unfinished = $derived.by(() => {
+    if (!snapshot) return 0;
+    const { teams, questionCount } = snapshot;
+    return teams.filter((team) => team.currentQuestion <= questionCount).length;
+  });
+  const draftDirty = $derived(physicalRosterKey(teams) !== physicalRosterKey(savedRoster));
+  const removedWithMarks = $derived.by(
+    () => snapshot?.teams.filter((team) => !teams.some((draft) => draft.id === team.id) && team.lastActionId) ?? []
   );
 
-  socket.on("connect", () => {
-    connected = true;
-    saving = false;
-    loadError = false;
-  });
   socket.on("disconnect", () => {
     connected = false;
-    saving = false;
   });
   socket.on("connect_error", () => {
     loadError = true;
@@ -68,17 +69,29 @@
     toast.error(message);
   });
   socket.on("snapshot", (next) => {
+    connected = true;
     loadError = false;
-    const previousRoster = snapshot?.teams.map(({ id, name, group }) => ({ id, name, group }));
     const nextRoster = next.teams.map(({ id, name, group }) => ({ id, name, group }));
+    if (!snapshot || physicalRosterKey(savedRoster) !== physicalRosterKey(nextRoster)) {
+      if (!draftDirty) resetDraft(nextRoster);
+      else if (!saving) draftConflict = true;
+      savedRoster = nextRoster;
+    }
     snapshot = next;
     snapshotReceivedAt = Date.now();
-    if (!saving && JSON.stringify(previousRoster) !== JSON.stringify(nextRoster)) teams = nextRoster;
+    now = snapshotReceivedAt;
   });
+
+  function resetDraft(roster = savedRoster) {
+    teams = roster.map((team) => ({ ...team }));
+    draftConflict = false;
+  }
 
   let now = $state(Date.now());
   $effect(() => {
-    const timer = setInterval(() => (now = Date.now()), 250);
+    const timer = setInterval(() => {
+      if (connected) now = Date.now();
+    }, 250);
     const fallback = setTimeout(() => {
       if (!snapshot) loadError = true;
     }, 8000);
@@ -99,18 +112,39 @@
     return current.countdownDurationMs - liveElapsedMs;
   });
   const clock = $derived(msToMinutesAndSeconds(remainingMs ?? liveElapsedMs));
+  const timerMs = $derived(Math.round((timerMinutes ?? 0) * 60_000));
+
+  function setTimer(duration: number | null) {
+    if (!connected || timerBusy || snapshot?.state === "finished") return;
+    if (duration !== null && (!Number.isFinite(duration) || duration < 1000 || duration > 86_400_000)) return;
+    timerBusy = true;
+    socket.timeout(4000).emit("setTimer", duration, (error, result) => {
+      timerBusy = false;
+      showResult(error, result);
+      if (result?.ok) toast.success(duration === null ? "Countdown turned off" : "Countdown set");
+    });
+  }
 
   function act(action: "start" | "pause" | "resume" | "finish") {
     if (action === "finish") {
       finishConfirmOpen = true;
       return;
     }
-    if (action === "start") socket.emit("start", showResult);
-    else if (action === "pause") socket.emit("pause", showResult);
-    else socket.emit("resume", showResult);
+    sendRoundAction(action);
   }
 
-  function saveTeams() {
+  function sendRoundAction(action: "start" | "pause" | "resume" | "finish") {
+    if (!connected || pendingRoundAction) return;
+    pendingRoundAction = true;
+    socket.timeout(4000).emit(action, (error, result) => {
+      pendingRoundAction = false;
+      if (action === "finish" && result?.ok) finishConfirmOpen = false;
+      showResult(error, result);
+    });
+  }
+
+  function saveTeams(confirmedRemovals?: string[]) {
+    if (!connected || saving || draftConflict || snapshot?.state === "finished") return;
     const blank = teams.length - teams.filter((team) => team.name.trim()).length;
     if (blank > 0) {
       toast.error(
@@ -131,25 +165,48 @@
       toast.error("Team names must be unique");
       return;
     }
+    if (removedWithMarks.some((team) => !confirmedRemovals?.includes(team.id))) {
+      removalTargets = removedWithMarks.map(({ id, name }) => ({ id, name }));
+      removalConfirmOpen = true;
+      return;
+    }
+    const expectedRoster = physicalRosterKey(savedRoster);
     saving = true;
-    socket.emit("updateTeams", cleaned, (result) => {
-      saving = false;
-      if (!result.ok) toast.error(result.error);
-      if (snapshot) teams = snapshot.teams.map((team) => ({ id: team.id, name: team.name, group: team.group }));
-    });
+    socket
+      .timeout(4000)
+      .emit(
+        "updateTeams",
+        { teams: cleaned, expectedRoster, confirmedRemovals: confirmedRemovals ?? [] },
+        (error, result) => {
+          saving = false;
+          if (error || !result?.ok) {
+            if (physicalRosterKey(savedRoster) !== expectedRoster) draftConflict = true;
+            showResult(error, result);
+            removalConfirmOpen = false;
+            return;
+          }
+          removalConfirmOpen = false;
+          resetDraft();
+          toast.success("Teams saved");
+        }
+      );
   }
 
-  function showResult(result: PhysicalOperationResult) {
-    if (!result.ok) toast.error(result.error);
+  function showResult(error: Error | null, result?: PhysicalOperationResult) {
+    if (error || !result) toast.error("Couldn’t confirm the change. Check the current state before trying again.");
+    else if (!result.ok) toast.error(result.error);
   }
 
   function resetMarkerPin() {
-    if (!/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)) return;
-    socket.emit("configure", { markerPin }, (result) => {
-      if (!result.ok) {
-        toast.error(result.error);
+    if (!connected || changingPin || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)) return;
+    changingPin = true;
+    socket.timeout(6000).emit("configure", { markerPin }, (error, result) => {
+      changingPin = false;
+      if (error || !result?.ok) {
+        showResult(error, result);
         return;
       }
+      pinConfirmOpen = false;
       markerPin = "";
       toast.success("Marker PIN updated");
     });
@@ -168,20 +225,10 @@
 <svelte:head><title>{snapshot?.name || "Mathex Live"} - Host</title></svelte:head>
 
 <div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
-  <main class="mx-auto flex w-full max-w-7xl flex-col gap-4">
-    <header class="flex flex-col justify-between gap-4 py-2 sm:flex-row sm:items-end">
-      <div>
-        <p class="mathex-kicker">Host console <span class="font-mono tabular-nums">· {id}</span></p>
-        <Header size="h1" class="mt-1 text-3xl tracking-[-0.04em]">{snapshot?.name || "Connecting..."}</Header>
-      </div>
-      <span
-        class="flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold {connected
-          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-          : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}"
-      >
-        <Radio class="h-3.5 w-3.5" />
-        {connected ? stateLabel : "RECONNECTING"}
-      </span>
+  <main class="mx-auto flex w-full max-w-5xl flex-col gap-4">
+    <header>
+      <p class="mathex-kicker">Host console · Event {id}</p>
+      <Header size="h1" class="mt-1 text-3xl tracking-tight">{snapshot?.name || "Mathex Live"}</Header>
     </header>
 
     {#if !id || !hostToken}
@@ -190,173 +237,243 @@
         <p class="mt-2 text-muted-foreground">Open the private host link created with the competition.</p>
       </section>
     {:else if snapshot}
-      <section class="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <div class="mathex-panel p-5 sm:p-7">
-          <div class="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p class="mathex-kicker">Round control</p>
-              <p class="mt-1 text-sm text-muted-foreground">
-                {snapshot.questionCount} questions · {snapshot.teams.length} teams
-              </p>
-              <p
-                class="mt-3 font-mono text-4xl font-black tabular-nums {remainingMs !== null && remainingMs < 0
-                  ? 'text-destructive'
-                  : 'text-foreground'}"
-              >
-                {clock}
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              {#if snapshot.state === "lobby"}
-                <Button class="gap-2" onclick={() => act("start")} disabled={!connected}
-                  ><CirclePlay /> Start round</Button
-                >
-              {:else if snapshot.state === "running"}
-                <Button variant="outline" class="gap-2" onclick={() => act("pause")} disabled={!connected}
-                  ><CirclePause /> Pause</Button
-                >
-                <Button variant="destructive" class="gap-2" onclick={() => act("finish")} disabled={!connected}
-                  ><Flag /> Finish</Button
-                >
-              {:else if snapshot.state === "paused"}
-                <Button class="gap-2" onclick={() => act("resume")} disabled={!connected}><CirclePlay /> Resume</Button>
-                <Button variant="destructive" class="gap-2" onclick={() => act("finish")} disabled={!connected}
-                  ><Flag /> Finish</Button
-                >
-              {/if}
-            </div>
-          </div>
-          {#if snapshot.state === "finished"}
-            <div class="mt-5 border border-border bg-accent p-4 text-sm font-semibold text-accent-foreground">
-              This competition is finished. The public scoreboard remains available.
-            </div>
-          {/if}
-          <AlertDialog.Root bind:open={finishConfirmOpen}>
-            <AlertDialog.Content>
-              <AlertDialog.Header>
-                <AlertDialog.Title>Finish this competition?</AlertDialog.Title>
-                <AlertDialog.Description>
-                  Markers will no longer be able to record results. This cannot be undone.
-                </AlertDialog.Description>
-              </AlertDialog.Header>
-              <AlertDialog.Footer>
-                <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-                <AlertDialog.Action
-                  onclick={() => {
-                    finishConfirmOpen = false;
-                    socket.emit("finish", showResult);
-                  }}>Finish competition</AlertDialog.Action
-                >
-              </AlertDialog.Footer>
-            </AlertDialog.Content>
-          </AlertDialog.Root>
-        </div>
-
-        <div class="mathex-panel p-5 sm:p-7">
-          <p class="mathex-kicker">Open on other screens</p>
-          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div class="border border-border p-4">
-              <Radio class="h-5 w-5 text-primary" />
-              <p class="mt-3 font-bold">Scoreboard</p>
-              <p class="mt-1 text-xs text-muted-foreground">Safe for the projector</p>
-              <div class="mt-4 flex gap-2">
-                <Button href={scoreboardUrl} target="_blank" variant="outline" size="sm"><ExternalLink /> Open</Button
-                ><Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Copy scoreboard link"
-                  onclick={() => copyLink(scoreboardUrl, "Scoreboard")}><Copy /></Button
-                >
-              </div>
-            </div>
-            <div class="border border-border p-4">
-              <ShieldCheck class="h-5 w-5 text-primary" />
-              <p class="mt-3 font-bold">Marker desk</p>
-              <p class="mt-1 text-xs text-muted-foreground">Protected by marker PIN</p>
-              <div class="mt-4 flex gap-2">
-                <Button href={markerUrl} target="_blank" variant="outline" size="sm"><ExternalLink /> Open</Button
-                ><Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Copy marker link"
-                  onclick={() => copyLink(markerUrl, "Marker")}><Copy /></Button
-                >
-              </div>
-              <div class="mt-3 flex gap-2">
-                <Input
-                  aria-label="New marker PIN"
-                  type="text"
-                  autocapitalize="characters"
-                  autocomplete="one-time-code"
-                  inputmode="text"
-                  maxlength={12}
-                  placeholder="8 letters/digits or 4-12 digits"
-                  bind:value={markerPin}
-                  oninput={() =>
-                    (markerPin = markerPin
-                      .toUpperCase()
-                      .replace(/[^A-Z0-9]/g, "")
-                      .slice(0, 12))}
-                /><Button
-                  size="sm"
-                  variant="outline"
-                  onclick={resetMarkerPin}
-                  disabled={!connected || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)}>Set</Button
-                >
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="mathex-panel p-5 sm:p-7">
-        <div class="mb-4 flex items-end justify-between gap-4">
+      <section class="mathex-panel sticky top-0 z-20 p-3 sm:p-4" aria-label="Round control">
+        <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p class="mathex-kicker">Live standings</p>
-            <h2 class="mt-1 text-2xl font-bold">Leaderboard</h2>
-          </div>
-          <span class="text-sm text-muted-foreground">Correct, then time</span>
-        </div>
-        <div class="grid gap-2 lg:grid-cols-2">
-          {#each snapshot.teams as team (team.id)}
-            <div
-              animate:flip={{ duration: motionDuration }}
-              class="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-b border-border p-3"
+            <p class="text-sm font-bold {connected ? 'text-primary' : 'text-destructive'}" role="status">
+              {connected ? roundLabels[snapshot.state] : "Reconnecting · controls unavailable"}
+            </p>
+            <p class="mt-1 text-xs text-muted-foreground">
+              {remainingMs === null ? "Elapsed time" : remainingMs < 0 ? "Overtime" : "Time remaining"}
+            </p>
+            <p
+              class="text-3xl leading-none font-black tabular-nums {remainingMs !== null && remainingMs < 0
+                ? 'text-destructive'
+                : 'text-foreground'}"
             >
-              <span class="text-center text-xl font-black text-muted-foreground">{team.rank}</span>
-              <div class="min-w-0">
-                <p class="truncate font-bold">{team.name}</p>
-                <p class="text-xs text-muted-foreground">
-                  {team.group || "Ungrouped"} · Q{Math.min(
-                    team.currentQuestion,
-                    snapshot.questionCount
-                  )}/{snapshot.questionCount}
-                </p>
-              </div>
-              <div class="text-right">
-                <p class="text-xl font-black text-emerald-600 dark:text-emerald-400">{team.correct}</p>
-                <p class="text-xs text-muted-foreground">correct · {team.incorrect} wrong</p>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </section>
-
-      <section class="mathex-panel p-5 sm:p-7">
-        <div class="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <p class="mathex-kicker">Roster</p>
-            <h2 class="mt-1 text-2xl font-bold">Teams and groups</h2>
-            <p class="mt-1 text-sm text-muted-foreground">
-              Changes appear on marker and scoreboard screens immediately.
+              {clock}
             </p>
           </div>
-          <Button class="gap-2" onclick={saveTeams} disabled={!connected || saving || snapshot.state === "finished"}
-            ><Save /> {saving ? "Saving..." : "Save teams"}</Button
-          >
+          <div class="flex flex-wrap gap-2">
+            {#if snapshot.state === "lobby"}
+              <Button class="gap-2" onclick={() => act("start")} disabled={!connected || pendingRoundAction}
+                ><CirclePlay /> Start round</Button
+              >
+            {:else if snapshot.state === "running"}
+              <Button
+                variant="outline"
+                class="gap-2"
+                onclick={() => act("pause")}
+                disabled={!connected || pendingRoundAction}><CirclePause /> Pause</Button
+              >
+            {:else if snapshot.state === "paused"}
+              <Button class="gap-2" onclick={() => act("resume")} disabled={!connected || pendingRoundAction}
+                ><CirclePlay /> Resume</Button
+              >
+            {/if}
+            {#if snapshot.state === "running" || snapshot.state === "paused"}
+              <Button
+                variant="ghost"
+                class="ms-2 gap-2 text-destructive"
+                onclick={() => act("finish")}
+                disabled={!connected || pendingRoundAction}
+                ><Flag /> {unfinished === 0 ? "Review and finish" : "Finish round"}</Button
+              >
+            {/if}
+          </div>
         </div>
-        <TeamEditor bind:teams disabled={saving || snapshot.state === "finished"} />
+        {#if snapshot.state !== "finished"}
+          <details class="mt-2 border-t border-border pt-2">
+            <summary class="w-fit cursor-pointer text-sm font-semibold">Countdown settings</summary>
+            <form
+              class="mt-2 flex flex-wrap items-end gap-2"
+              onsubmit={(event) => {
+                event.preventDefault();
+                setTimer(timerMs);
+              }}
+            >
+              <label class="grid gap-1 text-xs font-semibold" for="host-countdown"
+                >Minutes
+                <Input
+                  id="host-countdown"
+                  type="number"
+                  class="w-28"
+                  min={0.5}
+                  max={1440}
+                  step="any"
+                  required
+                  bind:value={timerMinutes}
+                />
+              </label>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!connected ||
+                  timerBusy ||
+                  !Number.isFinite(timerMs) ||
+                  timerMs < 30_000 ||
+                  timerMs > 86_400_000}
+              >
+                {remainingMs === null ? "Start countdown" : "Reset countdown"}
+              </Button>
+              {#if remainingMs !== null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!connected || timerBusy}
+                  onclick={() => setTimer(null)}>Turn off countdown</Button
+                >
+              {/if}
+            </form>
+            <p class="mt-2 text-xs text-muted-foreground">
+              Set 0.5 to 1,440 minutes. The countdown pauses with the round; reaching zero shows overtime, not the end
+              of scoring.
+            </p>
+          </details>
+        {/if}
+        {#if unfinished === 0 && (snapshot.state === "running" || snapshot.state === "paused")}
+          <p class="mt-2 text-sm font-medium text-primary">
+            All teams are done. Review the standings before finishing.
+          </p>
+        {/if}
+        <AlertDialog.Root bind:open={finishConfirmOpen}>
+          <AlertDialog.Content>
+            <AlertDialog.Header>
+              <AlertDialog.Title>Finish this competition?</AlertDialog.Title>
+              <AlertDialog.Description>
+                {unfinished === 0
+                  ? "All teams reached the end."
+                  : unfinished === 1
+                    ? "One team is still working."
+                    : `${unfinished} teams are still working.`}
+                Scorers will no longer be able to record or undo marks. This cannot be undone.
+              </AlertDialog.Description>
+            </AlertDialog.Header>
+            <AlertDialog.Footer>
+              <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+              <AlertDialog.Action onclick={() => sendRoundAction("finish")} disabled={!connected || pendingRoundAction}
+                >Finish competition</AlertDialog.Action
+              >
+            </AlertDialog.Footer>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
       </section>
+
+      <nav class="flex flex-wrap gap-x-4 gap-y-2" aria-label="Other screens">
+        {#each [{ url: scoreboardUrl, open: "Open projector scoreboard", label: "Scoreboard" }, { url: markerUrl, open: "Open marker desk in new tab", label: "Marker" }] as link (link.label)}
+          <div class="flex gap-1">
+            <Button href={link.url} target="_blank" rel="noopener" variant="outline" size="sm"
+              ><ExternalLink /> {link.open}</Button
+            >
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Copy ${link.label.toLowerCase()} link`}
+              title={`Copy ${link.label.toLowerCase()} link`}
+              onclick={() => copyLink(link.url, link.label)}><Copy /></Button
+            >
+          </div>
+        {/each}
+      </nav>
+
+      <section class="mathex-panel" aria-labelledby="host-standings">
+        <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-4 py-3">
+          <h2 id="host-standings" class="text-lg font-bold">
+            {snapshot.state === "finished" ? "Final standings" : "Live standings"}
+          </h2>
+          <p class="text-sm text-muted-foreground">
+            {snapshot.teams.length} teams · {snapshot.questionCount} questions
+          </p>
+        </div>
+        <div class="max-h-[55dvh] overflow-auto"><LiveStandings {snapshot} showAttempts /></div>
+      </section>
+
+      <details class="mathex-panel p-4">
+        <summary class="cursor-pointer font-bold">Setup{draftDirty ? " · Unsaved roster changes" : ""}</summary>
+        <section class="mt-4 border-t border-border pt-4" aria-labelledby="teams-heading">
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 id="teams-heading" class="text-lg font-bold">Teams and groups</h2>
+              <p class="text-sm text-muted-foreground">Saved changes appear on the marker desk and projector.</p>
+            </div>
+            <div class="flex gap-2">
+              {#if draftDirty || draftConflict}<Button variant="outline" onclick={() => resetDraft()} disabled={saving}
+                  >Discard draft</Button
+                >{/if}
+              <Button
+                onclick={() => saveTeams()}
+                disabled={!connected || saving || draftConflict || !draftDirty || snapshot.state === "finished"}
+                ><Save /> {saving ? "Saving…" : "Save teams"}</Button
+              >
+            </div>
+          </div>
+          {#if draftConflict}<p class="mb-3 font-semibold text-destructive" role="alert">
+              Another host saved roster changes. Your draft is still here, but you’ll need to discard it and start from
+              the latest roster before saving.
+            </p>{/if}
+          <TeamEditor bind:teams disabled={saving || snapshot.state === "finished"} />
+        </section>
+        <section class="mt-5 border-t border-border pt-4" aria-labelledby="pin-heading">
+          <h2 id="pin-heading" class="text-lg font-bold">Marker PIN</h2>
+          <p id="new-pin-hint" class="my-2 text-sm text-muted-foreground">
+            Changing the PIN disconnects active scorers. Use 8 letters or digits, or 4 to 12 digits.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <Input
+              aria-label="New marker PIN"
+              aria-describedby="new-pin-hint"
+              class="max-w-xs"
+              type="text"
+              autocapitalize="characters"
+              maxlength={12}
+              bind:value={markerPin}
+              oninput={() => (markerPin = markerPin.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+            />
+            <Button
+              variant="outline"
+              onclick={() => (pinConfirmOpen = true)}
+              disabled={!connected || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)}>Change PIN</Button
+            >
+          </div>
+        </section>
+      </details>
+
+      <AlertDialog.Root bind:open={removalConfirmOpen}>
+        <AlertDialog.Content>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Remove teams and their marks?</AlertDialog.Title>
+            <AlertDialog.Description
+              >Saving will permanently remove the marks recorded for {removalTargets
+                .map((team) => team.name)
+                .join(", ")}.</AlertDialog.Description
+            >
+          </AlertDialog.Header>
+          <AlertDialog.Footer
+            ><AlertDialog.Cancel>Keep editing</AlertDialog.Cancel><AlertDialog.Action
+              onclick={() => saveTeams(removalTargets.map((team) => team.id))}
+              disabled={!connected || saving || draftConflict || snapshot.state === "finished"}
+              >Remove and save</AlertDialog.Action
+            ></AlertDialog.Footer
+          >
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+
+      <AlertDialog.Root bind:open={pinConfirmOpen}>
+        <AlertDialog.Content>
+          <AlertDialog.Header
+            ><AlertDialog.Title>Change the marker PIN?</AlertDialog.Title><AlertDialog.Description
+              >Active scorers will have to reopen the desk with the new PIN. Existing marks are kept.</AlertDialog.Description
+            ></AlertDialog.Header
+          >
+          <AlertDialog.Footer
+            ><AlertDialog.Cancel>Cancel</AlertDialog.Cancel><AlertDialog.Action
+              onclick={resetMarkerPin}
+              disabled={!connected || changingPin}>Change and disconnect scorers</AlertDialog.Action
+            ></AlertDialog.Footer
+          >
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     {:else if loadError}
       <section class="mathex-panel p-8 text-center">
         <p class="mathex-kicker">Connection problem</p>
