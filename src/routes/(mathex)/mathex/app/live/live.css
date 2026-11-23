@@ -1,0 +1,446 @@
+/* Mathex Live. Everything here derives from the .mathex-app tokens in
+   app.css, so the live screens follow the rest of the competition app in both
+   themes. The --lv-* names are local aliases only. */
+.mathex-live {
+  --lv-field: var(--competition-paper);
+  --lv-surface: var(--card);
+  --lv-ink: var(--foreground);
+  --lv-ink-soft: var(--muted-foreground);
+  --lv-line: var(--border);
+  --lv-line-soft: var(--muted);
+  --lv-strong: var(--competition-viridian-deep);
+  --lv-warn: var(--competition-warning);
+  --lv-stop: var(--destructive);
+  --lv-stop-ink: var(--destructive-foreground);
+  background: var(--lv-field);
+  color: var(--lv-ink);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.mathex-live.is-screen {
+  min-height: 100dvh;
+}
+.public-site > div:has(> .mathex-live) {
+  display: flex;
+  flex-direction: column;
+}
+.public-site > div > .mathex-live {
+  flex: 1;
+}
+
+/* Type */
+.mathex-live .lv-title {
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.mathex-live .lv-h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.mathex-live .lv-soft {
+  color: var(--lv-ink-soft);
+}
+.mathex-live .lv-small {
+  font-size: 0.875rem;
+}
+.mathex-live .lv-code {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Status tag */
+.mathex-live .lv-plate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.15em 0.55em;
+  border-radius: 3px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.mathex-live .lv-plate.is-signal {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.mathex-live .lv-plate.is-stop {
+  background: var(--lv-stop);
+  color: var(--lv-stop-ink);
+}
+
+/* Buttons. Same shape and colours as the app's Button component, with
+   taller targets for use at an event. */
+.mathex-live .lbtn {
+  --btn-bg: transparent;
+  --btn-ink: var(--lv-ink);
+  --btn-line: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.35rem 1rem;
+  border: 1px solid var(--btn-line);
+  border-radius: 3px;
+  background: var(--btn-bg);
+  color: var(--btn-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+.mathex-live .lbtn svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+}
+.mathex-live .lbtn:is(:disabled, [aria-disabled="true"]) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mathex-live .lbtn-solid {
+  --btn-bg: var(--primary);
+  --btn-ink: var(--primary-foreground);
+  --btn-line: var(--primary);
+}
+.mathex-live .lbtn-line {
+  --btn-bg: var(--lv-surface);
+  --btn-line: var(--input);
+}
+.mathex-live .lbtn-stop {
+  --btn-ink: var(--lv-stop);
+  --btn-line: color-mix(in srgb, var(--lv-stop) 55%, transparent);
+}
+.mathex-live .lbtn-quiet {
+  padding-inline: 0.6rem;
+  --btn-ink: var(--lv-ink-soft);
+}
+.mathex-live .lbtn-sm {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.875rem;
+}
+@media (hover: hover) {
+  .mathex-live .lbtn-solid:not(:disabled):hover {
+    --btn-bg: color-mix(in srgb, var(--primary) 90%, transparent);
+  }
+  .mathex-live .lbtn-line:not(:disabled):hover,
+  .mathex-live .lbtn-quiet:not(:disabled):hover {
+    --btn-bg: var(--accent);
+    --btn-ink: var(--accent-foreground);
+  }
+  .mathex-live .lbtn-stop:not(:disabled):hover {
+    --btn-bg: var(--lv-stop);
+    --btn-ink: var(--lv-stop-ink);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mathex-live .lbtn {
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out,
+      border-color 120ms ease-out;
+  }
+}
+
+/* Fields */
+.mathex-live [data-slot="input"],
+.mathex-live .lv-select {
+  height: 2.5rem;
+  border: 1px solid var(--input);
+  border-radius: 3px;
+  background: var(--lv-surface);
+  color: var(--lv-ink);
+  font-size: 1rem;
+}
+.mathex-live .lv-select {
+  min-width: 0;
+  padding-inline: 0.6rem;
+}
+.mathex-live .lv-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.mathex-live .lv-hint {
+  margin-top: 0.35rem;
+  color: var(--lv-ink-soft);
+  font-size: 0.8125rem;
+}
+.mathex-live .lv-alert {
+  color: var(--lv-stop);
+  font-weight: 600;
+}
+
+/* Header line shared by the host console and the marker desk */
+.mathex-live .lv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  min-height: 3rem;
+  padding: 0.4rem clamp(0.75rem, 3vw, 2rem);
+  border-bottom: 1px solid var(--lv-line);
+}
+.mathex-live .lv-bar .mathex-kicker {
+  font-size: 0.875rem;
+}
+.mathex-live .lv-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-inline-start: auto;
+}
+.mathex-live .lv-bar-code {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.875rem;
+  color: var(--lv-ink-soft);
+}
+.mathex-live .lv-bar-code strong {
+  color: var(--lv-ink);
+  font-size: 1.0625rem;
+}
+.mathex-live .lv-theme {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--competition-line-strong);
+  border-radius: 3px;
+  color: var(--competition-ink-soft);
+}
+.mathex-live .lv-theme:hover {
+  border-color: var(--primary);
+  color: var(--lv-strong);
+}
+.mathex-live .lv-theme svg {
+  width: 1rem;
+  height: 1rem;
+}
+.mathex-live .lv-theme .moon,
+.dark .mathex-live .lv-theme .sun {
+  display: none;
+}
+.dark .mathex-live .lv-theme .moon {
+  display: block;
+}
+
+/* Question track: one segment per question. */
+.mathex-live .question-track {
+  --track-rest: var(--lv-line);
+  container-type: inline-size;
+}
+/* Long rounds wrap rather than losing the gap between questions. */
+.mathex-live .question-track-cells {
+  --gap: 1px;
+  --segment-width: calc((100cqw - (var(--n) - 1) * var(--gap)) / var(--n));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--gap);
+}
+.mathex-live .question-track-cells > span {
+  flex: 0 0 max(1px, var(--segment-width));
+  height: var(--track-h, 0.375rem);
+}
+@supports (width: round(down, 1cqw, 1px)) {
+  .mathex-live .question-track-cells {
+    --gap: clamp(1px, round(down, calc(100cqw / var(--n) / 4), 1px), 2px);
+  }
+  .mathex-live .question-track-cells > span {
+    flex-basis: max(1px, round(down, var(--segment-width), 1px));
+  }
+}
+.mathex-live .lv-standings .question-track {
+  width: clamp(9rem, 11vw, 14rem);
+}
+.mathex-live .question-track span {
+  background: var(--track-rest);
+}
+.mathex-live .question-track .solved {
+  background: var(--primary);
+}
+.mathex-live .question-track .skipped {
+  background: var(--competition-saffron);
+}
+.mathex-live .question-track .current {
+  background: var(--lv-surface);
+  box-shadow: inset 0 0 0 1.5px var(--primary);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mathex-live .question-track span {
+    transition: background-color 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+}
+
+/* Standings table used by the host console and the marker desk */
+.mathex-live .lv-standings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+.mathex-live .lv-standings caption {
+  padding: 1.1rem 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: left;
+}
+.mathex-live .lv-standings thead th {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--competition-line-strong);
+  color: var(--lv-ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: right;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.mathex-live .lv-standings tbody :is(th, td) {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--lv-line);
+  text-align: right;
+  white-space: nowrap;
+}
+.mathex-live .lv-standings :is(th, td):first-child {
+  padding-inline-start: 0.5rem;
+}
+.mathex-live .lv-standings :is(th, td):last-child {
+  padding-inline-end: 0.5rem;
+}
+.mathex-live .lv-standings :is(thead, tbody) .col-team {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.mathex-live .lv-standings tbody .col-team {
+  font-weight: 600;
+  line-height: 1.25;
+}
+.mathex-live .lv-standings .col-rank {
+  width: 1%;
+  color: var(--lv-ink-soft);
+  font-weight: 700;
+  text-align: center;
+}
+.mathex-live .lv-standings tbody .col-correct {
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+.mathex-live .lv-standings tbody .col-progress {
+  color: var(--lv-ink-soft);
+}
+.mathex-live .lv-standings .col-track {
+  min-width: 6rem;
+}
+.mathex-live .lv-standings tbody tr.is-leader :is(.col-rank, .col-team, .col-correct) {
+  color: var(--lv-strong);
+}
+.mathex-live .lv-standings tbody tr.is-pinned {
+  background: var(--accent);
+  box-shadow: inset 3px 0 var(--primary);
+}
+.mathex-live .lv-standings-wrap {
+  container-type: inline-size;
+}
+.mathex-live .lv-standings .team-meta {
+  display: none;
+  flex-wrap: wrap;
+  gap: 0 0.9rem;
+  margin-top: 0.15rem;
+  color: var(--lv-ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.mathex-live .lv-standings .team-meta b {
+  color: var(--lv-ink);
+  font-weight: 700;
+}
+@container (width < 40rem) {
+  .mathex-live .lv-standings .col-extra {
+    display: none;
+  }
+  .mathex-live .lv-standings .team-meta {
+    display: flex;
+  }
+}
+.mathex-live .lv-note {
+  max-width: 44rem;
+  margin-top: 0.9rem;
+  color: var(--lv-ink-soft);
+  font-size: 0.875rem;
+}
+
+/* Team roster editor */
+.mathex-live .roster-head,
+.mathex-live .roster-row {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) minmax(4.5rem, 7.5rem) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mathex-live .roster-head {
+  padding-bottom: 0.3rem;
+  color: var(--lv-ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.mathex-live .roster-row {
+  padding-block: 0.3rem;
+}
+.mathex-live .roster-n {
+  color: var(--lv-ink-soft);
+  font-weight: 700;
+  text-align: right;
+}
+.mathex-live .roster-remove {
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0 0.5rem;
+  border-radius: 3px;
+  color: var(--lv-ink-soft);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.mathex-live .roster-remove svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-inline: auto;
+}
+.mathex-live .roster-remove:not(:disabled):hover {
+  color: var(--lv-stop);
+}
+.mathex-live .roster-remove.is-armed {
+  background: var(--lv-stop);
+  color: var(--lv-stop-ink);
+}
+.mathex-live .roster-remove:disabled {
+  opacity: 0.35;
+}
+@media (width < 30rem) {
+  .mathex-live .roster-head {
+    display: none;
+  }
+  .mathex-live .roster-row {
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+    padding-block: 0.5rem;
+    border-bottom: 1px solid var(--lv-line);
+  }
+  .mathex-live .roster-row .roster-group {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}

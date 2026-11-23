@@ -2,13 +2,13 @@ import { io } from "socket.io-client";
 import { physicalRosterKey } from "../../src/lib/mathex/physical.schemas";
 import { checkReflow, expect, test, visit } from "./fixtures";
 
-async function createEvent(baseURL: string, groups: string[], longNames = false) {
+async function createEvent(baseURL: string, groups: string[], { longNames = false, questionCount = 3 } = {}) {
   const creator = io(`${baseURL}/physical`);
   const pin = "123456";
   try {
     const result = await creator.timeout(5000).emitWithAck("createCompetition", {
       name: longNames ? "Mathex Grand Final and Inter-School Championship Practice Rehearsal" : "Live rehearsal",
-      questionCount: 3,
+      questionCount,
       markerPin: pin,
       teams: groups.map((group, index) => ({
         name: `${String.fromCharCode(65 + index)} Team${longNames ? " with a long name that still needs to fit the board" : ""}`,
@@ -79,10 +79,10 @@ test("host, marker and projector stay in sync through a physical round", async (
       const board = document.querySelector(".projector-table");
       if (!board) return;
       const observer = new MutationObserver(() => {
-        if (!board.querySelector("tr.leader")?.textContent?.includes("B Team")) return;
+        if (!board.querySelector(".board-row.leader")?.textContent?.includes("B Team")) return;
         observer.disconnect();
         requestAnimationFrame(() => {
-          const moved = [...board.querySelectorAll("tbody tr")].some((row) =>
+          const moved = [...board.querySelectorAll(".board-row")].some((row) =>
             row
               .getAnimations()
               .some(
@@ -98,7 +98,7 @@ test("host, marker and projector stay in sync through a physical round", async (
     });
   }
   await marker.getByRole("button", { name: "Mark B Team correct" }).click();
-  await expect(scoreboard.locator("tr.leader").getByRole("rowheader", { name: "B Team" })).toBeVisible();
+  await expect(scoreboard.locator(".board-row.leader").getByRole("rowheader", { name: "B Team" })).toBeVisible();
   if (!isMobile) {
     await expect(scoreboard.locator(".projector-table")).toHaveAttribute("data-observed-rank-motion", "true");
     await scoreboard.emulateMedia({ reducedMotion: "reduce" });
@@ -216,16 +216,44 @@ test("the public scoreboard pages through large groups without losing rows", asy
   await expect(next).toBeDisabled();
 });
 
-test("seven long team names fit a short projector viewport", async ({ page, baseURL, isMobile }) => {
+test("a full standings page fits a short projector viewport even in a long round", async ({
+  page,
+  baseURL,
+  isMobile
+}) => {
   test.skip(isMobile, "Projector viewport");
-  const { code, hostPath } = await createEvent(baseURL!, Array<string>(7).fill(""), true);
+  const { code, hostPath } = await createEvent(baseURL!, Array<string>(9).fill(""), {
+    longNames: true,
+    questionCount: 200
+  });
   await visit(page, hostPath);
   await page.getByRole("button", { name: "Start round" }).click();
   await expect(page.getByText("Round live", { exact: true })).toBeVisible();
-  await page.setViewportSize({ width: 1024, height: 576 });
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await visit(page, `/mathex/app/live/scoreboard/${code}`);
-  await expect(page.getByRole("rowheader")).toHaveCount(7);
-  await expect(page.getByRole("rowheader", { name: /^G Team/ })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("rowheader")).toHaveCount(8);
+  const track = page.locator(".question-track-cells").first();
+  await expect(track.locator(":scope > span")).toHaveCount(200);
+  for (const viewport of [
+    { width: 1920, height: 1080 },
+    { width: 1280, height: 720 },
+    { width: 1024, height: 576 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(page.getByRole("rowheader", { name: /^H Team/ })).toBeInViewport({ ratio: 1 });
+    expect(
+      await track.locator(":scope > span").evaluateAll((segments) => {
+        const bounds = segments.map((segment) => segment.getBoundingClientRect());
+        return bounds.every((box, i) => {
+          const previous = bounds[i - 1];
+          return box.width >= 1 && (!previous || box.top > previous.top || box.left - previous.right >= 1);
+        });
+      })
+    ).toBe(true);
+  }
+  await page.getByRole("button", { name: "Next standings page" }).click();
+  await expect(page.getByRole("rowheader", { name: /^I Team/ })).toBeInViewport({ ratio: 1 });
+  await page.getByRole("button", { name: "Previous standings page" }).click();
 
   await page.setViewportSize({ width: 320, height: 640 });
   const rank = page.getByRole("columnheader", { name: "Rank" });

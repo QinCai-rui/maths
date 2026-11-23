@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { Button } from "#lib/components/ui/button/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import { Label } from "#lib/components/ui/label/index.js";
-  import { GripVertical, Plus, Trash2 } from "@lucide/svelte/icons";
+  import { Plus, Trash2 } from "@lucide/svelte/icons";
 
   export interface EditableTeam {
     id: string;
@@ -42,46 +41,46 @@
   }
 </script>
 
-<div class="space-y-3">
-  <div class="hidden grid-cols-[1fr_0.65fr_2rem] gap-3 px-3 text-xs font-semibold text-muted-foreground sm:grid">
-    <span>Team name</span><span>Group</span><span></span>
+<div>
+  <div class="roster-head" aria-hidden="true">
+    <span></span><span>Team name</span><span>Group</span><span></span>
   </div>
   {#each teams as team, index (team.id)}
-    <div class="grid gap-2 border border-border bg-background p-3 sm:grid-cols-[1fr_0.65fr_2rem] sm:items-end sm:gap-3">
+    {@const armed = armDeleteId === team.id}
+    <div class="roster-row">
+      <span class="roster-n" aria-hidden="true">{index + 1}</span>
       <div>
-        <Label for="team-{team.id}" class="mb-1.5 sm:sr-only">Team {index + 1} name</Label>
-        <div class="flex items-center gap-2">
-          <GripVertical class="hidden h-4 w-4 shrink-0 text-muted-foreground/60 sm:block" />
-          <Input id="team-{team.id}" bind:value={team.name} maxlength={50} {disabled} />
-        </div>
+        <Label for="team-{team.id}" class="sr-only">Team {index + 1} name</Label>
+        <Input id="team-{team.id}" bind:value={team.name} maxlength={50} placeholder="Team name" {disabled} />
       </div>
-      <div>
-        <Label for="group-{team.id}" class="mb-1.5 sm:sr-only">Group</Label>
+      <div class="roster-group">
+        <Label for="group-{team.id}" class="sr-only">Group</Label>
         <Input id="group-{team.id}" bind:value={team.group} maxlength={30} placeholder="Optional group" {disabled} />
       </div>
-      <Button
-        variant={armDeleteId === team.id ? "destructive" : "ghost"}
-        size="icon"
-        class="justify-self-end text-muted-foreground hover:text-destructive"
-        aria-label={armDeleteId === team.id
+      <button
+        type="button"
+        class="roster-remove"
+        class:is-armed={armed}
+        aria-label={armed
           ? `Confirm remove ${team.name || `team ${index + 1}`}`
           : `Remove ${team.name || `team ${index + 1}`}`}
-        title={armDeleteId === team.id ? "Click again to confirm removal" : "Remove team"}
+        title={armed ? "Click again to confirm removal" : "Remove team"}
         onclick={() => removeTeam(team.id)}
-        disabled={disabled || teams.length <= 1}><Trash2 /></Button
+        disabled={disabled || teams.length <= 1}
+        >{#if armed}Remove?{:else}<Trash2 />{/if}</button
       >
     </div>
   {/each}
-  <Button
-    variant="outline"
-    class="w-full gap-2 border-dashed"
+  <button
+    type="button"
+    class="lbtn lbtn-line lbtn-sm mt-3"
     onclick={addTeam}
     disabled={disabled || teams.length >= 60}
     title={teams.length >= 60 ? "Roster is limited to 60 teams" : "Add team"}
   >
-    <Plus class="h-4 w-4" /> Add team
-  </Button>
+    <Plus /> Add team
+  </button>
   {#if teams.length >= 60}
-    <p class="text-xs text-muted-foreground">Roster is limited to 60 teams.</p>
+    <p class="lv-hint">Roster is limited to 60 teams.</p>
   {/if}
 </div>

@@ -14,6 +14,18 @@ export function teamProgress(team: PhysicalTeamSnapshot, questionCount: number, 
   return `Q${team.currentQuestion} / ${questionCount}`;
 }
 
+export function wrongAttempts(count: number) {
+  return `${count} wrong ${count === 1 ? "attempt" : "attempts"}`;
+}
+
+export function teamTally(team: PhysicalTeamSnapshot) {
+  return `${team.correct} correct · ${wrongAttempts(team.incorrect)} · ${team.skipped} skipped`;
+}
+
+export function spacedCode(code: string) {
+  return /^\d{6}$/.test(code) ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
+}
+
 export function standingsGroups(teams: PhysicalTeamSnapshot[]) {
   // Match the server's rank buckets, including its ungrouped fallback.
   const groups = new Map<string, PhysicalTeamSnapshot[]>();

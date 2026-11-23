@@ -1,7 +1,5 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Button } from "#lib/components/ui/button/index.js";
-  import { Header } from "#lib/components/ui/header/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import type {
     PhysicalHostClientToServerEvents,
@@ -11,12 +9,13 @@
   } from "#lib/mathex/physical.schemas.js";
   import { physicalRosterKey } from "#lib/mathex/physical.schemas.js";
   import { copyText, msToMinutesAndSeconds } from "#lib/utils.js";
-  import { CirclePause, CirclePlay, Copy, ExternalLink, Flag, Save } from "@lucide/svelte/icons";
+  import { Copy, ExternalLink, Flag, Pause, Play } from "@lucide/svelte/icons";
   import type { Socket } from "socket.io-client";
   import { io } from "#lib/mathex/connection.js";
   import { toast } from "svelte-sonner";
   import TeamEditor, { type EditableTeam } from "../TeamEditor.svelte";
   import LiveStandings from "../LiveStandings.svelte";
+  import LiveBar from "../LiveBar.svelte";
   import { roundLabels } from "../standings.js";
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 
@@ -212,6 +211,17 @@
     });
   }
 
+  const screens = $derived([
+    {
+      label: "Projector scoreboard",
+      short: "scoreboard",
+      note: "Public. Anyone with the event code can watch.",
+      url: scoreboardUrl
+    },
+    { label: "Marker desk", short: "marker", note: "Opens with the event code and the marker PIN.", url: markerUrl }
+  ]);
+  const active = $derived.by(() => snapshot?.state === "running" || snapshot?.state === "paused");
+
   async function copyLink(path: string, label: string) {
     try {
       await copyText(`${page.url.origin}${path}`);
@@ -224,270 +234,512 @@
 
 <svelte:head><title>{snapshot?.name || "Mathex Live"} - Host</title></svelte:head>
 
-<div class="mathex-shell min-h-screen px-3 py-5 sm:px-6 sm:py-7">
-  <main class="mx-auto flex w-full max-w-5xl flex-col gap-4">
-    <header>
-      <p class="mathex-kicker">Host console · Event {id}</p>
-      <Header size="h1" class="mt-1 text-3xl tracking-tight">{snapshot?.name || "Mathex Live"}</Header>
+<LiveBar role="Host console" code={snapshot ? id : ""} />
+
+<main class="host">
+  {#if !id || !hostToken}
+    <section class="host-message">
+      <h1 class="lv-title">Host link incomplete</h1>
+      <p class="lv-soft">Open the private host link created with the competition.</p>
+      <a class="lbtn lbtn-line" href="/mathex/app/live">Set up a new event</a>
+    </section>
+  {:else if snapshot}
+    <header class="host-head">
+      <h1 class="lv-title">{snapshot.name}</h1>
+      <p class="lv-soft">
+        {snapshot.teams.length}
+        {snapshot.teams.length === 1 ? "team" : "teams"}, {snapshot.questionCount}
+        {snapshot.questionCount === 1 ? "question" : "questions"}{#if active}, {unfinished} still working{/if}
+      </p>
     </header>
 
-    {#if !id || !hostToken}
-      <section class="mathex-panel p-8 text-center">
-        <h2 class="text-xl font-bold">Host link incomplete</h2>
-        <p class="mt-2 text-muted-foreground">Open the private host link created with the competition.</p>
-      </section>
-    {:else if snapshot}
-      <section class="mathex-panel sticky top-0 z-20 p-3 sm:p-4" aria-label="Round control">
-        <div class="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p class="text-sm font-bold {connected ? 'text-primary' : 'text-destructive'}" role="status">
-              {connected ? roundLabels[snapshot.state] : "Reconnecting · controls unavailable"}
-            </p>
-            <p class="mt-1 text-xs text-muted-foreground">
-              {remainingMs === null ? "Elapsed time" : remainingMs < 0 ? "Overtime" : "Time remaining"}
-            </p>
-            <p
-              class="text-3xl leading-none font-black tabular-nums {remainingMs !== null && remainingMs < 0
-                ? 'text-destructive'
-                : 'text-foreground'}"
+    <section class="round-band" aria-label="Round control">
+      <div class="round-main">
+        <div class="round-clock" class:overtime={remainingMs !== null && remainingMs < 0}>
+          <p role="status">
+            <span
+              class="lv-plate"
+              class:is-signal={connected && snapshot.state === "running"}
+              class:is-line={connected && snapshot.state !== "running"}
+              class:is-stop={!connected}
+              >{connected ? roundLabels[snapshot.state] : "Reconnecting, controls unavailable"}</span
             >
-              {clock}
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            {#if snapshot.state === "lobby"}
-              <Button class="gap-2" onclick={() => act("start")} disabled={!connected || pendingRoundAction}
-                ><CirclePlay /> Start round</Button
-              >
-            {:else if snapshot.state === "running"}
-              <Button
-                variant="outline"
-                class="gap-2"
-                onclick={() => act("pause")}
-                disabled={!connected || pendingRoundAction}><CirclePause /> Pause</Button
-              >
-            {:else if snapshot.state === "paused"}
-              <Button class="gap-2" onclick={() => act("resume")} disabled={!connected || pendingRoundAction}
-                ><CirclePlay /> Resume</Button
-              >
-            {/if}
-            {#if snapshot.state === "running" || snapshot.state === "paused"}
-              <Button
-                variant="ghost"
-                class="ms-2 gap-2 text-destructive"
-                onclick={() => act("finish")}
-                disabled={!connected || pendingRoundAction}
-                ><Flag /> {unfinished === 0 ? "Review and finish" : "Finish round"}</Button
-              >
-            {/if}
-          </div>
-        </div>
-        {#if snapshot.state !== "finished"}
-          <details class="mt-2 border-t border-border pt-2">
-            <summary class="w-fit cursor-pointer text-sm font-semibold">Countdown settings</summary>
-            <form
-              class="mt-2 flex flex-wrap items-end gap-2"
-              onsubmit={(event) => {
-                event.preventDefault();
-                setTimer(timerMs);
-              }}
-            >
-              <label class="grid gap-1 text-xs font-semibold" for="host-countdown"
-                >Minutes
-                <Input
-                  id="host-countdown"
-                  type="number"
-                  class="w-28"
-                  min={0.5}
-                  max={1440}
-                  step="any"
-                  required
-                  bind:value={timerMinutes}
-                />
-              </label>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!connected ||
-                  timerBusy ||
-                  !Number.isFinite(timerMs) ||
-                  timerMs < 30_000 ||
-                  timerMs > 86_400_000}
-              >
-                {remainingMs === null ? "Start countdown" : "Reset countdown"}
-              </Button>
-              {#if remainingMs !== null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!connected || timerBusy}
-                  onclick={() => setTimer(null)}>Turn off countdown</Button
-                >
-              {/if}
-            </form>
-            <p class="mt-2 text-xs text-muted-foreground">
-              Set 0.5 to 1,440 minutes. The countdown pauses with the round; reaching zero shows overtime, not the end
-              of scoring.
-            </p>
-          </details>
-        {/if}
-        {#if unfinished === 0 && (snapshot.state === "running" || snapshot.state === "paused")}
-          <p class="mt-2 text-sm font-medium text-primary">
-            All teams are done. Review the standings before finishing.
           </p>
-        {/if}
-        <AlertDialog.Root bind:open={finishConfirmOpen}>
-          <AlertDialog.Content>
-            <AlertDialog.Header>
-              <AlertDialog.Title>Finish this competition?</AlertDialog.Title>
-              <AlertDialog.Description>
-                {unfinished === 0
-                  ? "All teams reached the end."
-                  : unfinished === 1
-                    ? "One team is still working."
-                    : `${unfinished} teams are still working.`}
-                Scorers will no longer be able to record or undo marks. This cannot be undone.
-              </AlertDialog.Description>
-            </AlertDialog.Header>
-            <AlertDialog.Footer>
-              <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-              <AlertDialog.Action onclick={() => sendRoundAction("finish")} disabled={!connected || pendingRoundAction}
-                >Finish competition</AlertDialog.Action
+          <p class="round-time">
+            <strong>{clock}</strong>
+            <span>{remainingMs === null ? "Elapsed time" : remainingMs < 0 ? "Overtime" : "Time remaining"}</span>
+          </p>
+        </div>
+        <div class="round-actions">
+          {#if snapshot.state === "lobby"}
+            <button
+              type="button"
+              class="lbtn lbtn-solid round-primary"
+              onclick={() => act("start")}
+              disabled={!connected || pendingRoundAction}><Play /> Start round</button
+            >
+          {:else if snapshot.state === "running"}
+            <button
+              type="button"
+              class="lbtn lbtn-line round-primary"
+              onclick={() => act("pause")}
+              disabled={!connected || pendingRoundAction}><Pause /> Pause</button
+            >
+          {:else if snapshot.state === "paused"}
+            <button
+              type="button"
+              class="lbtn lbtn-solid round-primary"
+              onclick={() => act("resume")}
+              disabled={!connected || pendingRoundAction}><Play /> Resume</button
+            >
+          {:else}
+            <p class="round-locked">The round is finished. Marks are locked.</p>
+          {/if}
+          {#if active}
+            <button
+              type="button"
+              class="lbtn lbtn-stop"
+              onclick={() => act("finish")}
+              disabled={!connected || pendingRoundAction}
+              ><Flag /> {unfinished === 0 ? "Review and finish" : "Finish round"}</button
+            >
+          {/if}
+        </div>
+      </div>
+      {#if unfinished === 0 && active}
+        <p class="round-notice">All teams are done. Review the standings before finishing.</p>
+      {/if}
+      {#if snapshot.state !== "finished"}
+        <details class="round-countdown">
+          <summary>Countdown settings</summary>
+          <form
+            onsubmit={(event) => {
+              event.preventDefault();
+              setTimer(timerMs);
+            }}
+          >
+            <label for="host-countdown"
+              >Minutes
+              <Input
+                id="host-countdown"
+                type="number"
+                class="w-28"
+                min={0.5}
+                max={1440}
+                step="any"
+                required
+                bind:value={timerMinutes}
+              />
+            </label>
+            <button
+              type="submit"
+              class="lbtn lbtn-line"
+              disabled={!connected ||
+                timerBusy ||
+                !Number.isFinite(timerMs) ||
+                timerMs < 30_000 ||
+                timerMs > 86_400_000}
+            >
+              {remainingMs === null ? "Start countdown" : "Reset countdown"}
+            </button>
+            {#if remainingMs !== null}
+              <button
+                type="button"
+                class="lbtn lbtn-quiet"
+                disabled={!connected || timerBusy}
+                onclick={() => setTimer(null)}>Turn off countdown</button
               >
-            </AlertDialog.Footer>
-          </AlertDialog.Content>
-        </AlertDialog.Root>
+            {/if}
+          </form>
+          <p>
+            Set 0.5 to 1,440 minutes. The countdown pauses with the round. Reaching zero shows overtime, it does not end
+            scoring.
+          </p>
+        </details>
+      {/if}
+      <AlertDialog.Root bind:open={finishConfirmOpen}>
+        <AlertDialog.Content>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Finish this competition?</AlertDialog.Title>
+            <AlertDialog.Description>
+              {unfinished === 0
+                ? "All teams reached the end."
+                : unfinished === 1
+                  ? "One team is still working."
+                  : `${unfinished} teams are still working.`}
+              Scorers will no longer be able to record or undo marks. This cannot be undone.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+            <AlertDialog.Action onclick={() => sendRoundAction("finish")} disabled={!connected || pendingRoundAction}
+              >Finish competition</AlertDialog.Action
+            >
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+    </section>
+
+    <div class="host-grid">
+      <section class="host-standings" aria-labelledby="host-standings">
+        <h2 id="host-standings" class="lv-h2">
+          {snapshot.state === "finished" ? "Final standings" : snapshot.state === "lobby" ? "Teams" : "Live standings"}
+        </h2>
+        <LiveStandings {snapshot} showAttempts />
       </section>
 
-      <nav class="flex flex-wrap gap-x-4 gap-y-2" aria-label="Other screens">
-        {#each [{ url: scoreboardUrl, open: "Open projector scoreboard", label: "Scoreboard" }, { url: markerUrl, open: "Open marker desk in new tab", label: "Marker" }] as link (link.label)}
-          <div class="flex gap-1">
-            <Button href={link.url} target="_blank" rel="noopener" variant="outline" size="sm"
-              ><ExternalLink /> {link.open}</Button
-            >
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Copy ${link.label.toLowerCase()} link`}
-              title={`Copy ${link.label.toLowerCase()} link`}
-              onclick={() => copyLink(link.url, link.label)}><Copy /></Button
-            >
-          </div>
-        {/each}
+      <nav class="host-screens" aria-labelledby="host-screens">
+        <h2 id="host-screens" class="lv-h2">Other screens</h2>
+        <ul>
+          {#each screens as screen (screen.short)}
+            <li>
+              <div>
+                <p class="host-screen-name">{screen.label}</p>
+                <p class="lv-soft lv-small">{screen.note}</p>
+              </div>
+              <div class="host-screen-actions">
+                <a
+                  class="lbtn lbtn-line lbtn-sm"
+                  href={screen.url}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={`Open ${screen.label.toLowerCase()} in a new tab`}><ExternalLink /> Open</a
+                >
+                <button
+                  type="button"
+                  class="lbtn lbtn-quiet lbtn-sm"
+                  aria-label={`Copy link to ${screen.label.toLowerCase()}`}
+                  onclick={() => copyLink(screen.url, screen.short === "marker" ? "Marker" : "Scoreboard")}
+                  ><Copy /> Copy link</button
+                >
+              </div>
+            </li>
+          {/each}
+        </ul>
       </nav>
 
-      <section class="mathex-panel" aria-labelledby="host-standings">
-        <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-4 py-3">
-          <h2 id="host-standings" class="text-lg font-bold">
-            {snapshot.state === "finished" ? "Final standings" : "Live standings"}
-          </h2>
-          <p class="text-sm text-muted-foreground">
-            {snapshot.teams.length} teams · {snapshot.questionCount} questions
-          </p>
-        </div>
-        <div class="max-h-[55dvh] overflow-auto"><LiveStandings {snapshot} showAttempts /></div>
-      </section>
-
-      <details class="mathex-panel p-4">
-        <summary class="cursor-pointer font-bold">Setup{draftDirty ? " · Unsaved roster changes" : ""}</summary>
-        <section class="mt-4 border-t border-border pt-4" aria-labelledby="teams-heading">
-          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 id="teams-heading" class="text-lg font-bold">Teams and groups</h2>
-              <p class="text-sm text-muted-foreground">Saved changes appear on the marker desk and projector.</p>
-            </div>
-            <div class="flex gap-2">
-              {#if draftDirty || draftConflict}<Button variant="outline" onclick={() => resetDraft()} disabled={saving}
-                  >Discard draft</Button
-                >{/if}
-              <Button
-                onclick={() => saveTeams()}
-                disabled={!connected || saving || draftConflict || !draftDirty || snapshot.state === "finished"}
-                ><Save /> {saving ? "Saving…" : "Save teams"}</Button
-              >
-            </div>
-          </div>
-          {#if draftConflict}<p class="mb-3 font-semibold text-destructive" role="alert">
+      <details class="host-setup">
+        <summary
+          ><span class="lv-h2">Setup</span>{#if draftDirty}<span class="lv-plate is-signal">Unsaved roster changes</span
+            >{/if}</summary
+        >
+        <section aria-labelledby="teams-heading">
+          <h3 id="teams-heading">Teams and groups</h3>
+          <p class="lv-soft lv-small">Saved changes appear on the marker desk and projector.</p>
+          {#if draftConflict}<p class="lv-alert lv-small mt-2" role="alert">
               Another host saved roster changes. Your draft is still here, but you’ll need to discard it and start from
               the latest roster before saving.
             </p>{/if}
-          <TeamEditor bind:teams disabled={saving || snapshot.state === "finished"} />
+          <div class="mt-3"><TeamEditor bind:teams disabled={saving || snapshot.state === "finished"} /></div>
+          <div class="host-setup-actions">
+            <button
+              type="button"
+              class="lbtn lbtn-solid"
+              onclick={() => saveTeams()}
+              disabled={!connected || saving || draftConflict || !draftDirty || snapshot.state === "finished"}
+              >{saving ? "Saving…" : "Save teams"}</button
+            >
+            {#if draftDirty || draftConflict}<button
+                type="button"
+                class="lbtn lbtn-quiet"
+                onclick={() => resetDraft()}
+                disabled={saving}>Discard draft</button
+              >{/if}
+          </div>
         </section>
-        <section class="mt-5 border-t border-border pt-4" aria-labelledby="pin-heading">
-          <h2 id="pin-heading" class="text-lg font-bold">Marker PIN</h2>
-          <p id="new-pin-hint" class="my-2 text-sm text-muted-foreground">
+        <section aria-labelledby="pin-heading">
+          <h3 id="pin-heading">Marker PIN</h3>
+          <p id="new-pin-hint" class="lv-soft lv-small">
             Changing the PIN disconnects active scorers. Use 8 letters or digits, or 4 to 12 digits.
           </p>
-          <div class="flex flex-wrap gap-2">
+          <div class="host-pin">
             <Input
               aria-label="New marker PIN"
               aria-describedby="new-pin-hint"
-              class="max-w-xs"
+              class="lv-code"
               type="text"
               autocapitalize="characters"
               maxlength={12}
               bind:value={markerPin}
               oninput={() => (markerPin = markerPin.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
             />
-            <Button
-              variant="outline"
+            <button
+              type="button"
+              class="lbtn lbtn-line"
               onclick={() => (pinConfirmOpen = true)}
-              disabled={!connected || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)}>Change PIN</Button
+              disabled={!connected || !/^(?:[A-Z0-9]{8}|\d{4,12})$/.test(markerPin)}>Change PIN</button
             >
           </div>
         </section>
       </details>
+    </div>
 
-      <AlertDialog.Root bind:open={removalConfirmOpen}>
-        <AlertDialog.Content>
-          <AlertDialog.Header>
-            <AlertDialog.Title>Remove teams and their marks?</AlertDialog.Title>
-            <AlertDialog.Description
-              >Saving will permanently remove the marks recorded for {removalTargets
-                .map((team) => team.name)
-                .join(", ")}.</AlertDialog.Description
-            >
-          </AlertDialog.Header>
-          <AlertDialog.Footer
-            ><AlertDialog.Cancel>Keep editing</AlertDialog.Cancel><AlertDialog.Action
-              onclick={() => saveTeams(removalTargets.map((team) => team.id))}
-              disabled={!connected || saving || draftConflict || snapshot.state === "finished"}
-              >Remove and save</AlertDialog.Action
-            ></AlertDialog.Footer
+    <AlertDialog.Root bind:open={removalConfirmOpen}>
+      <AlertDialog.Content>
+        <AlertDialog.Header>
+          <AlertDialog.Title>Remove teams and their marks?</AlertDialog.Title>
+          <AlertDialog.Description
+            >Saving will permanently remove the marks recorded for {removalTargets
+              .map((team) => team.name)
+              .join(", ")}.</AlertDialog.Description
           >
-        </AlertDialog.Content>
-      </AlertDialog.Root>
+        </AlertDialog.Header>
+        <AlertDialog.Footer
+          ><AlertDialog.Cancel>Keep editing</AlertDialog.Cancel><AlertDialog.Action
+            onclick={() => saveTeams(removalTargets.map((team) => team.id))}
+            disabled={!connected || saving || draftConflict || snapshot.state === "finished"}
+            >Remove and save</AlertDialog.Action
+          ></AlertDialog.Footer
+        >
+      </AlertDialog.Content>
+    </AlertDialog.Root>
 
-      <AlertDialog.Root bind:open={pinConfirmOpen}>
-        <AlertDialog.Content>
-          <AlertDialog.Header
-            ><AlertDialog.Title>Change the marker PIN?</AlertDialog.Title><AlertDialog.Description
-              >Active scorers will have to reopen the desk with the new PIN. Existing marks are kept.</AlertDialog.Description
-            ></AlertDialog.Header
-          >
-          <AlertDialog.Footer
-            ><AlertDialog.Cancel>Cancel</AlertDialog.Cancel><AlertDialog.Action
-              onclick={resetMarkerPin}
-              disabled={!connected || changingPin}>Change and disconnect scorers</AlertDialog.Action
-            ></AlertDialog.Footer
-          >
-        </AlertDialog.Content>
-      </AlertDialog.Root>
-    {:else if loadError}
-      <section class="mathex-panel p-8 text-center">
-        <p class="mathex-kicker">Connection problem</p>
-        <Header size="h2" class="mt-2 text-2xl">Could not open the host console</Header>
-        <p class="mt-2 text-sm text-muted-foreground">The link may be wrong, or the live competition may have ended.</p>
-        <div class="mt-4 flex justify-center gap-2">
-          <Button onclick={() => location.reload()}>Refresh</Button>
-          <Button href="/mathex/app/live" variant="outline">Live dashboard</Button>
-        </div>
-      </section>
-    {:else}
-      <section class="mathex-panel p-8 text-center">
-        <p class="text-muted-foreground">Loading host controls...</p>
-      </section>
-    {/if}
-  </main>
-</div>
+    <AlertDialog.Root bind:open={pinConfirmOpen}>
+      <AlertDialog.Content>
+        <AlertDialog.Header
+          ><AlertDialog.Title>Change the marker PIN?</AlertDialog.Title><AlertDialog.Description
+            >Active scorers will have to reopen the desk with the new PIN. Existing marks are kept.</AlertDialog.Description
+          ></AlertDialog.Header
+        >
+        <AlertDialog.Footer
+          ><AlertDialog.Cancel>Cancel</AlertDialog.Cancel><AlertDialog.Action
+            onclick={resetMarkerPin}
+            disabled={!connected || changingPin}>Change and disconnect scorers</AlertDialog.Action
+          ></AlertDialog.Footer
+        >
+      </AlertDialog.Content>
+    </AlertDialog.Root>
+  {:else if loadError}
+    <section class="host-message">
+      <h1 class="lv-title">Could not open the host console</h1>
+      <p class="lv-soft">The link may be wrong, or the live competition may have ended.</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="lbtn lbtn-solid" onclick={() => location.reload()}>Refresh</button>
+        <a class="lbtn lbtn-line" href="/mathex/app/live">Set up a new event</a>
+      </div>
+    </section>
+  {:else}
+    <p class="host-message lv-soft" role="status">Loading host controls…</p>
+  {/if}
+</main>
+
+<style>
+  .host {
+    width: min(90rem, 100%);
+    margin-inline: auto;
+    padding: clamp(1rem, 2.5vw, 1.75rem) clamp(0.75rem, 3vw, 2rem) 4rem;
+  }
+  .host-message {
+    display: grid;
+    justify-items: start;
+    gap: 0.75rem;
+    padding-block: clamp(2rem, 8vh, 5rem);
+  }
+  .host-message .lv-title {
+    font-size: clamp(1.75rem, 4vw, 2.75rem);
+  }
+  .host-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem 1.5rem;
+  }
+  .host-head h1 {
+    font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  }
+
+  .round-band {
+    margin-top: 0.9rem;
+    padding: clamp(0.75rem, 1.6vw, 1.1rem) clamp(0.9rem, 2vw, 1.5rem);
+    border: 1px solid var(--lv-line);
+    border-radius: 4px;
+    background: var(--lv-surface);
+    box-shadow: 0 1px 2px rgb(25 28 22 / 5%);
+  }
+  .round-main,
+  .round-clock,
+  .round-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .round-main {
+    justify-content: space-between;
+    gap: 0.75rem 2rem;
+  }
+  .round-clock {
+    gap: 0.5rem 1.25rem;
+  }
+  .round-time {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    color: var(--lv-ink-soft);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .round-time strong {
+    color: var(--lv-ink);
+    font-size: clamp(2.25rem, 4.5vw, 3rem);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 0.95;
+  }
+  .overtime .round-time,
+  .overtime .round-time strong {
+    color: var(--lv-stop);
+  }
+  .round-actions {
+    gap: 0.6rem;
+  }
+  .round-primary {
+    min-width: 9.5rem;
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+  .round-actions .lbtn-stop {
+    min-height: 2.75rem;
+  }
+  .round-locked,
+  .round-notice {
+    font-weight: 600;
+  }
+  .round-notice {
+    margin-top: 0.6rem;
+    color: var(--lv-warn);
+  }
+  .round-countdown {
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--lv-line);
+  }
+  .round-countdown summary,
+  .host-setup summary {
+    width: fit-content;
+    cursor: pointer;
+  }
+  .round-countdown summary {
+    color: var(--lv-ink-soft);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .round-countdown summary:hover,
+  .round-countdown[open] summary {
+    color: var(--lv-ink);
+  }
+  .round-countdown form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.6rem;
+    margin-top: 0.6rem;
+  }
+  .round-countdown label {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .round-countdown > p {
+    max-width: 44rem;
+    margin-top: 0.6rem;
+    color: var(--lv-ink-soft);
+    font-size: 0.875rem;
+  }
+
+  .host-grid {
+    display: grid;
+    gap: 2rem;
+    margin-top: 1.5rem;
+  }
+  .host-standings {
+    min-width: 0;
+  }
+  .host-standings :global(.lv-standings caption) {
+    padding-top: 0.9rem;
+  }
+  .host-standings h2,
+  .host-screens,
+  .host-setup {
+    padding-top: 0.9rem;
+    border-top: 2px solid var(--lv-ink);
+  }
+  .host-screens li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding-block: 0.8rem;
+    border-bottom: 1px solid var(--lv-line);
+  }
+  .host-screen-name {
+    font-weight: 700;
+  }
+  .host-screen-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .host-setup summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .host-setup summary::before {
+    content: "+";
+    width: 1ch;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .host-setup[open] summary::before {
+    content: "\2212";
+  }
+  .host-setup summary {
+    list-style: none;
+  }
+  .host-setup summary::-webkit-details-marker {
+    display: none;
+  }
+  .host-setup section {
+    margin-top: 1.25rem;
+  }
+  .host-setup h3 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+  }
+  .host-setup-actions,
+  .host-pin {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+  }
+  .host-pin :global([data-slot="input"]) {
+    width: 12rem;
+  }
+  @media (min-width: 48rem) and (min-height: 40rem) {
+    .round-band {
+      position: sticky;
+      top: 0.5rem;
+      z-index: 20;
+    }
+  }
+  @media (min-width: 68rem) {
+    .host-grid {
+      grid-template-columns: minmax(0, 1fr) 26rem;
+      grid-template-rows: auto 1fr;
+      column-gap: 3rem;
+      row-gap: 2rem;
+      align-items: start;
+    }
+    .host-standings {
+      grid-row: 1 / 3;
+    }
+  }
+</style>
