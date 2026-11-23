@@ -420,7 +420,7 @@
   height: 1.05rem;
   margin-inline: auto;
 }
-.mathex-live .roster-remove:not(:disabled):hover {
+.mathex-live .roster-remove:not(:disabled, .is-armed):hover {
   color: var(--lv-stop);
 }
 .mathex-live .roster-remove.is-armed {

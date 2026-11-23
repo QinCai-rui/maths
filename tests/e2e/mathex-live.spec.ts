@@ -130,7 +130,16 @@ test("host, marker and projector stay in sync through a physical round", async (
   await record.getByRole("button", { name: "Close" }).click();
 
   await host.getByRole("button", { name: "Remove B Team", exact: true }).click();
-  await host.getByRole("button", { name: "Confirm remove B Team" }).click();
+  const confirmRemoval = host.getByRole("button", { name: "Confirm remove B Team" });
+  if (!isMobile) {
+    await confirmRemoval.hover();
+    const colors = await confirmRemoval.evaluate((button) => {
+      const { color, backgroundColor } = getComputedStyle(button);
+      return { color, backgroundColor };
+    });
+    expect(colors.color).not.toBe(colors.backgroundColor);
+  }
+  await confirmRemoval.click();
   await host.getByRole("button", { name: "Save teams" }).click();
   const removal = host.getByRole("alertdialog", { name: "Remove teams and their marks?" });
   await expect(removal).toContainText("B Team");
@@ -168,8 +177,10 @@ test("host, marker and projector stay in sync through a physical round", async (
 test("the server rejects stale rosters and unconfirmed removal of new marks", async ({ baseURL }) => {
   const { hostPath, code, pin } = await createEvent(baseURL!, ["", ""]);
   const token = new URL(hostPath, baseURL).searchParams.get("hostToken");
-  const host = io(`${baseURL}/physical-host-${code}`, { auth: { token }, autoConnect: false });
-  const marker = io(`${baseURL}/physical-marker-${code}`, { auth: { code, pin }, autoConnect: false });
+  // Model two separate clients without a transport upgrade during the roster assertions.
+  const connection = { autoConnect: false, forceNew: true, transports: ["websocket"] };
+  const host = io(`${baseURL}/physical-host-${code}`, { ...connection, auth: { token } });
+  const marker = io(`${baseURL}/physical-marker-${code}`, { ...connection, auth: { code, pin } });
   try {
     const snapshot = (await new Promise((resolve) => {
       host.once("snapshot", resolve);
