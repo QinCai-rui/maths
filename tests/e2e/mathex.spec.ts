@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { io } from "socket.io-client";
 import { test, expect, visit, setTheme, checkAccessibility, checkReflow } from "./fixtures";
 
@@ -76,6 +77,30 @@ test("set editor imports a JSON backup without replacing the draft until confirm
   await expect(title).toHaveValue("Imported set");
   if (isMobile) await page.getByRole("button", { name: "Contents", exact: true }).click();
   await expect(page.getByRole("button", { name: /What is 3 \+ 3\?/ })).toBeVisible();
+});
+
+test("set editor renders math and exports both print PDFs", async ({ page }) => {
+  await page.addInitScript((question) => {
+    localStorage.setItem(
+      "mathex-draft",
+      JSON.stringify({
+        name: "Print regression",
+        questions: [{ ...question, contents: "<p>Find $$\\frac{8}{2}$$.</p>" }]
+      })
+    );
+  }, questions[0]);
+  await visit(page, "/mathex/app/create/editor");
+  await expect(page.locator("math mfrac").first()).toBeVisible();
+
+  for (const name of ["Question slips PDF", "Answer key PDF"]) {
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    const pending = page.waitForEvent("download");
+    await page.getByRole("menuitem", { name, exact: true }).click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toMatch(/\.pdf$/);
+    const data = await readFile(await download.path());
+    expect(data.subarray(0, 5).toString()).toBe("%PDF-");
+  }
 });
 
 for (const theme of ["light", "dark"] as const) {

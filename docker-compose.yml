@@ -10,7 +10,7 @@ services:
       args:
         GIT_COMMIT: ${GIT_COMMIT:-}
     ports:
-      - "5185:5185"
+      - "127.0.0.1:5185:5185"
     environment:
       - ANUBIS_CHECK_URL=http://anubis-auth:8923/.within.website/x/cmd/anubis/api/check
       - PORT=${PORT:-5185}
