@@ -209,6 +209,8 @@ jobs:
           push: false
           tags: maths-ci:${{ github.sha }}
           build-args: GIT_COMMIT=${{ github.sha }}
+          # Refresh the Debian packages before scanning the image.
+          no-cache-filters: runtime
           cache-from: type=gha,scope=ci-amd64
           cache-to: type=gha,scope=ci-amd64,mode=max
       - name: Check startup, HTTP routes, Socket.IO, and restart
@@ -301,6 +303,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}-${{ matrix.slug }}
           build-args: |
             GIT_COMMIT=${{ github.sha }}
+          no-cache-filters: runtime
           cache-from: type=gha,scope=${{ matrix.slug }}
           cache-to: type=gha,scope=${{ matrix.slug }},mode=max
 
