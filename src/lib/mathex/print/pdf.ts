@@ -5,7 +5,7 @@
 import type { z } from "zod";
 import type { Question, QuestionSet } from "../schemas";
 import { expressionToLatex } from "../expression";
-import { SLIP_GEOMETRY as G } from "./geometry";
+import { ANSWER_KEY_NOTES_WIDTH_PERCENT, SLIP_GEOMETRY as G } from "./geometry";
 import { mathAtoms, parseBlocks, type Block } from "./blocks";
 import {
   layoutLines,
@@ -618,7 +618,7 @@ export async function downloadAnswerSet(set: QuestionSetValue) {
   const contentWidth = mm(G.pageWidthMm) - 2 * margin;
   const paddings = { left: [0, 8, 8], right: [6, 10, 0] };
   const numberWidth = Math.max(20, size * 2.2);
-  const notesWidth = contentWidth * 0.32;
+  const notesWidth = (contentWidth * ANSWER_KEY_NOTES_WIDTH_PERCENT) / 100 - paddings.left[2];
   const answerWidth = contentWidth - numberWidth - notesWidth - 32;
   const smallSize = Math.max(5.5, size * 0.68);
   const title = set.name.trim() || "Untitled set";

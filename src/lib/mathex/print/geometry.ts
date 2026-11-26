@@ -28,3 +28,5 @@ export const SLIP_GEOMETRY = {
 } as const;
 
 export type SlipGeometry = typeof SLIP_GEOMETRY;
+
+export const ANSWER_KEY_NOTES_WIDTH_PERCENT = 60;

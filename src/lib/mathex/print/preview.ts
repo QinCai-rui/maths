@@ -3,7 +3,7 @@
 
 import { renderMath } from "../content";
 import { expressionToLatex } from "../expression";
-import { SLIP_GEOMETRY as G } from "./geometry";
+import { ANSWER_KEY_NOTES_WIDTH_PERCENT, SLIP_GEOMETRY as G } from "./geometry";
 import { listMarkers } from "./blocks";
 import {
   ACCENT,
@@ -249,7 +249,7 @@ th.label { color: #555; }
 td { padding: 6pt 8pt; vertical-align: top; border-bottom: 0.4pt solid #d4d4d4; }
 tr:last-child td { border-bottom: 0.8pt solid #2a2a2a; }
 th:first-child, td:first-child { padding-left: 0; padding-right: 6pt; width: ${Math.max(20, size * 2.2) + 6}pt; }
-th:last-child, td:last-child { padding-right: 0; width: 32%; }
+th:last-child, td:last-child { padding-right: 0; width: ${ANSWER_KEY_NOTES_WIDTH_PERCENT}%; }
 tr { break-inside: avoid; page-break-inside: avoid; }
 .number { font-family: "${SANS_FACE}", sans-serif; font-weight: 600; }
 .label.small { font-size: ${Math.max(5.5, size * 0.68)}pt; line-height: 1.5; }
@@ -259,7 +259,7 @@ tr { break-inside: avoid; page-break-inside: avoid; }
 .none { color: ${MUTED}; }
 .order { margin-top: 4pt; color: #6b5a1f; }
 .warn { color: ${WARN}; }
-.comment { font-size: 0.92em; color: #3a3a3a; }
+.comment { font-size: 0.92em; color: #3a3a3a; overflow-wrap: anywhere; }
 @media print { .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; } }
 `;
   return openPrintDocument(
